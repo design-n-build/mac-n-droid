@@ -1,0 +1,35 @@
+name: Bug report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead? Screenshots help a lot.
+    validations:
+      required: true
+  - type: input
+    id: mac
+    attributes:
+      label: Mac
+      description: Mac n Droid version (Settings → About) and macOS version
+      placeholder: "0.8.2 on macOS 26.1, MacBook Air M3"
+    validations:
+      required: true
+  - type: input
+    id: phone
+    attributes:
+      label: Phone
+      description: Mac n Droid version, phone model and Android version
+      placeholder: "0.8.5 on Pixel 8, Android 16"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce (if you know them)
+      placeholder: |
+        1. Play a song in Spotify
+        2. Switch to another app
+        3. The notch goes blank

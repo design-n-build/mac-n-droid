@@ -1,0 +1,1243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mac n Droid</title>
+<meta name="description" content="Free, private continuity between your Android phone and your Mac: notifications, codes, clipboard, files, screenshots, music, live activities and screen mirroring, over your own Wi-Fi.">
+<link rel="icon" href="assets/icon.png">
+<style>
+:root{
+  --bg:#f5f5f7; --bg-alt:#ffffff; --fg:#1d1d1f; --muted:#6e6e73; --line:rgba(0,0,0,.1); --card:#ffffff;
+  --brand:#0CCE6B; --brand-ink:#08843f; --accent:#0071e3; --accent-fg:#fff; --chip:rgba(0,0,0,.05);
+  --glow:rgba(12,206,107,.20); --glow2:rgba(0,113,227,.12);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#000; --bg-alt:#0c0c0d; --fg:#f5f5f7; --muted:#a1a1a6; --line:rgba(255,255,255,.12); --card:#151517;
+    --brand-ink:#3fe08d; --accent:#2997ff; --chip:rgba(255,255,255,.08); --glow:rgba(12,206,107,.16); --glow2:rgba(41,151,255,.12);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#000; --bg-alt:#0c0c0d; --fg:#f5f5f7; --muted:#a1a1a6; --line:rgba(255,255,255,.12); --card:#151517;
+  --brand-ink:#3fe08d; --accent:#2997ff; --chip:rgba(255,255,255,.08); --glow:rgba(12,206,107,.16); --glow2:rgba(41,151,255,.12);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);overflow-x:hidden;
+  font:17px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Inter,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+button{font:inherit;color:inherit}
+.wrap{max-width:1160px;margin:0 auto;padding:0 16px}
+.display{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Inter,sans-serif;letter-spacing:-.025em}
+
+/* ---------- Hero ---------- */
+.hero{text-align:center;padding:64px 0 28px;position:relative}
+.hero::before{content:"";position:absolute;inset:-40px 0 auto;height:620px;z-index:-1;pointer-events:none;
+  background:radial-gradient(40% 60% at 30% 70%,var(--glow),transparent 70%),radial-gradient(40% 60% at 72% 60%,var(--glow2),transparent 70%)}
+.appicon{width:84px;height:84px;border-radius:20px;display:block;margin:0 auto 20px;box-shadow:0 10px 30px -8px rgba(12,206,107,.55)}
+.eyebrow{display:inline-flex;gap:8px;align-items:center;font-size:14px;font-weight:600;color:var(--brand-ink);margin-bottom:10px}
+h1{font-weight:700;font-size:clamp(38px,6.4vw,72px);line-height:1.03;margin:0 0 16px}
+h1 .grad{background:linear-gradient(90deg,var(--brand) 10%,#1fb5a0 45%,var(--accent) 90%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{font-size:clamp(18px,2.3vw,22px);color:var(--muted);max-width:700px;margin:0 auto 28px}
+.downloads{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:12px;padding:12px 22px 12px 18px;border-radius:999px;text-decoration:none;font-weight:600;min-width:230px;justify-content:center;transition:transform .15s}
+.btn:hover{transform:translateY(-1px)}
+.btn span{display:flex;flex-direction:column;align-items:flex-start;line-height:1.25}
+.btn small{font-weight:400;font-size:12.5px;opacity:.8}
+.btn img{width:26px;height:26px;border-radius:7px}
+.primary{background:var(--fg);color:var(--bg)}
+.secondary{background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
+.trust{margin-top:16px;color:var(--muted);font-size:14px}
+
+/* ---------- Demo ---------- */
+.demo{padding-top:28px;padding-bottom:24px}
+.tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;justify-content:safe center;padding:4px 2px 18px;margin:0 -16px;padding-inline:16px}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;border:0;background:var(--chip);color:var(--fg);border-radius:999px;padding:8px 14px;font-size:14.5px;font-weight:500;cursor:pointer;display:inline-flex;gap:7px;align-items:center;transition:background .2s,color .2s}
+.tab svg{opacity:.75}
+.tab[aria-selected="true"]{background:var(--fg);color:var(--bg)}
+.tab[aria-selected="true"] svg{opacity:1}
+.tab:focus-visible,.act:focus-visible,.tour-btn:focus-visible,.btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.stage-wrap{position:relative;width:100%;height:calc(620px * var(--s,1));margin:0 auto}
+.stage{position:absolute;top:0;left:calc(50% - 560px * var(--s,1));width:1120px;height:620px;transform:scale(var(--s,1));transform-origin:0 0;user-select:none;-webkit-user-select:none}
+
+.caption{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,440px);gap:18px 40px;align-items:start;max-width:1000px;margin:22px auto 0;min-height:132px}
+.caption h2{font-size:clamp(24px,3vw,32px);line-height:1.12;margin:0 0 8px;font-weight:700}
+.caption p{margin:0;color:var(--muted);max-width:560px}
+.cap-side{display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.act{border:0;background:var(--accent);color:#fff;border-radius:999px;padding:9px 16px;font-size:14.5px;font-weight:600;cursor:pointer;display:inline-flex;gap:7px;align-items:center}
+.act:hover{filter:brightness(1.08)}
+.act.alt{background:var(--chip);color:var(--fg)}
+.tour-btn{border:0;background:none;color:var(--muted);font-size:13.5px;cursor:pointer;display:inline-flex;gap:6px;align-items:center;padding:4px 2px}
+.tour-btn:hover{color:var(--fg)}
+.hint{font-size:13px;color:var(--muted);flex-basis:100%;text-align:right}
+@media (max-width:760px){
+  .caption{grid-template-columns:1fr;min-height:0}
+  .cap-side{align-items:flex-start}
+  .actions{justify-content:flex-start}
+  .hint{text-align:left}
+}
+
+/* ---------- Sections ---------- */
+section.block{padding:72px 0}
+.block h2.big{font-size:clamp(30px,4.4vw,48px);line-height:1.06;margin:0 0 12px;font-weight:700;text-align:center}
+.block .sub{color:var(--muted);text-align:center;max-width:640px;margin:0 auto 36px;font-size:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.card{background:var(--card);border-radius:20px;padding:22px;box-shadow:inset 0 0 0 1px var(--line)}
+.card .ci{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--chip);color:var(--brand-ink);margin-bottom:12px}
+.card h3{margin:0 0 4px;font-size:17px}
+.card p{margin:0;color:var(--muted);font-size:15px}
+.privacy{background:var(--bg-alt);border-block:1px solid var(--line)}
+.pv{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:28px;max-width:960px;margin:0 auto}
+.pv div{text-align:center}
+.pv b{display:block;font-size:20px;margin:10px 0 4px}
+.pv span{color:var(--muted);font-size:15px}
+.pv .ci{width:52px;height:52px;border-radius:16px;margin:0 auto;display:grid;place-items:center;background:rgba(12,206,107,.12);color:var(--brand-ink)}
+.steps{counter-reset:s;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;list-style:none;padding:0;margin:0}
+.steps li{counter-increment:s;background:var(--card);border-radius:20px;padding:22px;box-shadow:inset 0 0 0 1px var(--line);color:var(--muted);font-size:15px}
+.steps li::before{content:counter(s);display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--fg);color:var(--bg);font-weight:700;margin-bottom:12px;font-size:15px}
+.steps b{color:var(--fg);display:block;font-size:17px;margin-bottom:4px}
+.final{text-align:center}
+footer{text-align:center;color:var(--muted);font-size:13px;padding:24px 16px 48px}
+
+/* =================================================================
+   STAGE: devices. Everything below is in fixed design pixels and
+   scaled as one piece.
+   ================================================================= */
+.beam{position:absolute;inset:0;pointer-events:none;overflow:visible}
+.beam path{fill:none;stroke-linecap:round}
+.beam .rail{stroke:var(--line);stroke-width:2;stroke-dasharray:2 7}
+.beam .flow{stroke:var(--brand);stroke-width:3;stroke-dasharray:10 14;opacity:0;transition:opacity .25s}
+.stage.to-mac .beam .flow{opacity:1;animation:flowR .6s linear infinite}
+.stage.to-phone .beam .flow{opacity:1;animation:flowL .6s linear infinite}
+@keyframes flowR{to{stroke-dashoffset:-24}}
+@keyframes flowL{to{stroke-dashoffset:24}}
+.badge{position:absolute;left:309px;top:226px;width:34px;height:34px;border-radius:50%;background:var(--card);box-shadow:inset 0 0 0 1px var(--line),0 6px 16px -6px rgba(0,0,0,.25);display:grid;place-items:center;color:var(--brand-ink);transition:transform .3s}
+.stage.to-mac .badge,.stage.to-phone .badge{transform:scale(1.15)}
+
+/* ---- Phone ---- */
+.phone{position:absolute;left:14px;top:44px;width:268px;height:550px;border-radius:46px;background:#101012;padding:9px;
+  box-shadow:inset 0 0 0 2px #2d2d30,inset 0 0 0 4px #0b0b0c,0 40px 70px -30px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.04)}
+.phone .btn-p,.phone .btn-v{position:absolute;right:-3px;width:4px;border-radius:0 3px 3px 0;background:#2a2a2d;transition:background .15s}
+.phone .btn-p{top:128px;height:46px}.phone .btn-v{top:196px;height:78px}
+.phone.btns .btn-p,.phone.btns .btn-v{background:var(--brand)}
+.phone.shake{animation:shake .32s linear infinite}
+@keyframes shake{0%,100%{transform:translateX(0) rotate(0)}25%{transform:translateX(-2px) rotate(-.6deg)}75%{transform:translateX(2px) rotate(.6deg)}}
+
+.p-screen{--p:#1E6B3F;--onp:#fff;--pc:#A6F2C0;--onpc:#002110;--s:#F5FBF3;--sc:#E9EFE7;--sch:#E2E9E0;--ons:#171D18;--onsv:#404941;--ol:#707970;--sec:#D0E8D4;
+  position:relative;width:250px;height:532px;border-radius:38px;overflow:hidden;background:var(--s);color:var(--ons);
+  font:12px/1.35 "Google Sans",Roboto,"Segoe UI",system-ui,-apple-system,sans-serif}
+.p-cam{position:absolute;top:10px;left:50%;width:11px;height:11px;margin-left:-5.5px;border-radius:50%;background:#050505;z-index:60;box-shadow:inset 0 0 0 2px #1b1b1d}
+.p-status{position:absolute;top:0;left:0;right:0;height:30px;z-index:40;display:flex;align-items:center;gap:6px;padding:0 20px 0 22px;font-weight:500;font-size:12px}
+.p-status .sp{flex:1}
+.p-sicons{display:flex;gap:3px;align-items:center;opacity:.8}
+.p-sicons svg{width:11px;height:11px}
+.p-sicons i{display:inline-flex;transition:opacity .3s,transform .3s}
+.p-sicons i.out{opacity:0;transform:scale(.4)}
+.p-batt{display:flex;align-items:center;gap:3px;font-size:11px}
+.p-app{position:absolute;inset:0;overflow:hidden}
+.p-app.swap{animation:pIn .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes pIn{from{opacity:0;transform:scale(.97)}}
+.p-gesture{position:absolute;bottom:7px;left:50%;width:96px;height:4px;margin-left:-48px;border-radius:4px;background:rgba(0,0,0,.55);z-index:58;cursor:pointer}
+.p-gesture::before{content:"";position:absolute;inset:-8px -10px}
+
+/* app icon */
+.ai{display:inline-grid;place-items:center;border-radius:50%;background:var(--c);color:#fff;flex:0 0 auto}
+.ai img{width:112%;height:112%;object-fit:contain}
+.mac .ai{border-radius:24%}
+
+/* home */
+.p-home{position:absolute;inset:0;padding:54px 14px 0;background:radial-gradient(120% 70% at 20% 0%,#e5fbe9,transparent 60%),radial-gradient(120% 80% at 100% 100%,#b5e3d0,transparent 60%),linear-gradient(170deg,#d9f4e1,#bfe6d3)}
+.p-clock{padding:6px 8px 22px}
+.p-clock b{display:block;font-size:52px;line-height:1;font-weight:400;letter-spacing:-1px;color:#0f3a22}
+.p-clock span{font-size:12.5px;color:#245a3a;font-weight:500}
+.p-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 4px}
+.p-icon{display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;font-size:10px;color:#173323}
+.p-icon span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56px}
+.p-search{position:absolute;left:14px;right:14px;bottom:28px;height:40px;border-radius:20px;background:rgba(255,255,255,.75);display:flex;align-items:center;gap:8px;padding:0 14px;color:var(--onsv)}
+
+/* generic M3 */
+.p-col{position:absolute;inset:0;display:flex;flex-direction:column;padding-top:30px;background:var(--s)}
+.m3-bar{height:48px;display:flex;align-items:center;gap:10px;padding:0 16px;flex:0 0 auto}
+.m3-title{font-size:19px;font-weight:400}
+.m3-bar .sp{flex:1}
+.seg{display:flex;margin:4px 14px 10px;border:1px solid var(--ol);border-radius:18px;overflow:hidden}
+.seg span{flex:1;text-align:center;padding:6px 0;font-weight:500;font-size:11px;border-left:1px solid var(--ol)}
+.seg span:first-child{border-left:0}
+.seg .on{background:var(--sec)}
+.flist{flex:1;overflow:hidden;padding:0 6px}
+.frow{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:14px}
+.frow.new{animation:rowIn .5s cubic-bezier(.2,.8,.2,1);background:var(--sc)}
+@keyframes rowIn{from{opacity:0;transform:translateY(-10px)}}
+.frow .t{flex:1;min-width:0}
+.frow b{display:block;font-weight:500;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frow small{color:var(--onsv);font-size:10.5px}
+.prog{height:4px;border-radius:4px;background:var(--sch);margin-top:5px;overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:var(--p);border-radius:4px;transition:width 1s linear}
+.thumb{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;color:#fff;font-weight:700;font-size:9px;letter-spacing:.3px}
+.thumb.pdf{background:#e5483d}
+.thumb.img{background:linear-gradient(140deg,#ffb36b,#ff6f91 55%,#7d5fff)}
+.thumb.txt{background:#8e8e93}
+.thumb.folder{background:#3d9bf5}
+.fab{position:absolute;right:16px;bottom:84px;height:48px;padding:0 18px;border-radius:16px;background:var(--pc);color:var(--onpc);display:flex;align-items:center;gap:8px;font-weight:500;box-shadow:0 3px 8px rgba(0,0,0,.18);cursor:pointer}
+.navbar{position:absolute;left:0;right:0;bottom:0;height:70px;background:var(--sc);display:flex;padding:10px 6px 18px}
+.navbar span{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;font-weight:500;color:var(--onsv)}
+.navbar span i{width:52px;height:26px;border-radius:13px;display:grid;place-items:center}
+.navbar span.on{color:var(--ons)}
+.navbar span.on i{background:var(--sec)}
+
+/* heads-up, shade, sheet, snack */
+.p-hu{position:absolute;left:8px;right:8px;top:34px;z-index:45;background:#fff;border-radius:22px;padding:12px 14px;box-shadow:0 8px 24px -6px rgba(0,0,0,.28);
+  transform:translateY(calc(-100% - 60px));transition:transform .45s cubic-bezier(.3,1.2,.4,1)}
+.p-hu.show{transform:none}
+.hu-top{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--onsv);margin-bottom:6px}
+.hu-body{display:flex;gap:10px}
+.hu-body b{display:block;font-size:12.5px;font-weight:500}
+.hu-body p{margin:1px 0 0;color:var(--onsv)}
+.hu-body .me{color:var(--ons);margin-top:4px}
+.hu-acts{display:flex;gap:16px;margin:10px 0 0 34px;color:var(--p);font-weight:500;font-size:11.5px}
+.p-shade{position:absolute;inset:0;z-index:44;background:rgba(232,240,232,.96);padding:42px 10px 0;transform:translateY(-100%);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.p-shade.show{transform:none}
+.shade-tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:6px 4px 14px}
+.shade-tiles span{height:46px;border-radius:23px;background:var(--pc);display:flex;align-items:center;gap:6px;padding:0 12px;font-weight:500;font-size:11px;color:var(--onpc)}
+.shade-tiles span.off{background:var(--sch);color:var(--ons)}
+.sn{background:#fff;border-radius:18px;padding:10px 12px;display:flex;gap:10px;margin-bottom:6px;transition:transform .45s,opacity .45s,max-height .45s .2s,margin .45s .2s,padding .45s .2s;max-height:90px;overflow:hidden}
+.sn.gone{transform:translateX(110%);opacity:0;max-height:0;margin:0;padding-block:0}
+.sn b{display:block;font-weight:500}
+.sn span{color:var(--onsv)}
+.p-sheet{position:absolute;left:0;right:0;bottom:0;z-index:46;background:var(--sc);border-radius:26px 26px 0 0;padding:10px 16px 30px;transform:translateY(105%);transition:transform .4s cubic-bezier(.2,.8,.2,1);box-shadow:0 -10px 30px rgba(0,0,0,.18)}
+.p-sheet.show{transform:none}
+.p-sheet::before{content:"";display:block;width:32px;height:4px;border-radius:2px;background:var(--ol);opacity:.5;margin:0 auto 12px}
+.sh-prev{display:flex;gap:10px;align-items:center;background:var(--s);border-radius:16px;padding:8px;margin-bottom:14px}
+.sh-prev .ph{width:54px;height:54px;border-radius:10px;background:linear-gradient(140deg,#ffb36b,#ff6f91 55%,#7d5fff)}
+.sh-targets{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center;font-size:9.5px}
+.sh-targets span{display:flex;flex-direction:column;align-items:center;gap:5px}
+.p-snack{position:absolute;left:12px;right:12px;bottom:26px;z-index:47;background:#2f3330;color:#eff1ec;border-radius:6px;padding:12px 14px;font-size:11.5px;display:flex;gap:8px;align-items:center;opacity:0;transform:translateY(12px);transition:.3s}
+.p-snack.show{opacity:1;transform:none}
+.p-flash{position:absolute;inset:0;background:#fff;opacity:0;z-index:55;pointer-events:none;transition:opacity .25s}
+.p-flash.on{opacity:.95;transition:none}
+.p-touch{position:absolute;z-index:57;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:rgba(30,30,30,.22);box-shadow:0 0 0 2px rgba(255,255,255,.7);opacity:0;transform:scale(.6);transition:opacity .15s,transform .15s;pointer-events:none}
+.p-touch.on{opacity:1;transform:scale(1)}
+.p-touch.up{opacity:0;transform:scale(1.6);transition:.3s}
+.p-overlay{position:absolute;inset:0;z-index:50;display:none}
+.p-overlay.show{display:block;animation:pIn .3s}
+.p-shot{position:absolute;left:12px;bottom:34px;z-index:48;padding:4px;background:#fff;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.3);opacity:0;transform:translateX(-140%);transition:transform .4s cubic-bezier(.2,.8,.2,1),opacity .3s}
+.p-shot.show{transform:none;opacity:1}
+.p-shot .acts{display:flex;gap:10px;justify-content:center;font-size:9.5px;color:var(--p);font-weight:500;padding:4px 0 1px}
+
+/* thread / notes / maps / player / clock */
+.selable{border-radius:3px;transition:background .2s}
+.sel{background:rgba(30,107,63,.25);box-shadow:0 0 0 2px rgba(30,107,63,.25)}
+.p-maps{position:absolute;inset:0;background:#eef2ea}
+.p-maps svg.map{position:absolute;inset:0;width:100%;height:100%}
+.m3-search{position:absolute;left:12px;right:12px;top:38px;height:44px;border-radius:22px;background:#fff;display:flex;align-items:center;gap:10px;padding:0 16px;box-shadow:0 2px 6px rgba(0,0,0,.15);z-index:2}
+.m3-search .ph{color:var(--onsv)}
+.m3-search .val{color:var(--ons);font-weight:500}
+.pop{position:absolute;z-index:3;background:#fff;border-radius:10px;padding:8px 14px;box-shadow:0 4px 14px rgba(0,0,0,.22);font-weight:500;animation:pIn .2s}
+.pin{position:absolute;left:125px;top:236px;margin:-30px 0 0 -14px;color:#e5483d;opacity:0;transform:translateY(-30px);transition:.45s cubic-bezier(.3,1.5,.5,1);filter:drop-shadow(0 3px 2px rgba(0,0,0,.25))}
+.pin.show{opacity:1;transform:none}
+.place{position:absolute;left:0;right:0;bottom:0;background:var(--s);border-radius:26px 26px 0 0;padding:18px 18px 34px;box-shadow:0 -6px 20px rgba(0,0,0,.12);transform:translateY(105%);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.place.show{transform:none}
+.place b{font-size:16px;font-weight:500;display:block}
+.place .sub2{color:var(--onsv);font-size:11px}
+.place-row{display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding:10px 12px;border-radius:14px;background:var(--sc)}
+.chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--ol);border-radius:8px;padding:5px 10px;font-weight:500;font-size:11px;cursor:pointer}
+.player{position:absolute;inset:0;padding:40px 20px 0;background:linear-gradient(180deg,var(--tint,#ffe1d6),var(--s) 70%);transition:background .5s}
+.art{width:210px;height:210px;border-radius:24px;margin:10px auto 22px;box-shadow:0 14px 30px -10px rgba(0,0,0,.4);transition:background .5s;position:relative;overflow:hidden}
+.art::after{content:"";position:absolute;inset:0;background:radial-gradient(60% 50% at 30% 30%,rgba(255,255,255,.35),transparent 60%)}
+.player b{display:block;font-size:17px;font-weight:500}
+.player .by{color:var(--onsv)}
+.bar{height:4px;border-radius:4px;background:rgba(0,0,0,.12);margin:18px 0 6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ons);width:0;transition:width 1s linear}
+.times{display:flex;justify-content:space-between;font-size:10px;color:var(--onsv)}
+.ctl{display:flex;justify-content:center;align-items:center;gap:22px;margin-top:14px}
+.ctl span{cursor:pointer;display:grid;place-items:center}
+.ctl .big{width:64px;height:64px;border-radius:22px;background:var(--ons);color:#fff;transition:border-radius .3s}
+.ctl .big.paused{border-radius:50%}
+.press{animation:press .3s}
+@keyframes press{50%{transform:scale(.86)}}
+.clockapp{position:absolute;inset:0;padding-top:30px;background:var(--s);text-align:center}
+.tabs3{display:flex;justify-content:center;gap:6px;margin:6px 0 18px}
+.tabs3 span{padding:6px 12px;border-radius:16px;font-weight:500;font-size:11px;color:var(--onsv)}
+.tabs3 .on{background:var(--sec);color:var(--ons)}
+.ring{position:relative;width:200px;height:200px;margin:0 auto}
+.ring svg{transform:rotate(-90deg)}
+.ring .lab{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .lab b{font-size:40px;font-weight:400;font-variant-numeric:tabular-nums}
+.ring .lab span{color:var(--onsv)}
+.clockbtns{display:flex;justify-content:center;gap:14px;margin-top:22px}
+.clockbtns span{height:52px;min-width:52px;padding:0 18px;border-radius:26px;display:grid;place-items:center;background:var(--sch);font-weight:500}
+.clockbtns span.pri{background:var(--p);color:#fff;min-width:96px}
+.notes{position:absolute;inset:0;padding-top:30px;background:var(--s)}
+.ncards{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:6px 12px}
+.ncards div{background:var(--sc);border-radius:16px;padding:12px;min-height:84px}
+.ncards b{display:block;font-weight:500;margin-bottom:4px}
+.ncards span{color:var(--onsv);font-size:10.5px}
+.editor{padding:8px 18px}
+.editor h4{font-size:20px;font-weight:400;margin:4px 0 10px}
+.caret::after{content:"";display:inline-block;width:1.5px;height:1.1em;background:var(--p);vertical-align:-2px;margin-left:1px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.generic{position:absolute;inset:0;padding-top:30px;background:var(--s);display:flex;flex-direction:column;align-items:center}
+.generic .sk{width:84%;height:54px;border-radius:14px;background:var(--sc);margin-top:10px}
+.trip{position:absolute;inset:0;padding-top:30px;background:var(--s)}
+.trip .hero-img{height:150px;margin:6px 12px 12px;border-radius:22px;background:linear-gradient(160deg,#ffd58a,#ff8f6b 45%,#3f6fd8);position:relative;overflow:hidden}
+.trip .hero-img::after{content:"";position:absolute;left:-10%;right:-10%;bottom:-40px;height:90px;border-radius:50%;background:#2a4a9c}
+.trip .hero-img b{position:absolute;left:14px;bottom:12px;color:#fff;font-size:18px;font-weight:500;z-index:1}
+.trip li{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--sch);align-items:center}
+.trip li time{width:44px;color:var(--onsv);font-size:10.5px}
+.trip ul{list-style:none;margin:0;padding:0 16px}
+.ringing{position:absolute;inset:0;background:linear-gradient(180deg,#0e3b22,#081f13);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
+.ringing .pulse{width:96px;height:96px;border-radius:50%;background:var(--brand,#0CCE6B);display:grid;place-items:center;position:relative;margin-bottom:24px}
+.ringing .pulse::before,.ringing .pulse::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid #0CCE6B;animation:wave 1.4s ease-out infinite}
+.ringing .pulse::after{animation-delay:.7s}
+@keyframes wave{to{transform:scale(2);opacity:0}}
+.ringing b{font-size:18px;font-weight:500}
+.ringing span{opacity:.75;font-size:11.5px;margin-top:4px}
+.ringing .stop{margin-top:36px;background:#fff;color:#0e3b22;border-radius:26px;padding:14px 34px;font-weight:600;cursor:pointer}
+.charging{position:absolute;inset:0;background:rgba(0,0,0,.82);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.charging .c{width:120px;height:120px;border-radius:50%;border:4px solid #0CCE6B;display:grid;place-items:center;font-size:28px;margin-bottom:12px;box-shadow:0 0 40px rgba(12,206,107,.5)}
+
+/* ---- Mac ---- */
+.mac{position:absolute;left:380px;top:116px;width:710px}
+.m-lid{width:710px;height:462px;border-radius:22px 22px 6px 6px;background:#0b0b0c;padding:12px 12px 20px;
+  box-shadow:inset 0 0 0 1.5px #3a3a3d,inset 0 0 0 3px #0b0b0c,0 40px 70px -35px rgba(0,0,0,.55)}
+.m-base{width:770px;margin-left:-30px;height:16px;position:relative;border-radius:2px 2px 14px 14px;
+  background:linear-gradient(#e6e7ea,#c2c4c8 45%,#8d8f94);box-shadow:0 18px 30px -14px rgba(0,0,0,.5)}
+.m-base::before{content:"";position:absolute;left:50%;top:0;width:110px;height:6px;margin-left:-55px;border-radius:0 0 8px 8px;background:linear-gradient(#a9abaf,#c9cbcf)}
+.m-screen{position:relative;width:686px;height:430px;border-radius:10px 10px 2px 2px;overflow:hidden;color:#1d1d1f;
+  font:11px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Inter,sans-serif;
+  background:radial-gradient(70% 70% at 0% 0%,#aef0c8,transparent 60%),radial-gradient(60% 70% at 100% 10%,#a9c6ff,transparent 60%),radial-gradient(80% 70% at 60% 110%,#d5b9ff,transparent 65%),#e8eefb}
+.m-menubar{position:absolute;top:0;left:0;right:0;height:22px;z-index:30;display:flex;align-items:center;gap:13px;padding:0 12px;font-size:11.5px;
+  background:rgba(255,255,255,.42);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}
+.m-menubar .sp{flex:1}
+.m-menubar b{font-weight:700}
+.m-extra{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border-radius:5px;cursor:pointer;font-variant-numeric:tabular-nums}
+.m-extra.on{background:rgba(0,0,0,.12)}
+.m-extra .bolt{color:#1a9c4b;display:none}
+.m-extra.charging .bolt{display:inline}
+.m-desk{position:absolute;top:22px;left:0;right:0;bottom:0}
+.m-icons{position:absolute;top:34px;right:12px;width:80px;display:flex;flex-direction:column;gap:10px;align-items:center;z-index:1}
+.dicon{display:flex;flex-direction:column;align-items:center;gap:3px;width:80px;text-align:center;font-size:10px;font-weight:500;color:#1d1d1f;transition:transform .2s,opacity .2s}
+.dicon span{padding:0 4px;border-radius:4px;line-height:1.3}
+.dicon .thumb{width:44px;height:48px;border-radius:5px;box-shadow:0 2px 5px rgba(0,0,0,.2)}
+.dicon.lift{opacity:.4}
+.dicon.new{animation:pIn .4s}
+.dicon .snapbox{border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,.25);overflow:hidden}
+.m-dock{position:absolute;bottom:5px;left:50%;transform:translateX(-50%);z-index:20;display:flex;gap:6px;padding:5px 7px;border-radius:16px;
+  background:rgba(255,255,255,.4);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.6),0 6px 18px -8px rgba(0,0,0,.3)}
+.m-dock i{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:#fff;transition:transform .25s}
+.m-dock i.bounce{animation:bounce .5s 2}
+@keyframes bounce{40%{transform:translateY(-10px)}}
+.m-dock img{width:112%;height:112%;object-fit:contain}
+
+.m-win{position:absolute;background:#fff;border-radius:11px;overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 0 0 .5px rgba(0,0,0,.22),0 22px 44px -16px rgba(0,0,0,.4);animation:winIn .35s cubic-bezier(.2,.8,.2,1)}
+@keyframes winIn{from{opacity:0;transform:translateY(8px) scale(.985)}}
+.m-tb{height:28px;flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:0 10px;background:#f6f6f6;border-bottom:.5px solid #dedede;position:relative}
+.m-tb .tl{width:10px;height:10px;border-radius:50%}
+.tl.r{background:#ff5f57}.tl.y{background:#febc2e}.tl.g{background:#28c840}
+.m-tb .tt{position:absolute;left:0;right:0;text-align:center;font-weight:600;color:#4b4b4b;pointer-events:none}
+.m-wb{flex:1;position:relative;overflow:hidden;display:flex;min-height:0}
+.mnd-side{width:118px;background:#f1f1f3;padding:8px 6px;border-right:.5px solid #e2e2e2;flex:0 0 auto}
+.si{display:flex;gap:6px;align-items:center;padding:4px 8px;border-radius:6px;color:#3a3a3c;margin-bottom:1px}
+.si svg{color:#0a7bff}
+.si.on{background:rgba(0,0,0,.08);font-weight:500}
+.mnd-main{flex:1;padding:12px 14px;overflow:hidden;min-width:0}
+.mnd-main h3{margin:0 0 10px;font-size:15px}
+.nrow{display:flex;gap:9px;align-items:center;padding:8px 10px;border-radius:9px;background:#f5f5f7;margin-bottom:6px;transition:transform .4s,opacity .4s,max-height .4s .15s,margin .4s .15s,padding .4s .15s;max-height:60px;overflow:hidden}
+.nrow.new{animation:rowIn .5s cubic-bezier(.2,.8,.2,1);box-shadow:inset 0 0 0 1.5px #0a84ff33}
+.nrow.gone{transform:translateX(40px);opacity:0;max-height:0;margin:0;padding-block:0}
+.nrow .t{flex:1;min-width:0}
+.nrow b{display:block;font-weight:600}
+.nrow .t span{color:#6e6e73;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.nrow time{color:#8e8e93;font-size:10px}
+.nrow .x{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;color:#8e8e93;background:#e6e6ea;font-size:12px;line-height:1}
+.web .m-tb{height:34px;background:#f3f3f5}
+.web .m-wb{position:static}
+.urlbar{position:absolute;left:96px;right:96px;top:7px;height:20px;border-radius:7px;background:#e6e6ea;display:flex;align-items:center;justify-content:center;gap:5px;color:#5a5a5e;font-size:10.5px}
+.page{flex:1;display:grid;place-items:center;background:linear-gradient(#fafafa,#f0f0f4)}
+.signin{width:270px;background:#fff;border-radius:14px;padding:20px;box-shadow:0 0 0 .5px rgba(0,0,0,.1),0 8px 20px -10px rgba(0,0,0,.2);text-align:center;position:relative}
+.signin .logo{width:34px;height:34px;border-radius:10px;margin:0 auto 8px;background:#5e35b1;color:#fff;display:grid;place-items:center;font-weight:800;font-size:16px}
+.signin h5{margin:0 0 4px;font-size:14px}
+.signin p{margin:0 0 14px;color:#6e6e73}
+.otp{display:flex;gap:6px;justify-content:center;margin-bottom:14px}
+.otp span{width:30px;height:38px;border-radius:7px;box-shadow:inset 0 0 0 1px #d2d2d7;display:grid;place-items:center;font-size:17px;font-weight:600;transition:box-shadow .2s}
+.otp span.f{box-shadow:inset 0 0 0 1.5px #0a84ff}
+.mbtn{display:inline-block;background:#0a84ff;color:#fff;border-radius:7px;padding:6px 18px;font-weight:600}
+.signin .done{position:absolute;inset:0;border-radius:14px;background:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:600}
+.signin.ok .done{display:flex;animation:pIn .3s}
+.signin .done i{width:40px;height:40px;border-radius:50%;background:#28c840;color:#fff;display:grid;place-items:center}
+.mnotes{display:flex;flex:1}
+.mnotes aside{width:132px;background:#f6f5f1;border-right:.5px solid #e3e1da;padding:8px 6px}
+.mnotes .nn{padding:6px 8px;border-radius:6px;margin-bottom:2px}
+.mnotes .nn b{display:block;font-weight:600}
+.mnotes .nn span{color:#8e8e93;font-size:10px}
+.mnotes .nn.on{background:#f3d36b}
+.mnotes article{flex:1;padding:14px 18px;background:#fffefb}
+.mnotes h4{margin:0 0 8px;font-size:15px}
+.mnotes p{margin:0 0 6px}
+.mhl{border-radius:2px;padding:0 1px}
+.mhl.sel{background:#b3d7ff;box-shadow:none}
+.paste{display:inline-block;min-width:60px;border-bottom:1px dashed #c7c7cc}
+.paste.filled{border-color:transparent;font-weight:500;animation:pIn .3s}
+.pasted-img{margin-top:6px;animation:pIn .35s}
+.finder .m-wb{background:#fff}
+.fside{width:110px;background:#f1f1f3;padding:8px 6px;border-right:.5px solid #e2e2e2}
+.fside small{display:block;color:#8e8e93;font-size:9.5px;font-weight:600;padding:4px 8px}
+.flist2{flex:1}
+.fhead,.frow2{display:grid;grid-template-columns:1fr 70px 90px;gap:8px;padding:5px 12px;align-items:center}
+.fhead{color:#8e8e93;font-size:10px;border-bottom:.5px solid #e5e5e5}
+.frow2:nth-child(even){background:#f5f5f7}
+.frow2 .nm{display:flex;gap:7px;align-items:center;font-weight:500}
+.frow2 .nm .thumb{width:18px;height:20px;border-radius:3px;font-size:0}
+.frow2 span{color:#6e6e73}
+.frow2.new{animation:rowIn .5s;background:#0a84ff!important;color:#fff}
+.frow2.new span{color:#e6f0ff}
+.docwin .m-wb{background:#fff;padding:22px 28px;display:block}
+.docwin .ln{height:7px;border-radius:4px;background:#ececf0;margin-bottom:9px}
+.docwin h4{margin:0 0 12px;font-size:16px}
+.mirrorwin .m-tb{background:#1f1f21;border-color:#000}
+.mirrorwin .m-tb .tt{color:#e5e5ea}
+.mirrorwin .m-wb{background:#000;flex-direction:column;align-items:center}
+.mirror{width:125px;height:266px;overflow:hidden;position:relative;cursor:pointer}
+.mirror .p-screen{transform:scale(.5);transform-origin:0 0;border-radius:0}
+.mirror .p-cam{display:none}
+.mbar{display:flex;gap:26px;justify-content:center;padding:6px 0 7px;color:#d1d1d6;width:100%;background:#1f1f21}
+.mbar span{cursor:pointer;display:grid;place-items:center}
+.ov{display:flex;flex-direction:column;gap:10px}
+.ov-np{display:flex;gap:12px;align-items:center;padding:12px;border-radius:12px;background:#f5f5f7}
+.ov-art{width:62px;height:62px;border-radius:9px;flex:0 0 auto;box-shadow:0 4px 10px -4px rgba(0,0,0,.4);transition:background .5s}
+.ov-meta{flex:1;min-width:0}
+.ov-meta small{color:#1a9c4b;font-weight:600;font-size:9.5px;text-transform:uppercase;letter-spacing:.4px}
+.ov-meta b{display:block;font-size:13px}
+.ov-meta span{color:#6e6e73}
+.ov-bar{height:3px;border-radius:3px;background:#dcdce0;margin-top:7px;overflow:hidden}
+.ov-bar i{display:block;height:100%;width:0;background:#1d1d1f;transition:width 1s linear}
+.ov-ctl{display:flex;gap:10px;align-items:center}
+.ov-ctl span{cursor:pointer;width:26px;height:26px;border-radius:50%;display:grid;place-items:center}
+.ov-ctl span.pp{background:#1d1d1f;color:#fff;width:30px;height:30px}
+.ov-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ov-card{padding:10px 12px;border-radius:12px;background:#f5f5f7;display:flex;gap:9px;align-items:center}
+.ov-card b{display:block}
+.ov-card span{color:#6e6e73}
+
+/* notch / island */
+.m-island{position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:40;width:96px;height:22px;background:#000;color:#fff;border-radius:0 0 12px 12px;overflow:hidden;
+  transition:width .5s cubic-bezier(.3,1.25,.5,1),height .5s cubic-bezier(.3,1.25,.5,1),border-radius .4s;cursor:pointer}
+.m-island.expanded{border-radius:0 0 22px 22px;box-shadow:0 10px 30px -8px rgba(0,0,0,.5)}
+.i-wings{position:absolute;inset:0 10px;display:flex;align-items:center;justify-content:space-between;opacity:0;transition:opacity .2s}
+.m-island.compact .i-wings{opacity:1;transition-delay:.18s}
+.i-wings>span{display:flex;align-items:center;gap:5px;font-weight:600;font-size:10.5px;font-variant-numeric:tabular-nums}
+.i-body{position:absolute;left:0;right:0;top:22px;padding:6px 16px 12px;opacity:0;transition:opacity .2s}
+.m-island.expanded .i-body{opacity:1;transition-delay:.2s}
+.i-card{display:flex;gap:10px;align-items:center}
+.i-txt{flex:1;min-width:0}
+.i-txt small{display:block;color:#a1a1a6;font-size:9.5px}
+.i-txt b{display:block;font-size:12px}
+.i-txt span{display:block;color:#d1d1d6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.i-txt .big{font-size:19px;letter-spacing:1px;font-variant-numeric:tabular-nums}
+.i-acts{display:flex;gap:6px;margin-top:9px}
+.i-btn{flex:1;text-align:center;padding:5px 0;border-radius:8px;background:rgba(255,255,255,.14);font-weight:600}
+.i-copy{padding:6px 10px;border-radius:9px;background:#0a84ff;font-weight:600;display:flex;gap:5px;align-items:center;white-space:nowrap}
+.i-copy.done{background:#28c840}
+.i-reply{display:flex;gap:6px;margin-top:9px;align-items:center}
+.i-input{flex:1;min-height:24px;padding:4px 10px;border-radius:12px;background:rgba(255,255,255,.14);white-space:nowrap;overflow:hidden}
+.i-send{width:24px;height:24px;border-radius:50%;background:#0a84ff;display:grid;place-items:center}
+.i-prog{height:4px;border-radius:4px;background:rgba(255,255,255,.18);margin-top:10px;overflow:hidden}
+.i-prog i{display:block;height:100%;background:#ff9f0a;border-radius:4px;transition:width 1s linear}
+.i-art{width:16px;height:16px;border-radius:4px;display:inline-block}
+.ok{color:#30d158;display:inline-flex}
+.bars{display:inline-flex;gap:2px;align-items:center;height:12px}
+.bars i{width:2.5px;border-radius:2px;background:#30d158;animation:eq .9s ease-in-out infinite;height:4px}
+.bars i:nth-child(2){animation-delay:-.3s}.bars i:nth-child(3){animation-delay:-.6s}.bars i:nth-child(4){animation-delay:-.15s}
+.bars.paused i{animation:none;height:3px;background:#8e8e93}
+@keyframes eq{50%{height:12px}}
+.m-menu{position:absolute;top:24px;right:96px;z-index:35;width:200px;padding:5px;border-radius:10px;background:rgba(246,246,248,.86);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);
+  box-shadow:0 0 0 .5px rgba(0,0,0,.2),0 14px 30px -10px rgba(0,0,0,.35);opacity:0;transform:translateY(-4px);transition:.18s;pointer-events:none}
+.m-menu.show{opacity:1;transform:none;pointer-events:auto}
+.mm-head{display:flex;gap:8px;align-items:center;padding:6px 8px 8px}
+.mm-head b{display:block}
+.mm-head span{color:#6e6e73;font-size:10px}
+.m-menu hr{border:0;border-top:.5px solid rgba(0,0,0,.14);margin:3px 6px}
+.mm-i{padding:4px 8px;border-radius:5px;cursor:pointer}
+.mm-i.hot{background:#0a84ff;color:#fff}
+.m-keys{position:absolute;left:50%;bottom:58px;transform:translate(-50%,10px);z-index:45;display:flex;gap:6px;padding:8px 10px;border-radius:14px;background:rgba(30,30,32,.78);
+  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);opacity:0;transition:.2s;pointer-events:none;color:#fff;font-size:11px;align-items:center}
+.m-keys.on{opacity:1;transform:translate(-50%,0)}
+.m-keys kbd{font:600 14px/1 -apple-system,BlinkMacSystemFont,sans-serif;min-width:28px;height:28px;padding:0 8px;border-radius:7px;background:linear-gradient(#5a5a5e,#3a3a3c);box-shadow:inset 0 -2px 0 rgba(0,0,0,.35),0 1px 0 rgba(255,255,255,.1);display:grid;place-items:center}
+.m-cursor{position:absolute;left:470px;top:300px;z-index:70;width:18px;height:18px;opacity:0;transition:left .6s cubic-bezier(.45,0,.2,1),top .6s cubic-bezier(.45,0,.2,1),opacity .25s;pointer-events:none;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.4))}
+.m-cursor.on{opacity:1}
+.m-cursor::after{content:"";position:absolute;left:-9px;top:-9px;width:18px;height:18px;border-radius:50%;background:rgba(10,132,255,.35);transform:scale(0);opacity:0}
+.m-cursor.down::after{animation:clk .35s ease-out}
+@keyframes clk{0%{transform:scale(.3);opacity:1}100%{transform:scale(1.8);opacity:0}}
+.m-cursor svg{display:block}
+.m-thumb{position:absolute;right:14px;bottom:56px;z-index:25;padding:3px;border-radius:8px;background:#fff;box-shadow:0 10px 26px -6px rgba(0,0,0,.45);opacity:0;transform:translateX(130%);transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .3s}
+.m-thumb.show{transform:none;opacity:1}
+
+/* ghosts that fly between devices */
+.ghost{position:absolute;left:0;top:0;z-index:200;pointer-events:none;will-change:transform}
+.gchip{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;background:#fff;color:#1d1d1f;border-radius:12px;padding:7px 11px;font:600 11px/1.2 -apple-system,BlinkMacSystemFont,Roboto,sans-serif;box-shadow:0 10px 26px -6px rgba(0,0,0,.4),0 0 0 1px rgba(12,206,107,.5)}
+.gchip.dark{background:#1d1d1f;color:#fff}
+.gfile{display:flex;flex-direction:column;align-items:center;gap:4px;font:600 10px -apple-system,BlinkMacSystemFont,sans-serif;color:#1d1d1f}
+.gfile .thumb{width:44px;height:52px;border-radius:7px;box-shadow:0 10px 22px -6px rgba(0,0,0,.45)}
+.gfile small{background:#fff;border-radius:5px;padding:2px 6px;box-shadow:0 3px 8px rgba(0,0,0,.15)}
+.snapbox{position:relative;overflow:hidden;border-radius:8px;background:#fff}
+.snapbox>.p-screen{position:absolute;left:0;top:0;transform-origin:0 0;border-radius:0}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body>
+
+<header class="hero wrap">
+  <img class="appicon" src="assets/icon.png" alt="" width="84" height="84">
+  <div class="eyebrow">Free · No account · Your Wi‑Fi only</div>
+  <h1 class="display">Your Android and your Mac,<br><span class="grad">finally on the same page.</span></h1>
+  <p class="lead">Notifications, codes, clipboard, files, screenshots, music and even your phone's screen, right on your Mac. Watch it work below, or try it yourself.</p>
+  <div class="downloads">
+    <!-- Download links: keep the literal filenames so they're easy to update on each release. -->
+    <a class="btn primary" href="MacNDroid-0.8.2.dmg"><img src="assets/icon.png" alt=""><span>Download for Mac<small>macOS 14 or later · v0.8.2</small></span></a>
+    <a class="btn secondary" href="MacNDroid-0.8.5.apk"><img src="assets/icon.png" alt=""><span>Download for Android<small>Android 10 or later · v0.8.5</small></span></a>
+  </div>
+  <div class="trust">Apple silicon and Intel · Pairs with a QR code in under a minute</div>
+</header>
+
+<section class="demo wrap" id="tour" aria-labelledby="capTitle">
+  <div class="tabs" role="tablist" id="tabs" aria-label="Features"></div>
+
+  <div class="stage-wrap" id="wrap">
+    <div class="stage" id="stage" aria-hidden="true">
+      <svg class="beam" viewBox="0 0 1120 620">
+        <path class="rail" d="M284 330 C 312 232, 344 232, 380 300"/>
+        <path class="flow" d="M284 330 C 312 232, 344 232, 380 300"/>
+      </svg>
+      <div class="badge" title="End-to-end encrypted"></div>
+
+      <div class="phone" id="phone">
+        <i class="btn-p"></i><i class="btn-v"></i>
+        <div class="p-screen" id="pScreen">
+          <div class="p-app" id="pApp"></div>
+          <div class="p-status"><span>9:41</span><span class="p-sicons" id="pSicons"></span><span class="sp"></span><span id="pWifi"></span><span class="p-batt" id="pBatt"></span></div>
+          <div class="p-hu" id="pHu"></div>
+          <div class="p-shade" id="pShade"></div>
+          <div class="p-sheet" id="pSheet"></div>
+          <div class="p-shot" id="pShot"></div>
+          <div class="p-overlay" id="pOverlay"></div>
+          <div class="p-snack" id="pSnack"></div>
+          <div class="p-flash" id="pFlash"></div>
+          <div class="p-touch" id="pTouch"></div>
+          <div class="p-cam"></div>
+          <span class="p-gesture" data-act="home"></span>
+        </div>
+      </div>
+
+      <div class="mac" id="mac">
+        <div class="m-lid">
+          <div class="m-screen" id="mScreen">
+            <div class="m-menubar"><b id="mApp">Finder</b><span>File</span><span>Edit</span><span>View</span><span class="sp"></span>
+              <span class="m-extra" id="mExtra" data-act="extra"></span><span id="mWifi"></span><span>Sat 7 Nov  9:41</span></div>
+            <div class="m-desk" id="mDesk"></div>
+            <div class="m-icons" id="mIcons"></div>
+            <div class="m-thumb" id="mThumb"></div>
+            <div class="m-dock" id="mDock"></div>
+            <div class="m-island" id="island" data-act="island"><div class="i-wings"><span class="i-l"></span><span class="i-r"></span></div><div class="i-body"></div></div>
+            <div class="m-menu" id="mMenu"></div>
+            <div class="m-keys" id="mKeys"></div>
+            <div class="m-cursor" id="mCursor"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M2 1.5v13.2l3.3-3.1 2.2 5 2.2-1-2.2-4.9h4.6z" fill="#000" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg></div>
+          </div>
+        </div>
+        <div class="m-base"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="caption">
+    <div>
+      <h2 class="display" id="capTitle">Notifications</h2>
+      <p id="capBody"></p>
+    </div>
+    <div class="cap-side">
+      <div class="actions" id="actions"></div>
+      <button class="tour-btn" id="tourBtn" type="button"></button>
+    </div>
+  </div>
+</section>
+
+<section class="block wrap" aria-labelledby="moreTitle">
+  <h2 class="big display" id="moreTitle">And plenty more.</h2>
+  <p class="sub">Small things that add up to a phone you rarely need to pick up.</p>
+  <div class="grid" id="moreGrid"></div>
+</section>
+
+<section class="block privacy" aria-labelledby="pvTitle">
+  <div class="wrap">
+    <h2 class="big display" id="pvTitle">Nothing leaves your Wi‑Fi.</h2>
+    <p class="sub">Your phone and your Mac talk to each other directly. There's no server in between, because there's no server at all.</p>
+    <div class="pv" id="pvGrid"></div>
+  </div>
+</section>
+
+<section class="block wrap" aria-labelledby="setupTitle">
+  <h2 class="big display" id="setupTitle">Set up in a minute.</h2>
+  <p class="sub">Install both apps, scan a code, and you're done.</p>
+  <ol class="steps">
+    <li><b>Install on your Mac.</b>Open the DMG and drag Mac n Droid to Applications. The first time, go to System Settings → Privacy &amp; Security and click <b style="display:inline">Open Anyway</b>.</li>
+    <li><b>Install on your phone.</b>Open the APK and allow installing from your browser or file manager.</li>
+    <li><b>Pair.</b>On the Mac, choose Pair a Phone. On the phone, tap Scan QR code.</li>
+    <li><b>Allow access.</b>Follow the Finish setup list on the phone. If notification access is greyed out, open App info → ⋮ → Allow restricted settings.</li>
+  </ol>
+</section>
+
+<section class="block wrap final">
+  <img class="appicon" src="assets/icon.png" alt="" width="72" height="72" style="width:72px;height:72px">
+  <h2 class="big display">Free. For you and your friends.</h2>
+  <p class="sub">No account, no ads, no subscription.</p>
+  <div class="downloads">
+    <a class="btn primary" href="MacNDroid-0.8.2.dmg"><img src="assets/icon.png" alt=""><span>Download for Mac<small>macOS 14 or later · v0.8.2</small></span></a>
+    <a class="btn secondary" href="MacNDroid-0.8.5.apk"><img src="assets/icon.png" alt=""><span>Download for Android<small>Android 10 or later · v0.8.5</small></span></a>
+  </div>
+</section>
+
+<footer>Mac n Droid isn't affiliated with Apple or Google. Mac and macOS are trademarks of Apple Inc. Android is a trademark of Google LLC.</footer>
+
+<script>
+(() => {
+'use strict';
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = id => document.getElementById(id);
+const S = $('stage'), W = $('wrap'), phoneEl = $('phone'), pScreen = $('pScreen'), mScreen = $('mScreen');
+const pApp = $('pApp'), pHu = $('pHu'), pShade = $('pShade'), pSheet = $('pSheet'), pShot = $('pShot'), pOverlay = $('pOverlay'),
+      pSnack = $('pSnack'), pFlash = $('pFlash'), pTouch = $('pTouch');
+const island = $('island'), iL = island.querySelector('.i-l'), iR = island.querySelector('.i-r'), iB = island.querySelector('.i-body');
+const mDesk = $('mDesk'), mIcons = $('mIcons'), mMenu = $('mMenu'), mKeys = $('mKeys'), mc = $('mCursor'), mThumb = $('mThumb'), mExtra = $('mExtra');
+
+/* ---------- icons ---------- */
+const P = {
+  msg:'<path d="M4 5h16v11H9l-5 4z"/>', mail:'<path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/>',
+  cal:'<path d="M4 6h16v14H4z"/><path d="M4 10h16M8 3v4M16 3v4"/>', photo:'<path d="M4 5h16v14H4z"/><path d="M4 16l5-5 4 4 3-3 4 4"/>',
+  music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+  pin:'<path d="M12 21s-7-6.5-7-12a7 7 0 0114 0c0 5.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/>',
+  bag:'<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 016 0v2"/>',
+  bank:'<path d="M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18"/>',
+  note:'<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/>', camera:'<path d="M4 8h4l2-3h4l2 3h4v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  folder:'<path d="M3 6h6l2 2h10v11H3z"/>', clock:'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/>',
+  phone:'<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+  search:'<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.5-4.5"/>', send:'<path d="M4 12l16-8-6 16-3-7z"/>',
+  copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M5 16V5a1 1 0 011-1h10"/>', check:'<path d="M5 12.5l4.5 4.5L19 7"/>',
+  bell:'<path d="M6 16v-5a6 6 0 0112 0v5l2 2H4z"/><path d="M10 21a2 2 0 004 0"/>', lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+  screen:'<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/>', key:'<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
+  vol:'<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 9a4 4 0 010 6M19 6.5a8 8 0 010 11"/>',
+  shot:'<path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3"/><circle cx="12" cy="12" r="3"/>',
+  live:'<rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="7" cy="12" r="2"/>', wifi2:'<path d="M2 9a15 15 0 0120 0M5.5 12.5a10 10 0 0113 0M9 16a5 5 0 016 0"/><circle cx="12" cy="19" r=".6"/>',
+  qr:'<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/>', filter:'<path d="M4 5h16l-6 8v6l-4-2v-4z"/>',
+  call:'<path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2"/>', menubar:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18"/>',
+  tile:'<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/>',
+  sync:'<path d="M20 11a8 8 0 00-14.3-4.6L4 8M4 4v4h4M4 13a8 8 0 0014.3 4.6L20 16M20 20v-4h-4"/>', back:'<path d="M15 5l-7 7 7 7"/>', recents:'<rect x="5" y="5" width="14" height="14" rx="2"/>',
+  home:'<circle cx="12" cy="12" r="7"/>', dl:'<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/>',
+  pause:'<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor" stroke="none"/>', play:'<path d="M8 5l11 7-11 7z" fill="currentColor" stroke="none"/>',
+  next:'<path d="M5 5l10 7-10 7z" fill="currentColor" stroke="none"/><path d="M18 5v14" stroke-width="2.6"/>',
+  prev:'<path d="M19 5L9 12l10 7z" fill="currentColor" stroke="none"/><path d="M6 5v14" stroke-width="2.6"/>',
+  bolt:'<path d="M13 2L4 14h7l-1 8 9-12h-7z" fill="currentColor" stroke="none"/>', pauseO:'<path d="M9 6v12M15 6v12"/>', plus:'<path d="M12 5v14M5 12h14"/>'
+};
+const ic = (n, s = 18) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n] || ''}</svg>`;
+const APPS = {
+  messages:{n:'Messages',i:'msg',c:'#1a73e8'}, mail:{n:'Mail',i:'mail',c:'#d93025'}, calendar:{n:'Calendar',i:'cal',c:'#4f7ef7'},
+  photos:{n:'Photos',i:'photo',c:'#f2a600'}, music:{n:'Music',i:'music',c:'#f4511e'}, maps:{n:'Maps',i:'pin',c:'#0fa3b8'},
+  clock:{n:'Clock',i:'clock',c:'#6b5ce7'}, bank:{n:'Bank',i:'bank',c:'#5e35b1'}, notes:{n:'Notes',i:'note',c:'#188038'},
+  camera:{n:'Camera',i:'camera',c:'#5f6368'}, files:{n:'Files',i:'folder',c:'#1967d2'}, mnd:{n:'Mac n Droid',logo:true,c:'#0CCE6B'},
+  browser:{n:'Browser',i:'globe',c:'#0a84ff'}, finder:{n:'Finder',i:'folder',c:'#3d9bf5'}
+};
+const appIcon = (k, s = 40) => { const a = APPS[k]; return `<i class="ai" style="--c:${a.c};width:${s}px;height:${s}px">${a.logo ? '<img src="assets/mark-white.png" alt="">' : ic(a.i, Math.round(s * .5))}</i>`; };
+const thumb = (k, label = '') => `<i class="thumb ${k}">${label || (k === 'pdf' ? 'PDF' : k === 'txt' ? 'TXT' : '')}</i>`;
+$('pWifi').innerHTML = '<svg width="13" height="11" viewBox="0 0 24 20"><path d="M12 19L0 6a17 17 0 0124 0z" fill="currentColor"/></svg>';
+$('mWifi').innerHTML = ic('wifi2', 13);
+S.querySelector('.badge').innerHTML = ic('lock', 16);
+
+/* ---------- scaling ---------- */
+let SC = 1;
+const fit = () => { SC = Math.min(1, W.clientWidth / 1120); W.style.setProperty('--s', SC); };
+new ResizeObserver(fit).observe(W); fit();
+const rel = (el, root = S) => { const r = el.getBoundingClientRect(), R = root.getBoundingClientRect(); return { x:(r.left - R.left) / SC, y:(r.top - R.top) / SC, w:r.width / SC, h:r.height / SC }; };
+
+/* ---------- timing / cancellation ---------- */
+let token = 0; const CANCEL = { cancelled:true };
+const wait = ms => { const my = token; return new Promise((res, rej) => setTimeout(() => my === token ? res() : rej(CANCEL), RM ? Math.min(ms, 400) : ms)); };
+const guard = () => { const my = token; return () => { if (my !== token) throw CANCEL; }; };
+
+/* ---------- phone helpers ---------- */
+let sicons = [];
+const SIC = { mail:'mail', cal:'cal', msg:'msg', bank:'bank', clock:'clock', dl:'dl' };
+function renderSicons(){ $('pSicons').innerHTML = sicons.map(k => `<i data-k="${k}">${ic(SIC[k], 11)}</i>`).join(''); }
+const setSicons = a => { sicons = a.slice(); renderSicons(); };
+const addSicon = k => { if (!sicons.includes(k)) { sicons.unshift(k); renderSicons(); } };
+const removeSicon = k => { const el = $('pSicons').querySelector(`[data-k="${k}"]`); if (el) el.classList.add('out'); sicons = sicons.filter(x => x !== k); setTimeout(renderSicons, 320); };
+let batt = { p:64, ch:false };
+function renderBatt(){
+  const { p, ch } = batt;
+  $('pBatt').innerHTML = `<svg width="8" height="13" viewBox="0 0 8 13"><rect x="1.5" y="0" width="5" height="1.6" rx=".6" fill="currentColor" opacity=".5"/><rect x=".5" y="1.5" width="7" height="11" rx="1.6" fill="none" stroke="currentColor" opacity=".5"/><rect x="1.6" y="${2.6 + 8.8 * (1 - p / 100)}" width="4.8" height="${8.8 * p / 100}" rx=".8" fill="${ch ? '#1a9c4b' : 'currentColor'}"/></svg>${p}%`;
+  mExtra.innerHTML = `${ic('phone', 12)}<span class="bolt">${ic('bolt', 10)}</span>${p}%`;
+  mExtra.classList.toggle('charging', ch);
+}
+const phoneView = html => { pApp.classList.remove('swap'); void pApp.offsetWidth; pApp.innerHTML = html; pApp.classList.add('swap'); };
+function hu({ k, app, title, text, me, acts = [] }){
+  pHu.innerHTML = `<div class="hu-top">${appIcon(k, 16)}<span>${app} · now</span></div><div class="hu-body"><span style="width:24px"></span><div><b>${title}</b><p>${text}</p>${me ? `<p class="me">${me}</p>` : ''}</div></div>${acts.length ? `<div class="hu-acts">${acts.map(a => `<span>${a}</span>`).join('')}</div>` : ''}`;
+  pHu.classList.add('show');
+}
+let snackT;
+function snack(html, ms = 2000){ pSnack.innerHTML = html; pSnack.classList.add('show'); clearTimeout(snackT); snackT = setTimeout(() => pSnack.classList.remove('show'), ms); }
+async function tap(el, { long = false } = {}){
+  const r = rel(el, pScreen);
+  pTouch.style.left = (r.x + r.w / 2) + 'px'; pTouch.style.top = (r.y + r.h / 2) + 'px';
+  pTouch.className = 'p-touch on'; await wait(long ? 650 : 260);
+  pTouch.className = 'p-touch on up'; await wait(180); pTouch.className = 'p-touch';
+}
+
+/* ---------- mac helpers ---------- */
+const macApp = n => { $('mApp').textContent = n; };
+const win = ({ id, title = '', x, y, w, h, body, cls = '' }) =>
+  `<div class="m-win ${cls}" id="${id}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px"><div class="m-tb"><i class="tl r"></i><i class="tl y"></i><i class="tl g"></i><span class="tt">${title}</span></div><div class="m-wb">${body}</div></div>`;
+function mndWin(active, content, g = {}){
+  const items = [['Overview','phone'],['Notifications','bell'],['Files','folder'],['Mirror','screen']];
+  return win({ id:'wMnd', x:g.x ?? 130, y:g.y ?? 26, w:g.w ?? 440, h:g.h ?? 300, title:'Mac n Droid',
+    body:`<nav class="mnd-side">${items.map(([n, i]) => `<span class="si ${n === active ? 'on' : ''}">${ic(i, 12)}${n}</span>`).join('')}</nav><div class="mnd-main"><h3>${active}</h3>${content}</div>` });
+}
+const desk = html => { mDesk.innerHTML = html; };
+const DEF_ICONS = [{ n:'Projects', k:'folder' }, { n:'Invoice.pdf', k:'pdf' }];
+const deskIcon = d => `<div class="dicon ${d.cls || ''}" ${d.id ? `id="${d.id}"` : ''}>${d.html || thumb(d.k)}<span>${d.n}</span></div>`;
+const setIcons = (a = DEF_ICONS) => { mIcons.innerHTML = a.map(deskIcon).join(''); };
+$('mDock').innerHTML = ['finder','browser','notes','music','mnd'].map(k => k === 'mnd'
+  ? `<i id="dockMnd" style="background:${APPS.mnd.c}"><img src="assets/mark-white.png" alt=""></i>`
+  : `<i style="background:${APPS[k].c}">${ic(APPS[k].i, 18)}</i>`).join('');
+
+function isl(mode, o = {}){
+  island.className = 'm-island ' + mode;
+  if (mode === 'compact'){ iL.innerHTML = o.l || ''; iR.innerHTML = o.r || ''; island.style.width = (o.w || 250) + 'px'; island.style.height = '22px'; }
+  else if (mode === 'expanded'){ iB.innerHTML = o.body || ''; island.style.width = (o.w || 320) + 'px'; island.style.height = (o.h || 92) + 'px'; }
+  else { island.style.width = ''; island.style.height = ''; }
+}
+async function point(el, dx = .5, dy = .5){
+  const r = rel(el, mScreen);
+  mc.classList.add('on'); mc.style.left = (r.x + r.w * dx) + 'px'; mc.style.top = (r.y + r.h * dy) + 'px';
+  await wait(680);
+}
+async function click(){ mc.classList.remove('down'); void mc.offsetWidth; mc.classList.add('down'); await wait(220); }
+const curOff = () => mc.classList.remove('on');
+let keysT;
+function keysFlash(label, ms = 1000){
+  mKeys.innerHTML = label.split(' ').map(k => k.startsWith('~') ? `<span>${k.slice(1).replace(/_/g, ' ')}</span>` : `<kbd>${k}</kbd>`).join('');
+  mKeys.classList.add('on'); clearTimeout(keysT); keysT = setTimeout(() => mKeys.classList.remove('on'), ms);
+}
+async function typeInto(el, text, speed = 40){ for (const ch of text){ el.textContent += ch; await wait(speed); } }
+
+/* ---------- transfer between devices ---------- */
+let beamT;
+function beam(dir){ S.classList.remove('to-mac', 'to-phone'); S.classList.add(dir === 'mac' ? 'to-mac' : 'to-phone'); clearTimeout(beamT); beamT = setTimeout(() => S.classList.remove('to-mac', 'to-phone'), 1200); }
+async function fly(from, to, html, { dur = 1000, dir } = {}){
+  const check = guard();
+  const a = rel(from), b = rel(to);
+  const g = document.createElement('div'); g.className = 'ghost'; g.innerHTML = html; S.appendChild(g);
+  const gw = g.offsetWidth, gh = g.offsetHeight;
+  const x0 = a.x + a.w / 2 - gw / 2, y0 = a.y + a.h / 2 - gh / 2, x1 = b.x + b.w / 2 - gw / 2, y1 = b.y + b.h / 2 - gh / 2;
+  const mx = (x0 + x1) / 2, my = Math.min(y0, y1) - 110;
+  beam(dir || (x1 > x0 ? 'mac' : 'phone'));
+  const kf = [];
+  for (let i = 0; i <= 16; i++){
+    const t = i / 16, u = 1 - t;
+    const x = u * u * x0 + 2 * u * t * mx + t * t * x1, y = u * u * y0 + 2 * u * t * my + t * t * y1;
+    kf.push({ offset:t, opacity: t < .06 ? t / .06 : t > .92 ? (1 - t) / .08 : 1, transform:`translate(${x}px,${y}px) scale(${1 + .12 * Math.sin(Math.PI * t) - .2 * t})` });
+  }
+  const anim = g.animate(kf, { duration: RM ? 250 : dur, easing:'cubic-bezier(.5,0,.3,1)', fill:'forwards' });
+  try { await anim.finished; } catch (e) {} finally { g.remove(); }
+  check();
+}
+function snapHTML(scale){
+  const c = pScreen.cloneNode(true);
+  c.removeAttribute('id'); c.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+  c.querySelectorAll('.p-touch,.p-flash,.p-shot,.p-gesture').forEach(e => e.remove());
+  c.style.transform = `scale(${scale})`;
+  return `<div class="snapbox" style="width:${250 * scale}px;height:${532 * scale}px">${c.outerHTML}</div>`;
+}
+
+/* ---------- phone screens ---------- */
+const HOME = ['messages','mail','calendar','photos','music','maps','clock','bank','notes','camera','files','mnd'];
+const vHome = () => `<div class="p-home"><div class="p-clock"><b>9:41</b><span>Saturday, November 7</span></div><div class="p-grid">${HOME.map(k => `<span class="p-icon" data-act="open:${k}">${appIcon(k, 42)}<span>${APPS[k].n}</span></span>`).join('')}</div><div class="p-search">${ic('search', 14)}<span>Search</span></div></div>`;
+const navBar = on => `<div class="navbar">${[['Home','home'],['Notifications','bell'],['Files','folder']].map(([n, i], j) => `<span class="${j === on ? 'on' : ''}"><i>${ic(i, 16)}</i>${n}</span>`).join('')}</div>`;
+const pRow = f => `<div class="frow ${f.cls || ''}">${thumb(f.k)}<div class="t"><b>${f.n}</b><small>${f.s}</small>${f.prog ? '<div class="prog"><i></i></div>' : ''}</div></div>`;
+const vFiles = () => `<div class="p-col"><div class="m3-bar"><span class="m3-title">Files</span></div><div class="seg"><span class="on">All</span><span>Received</span><span>Sent</span></div><div class="flist" id="pFiles">${pRow({ n:'Receipt-October.pdf', k:'pdf', s:'Received · Yesterday' })}${pRow({ n:'IMG_1988.jpg', k:'img', s:'Sent · Yesterday' })}${pRow({ n:'Wifi-setup.txt', k:'txt', s:'Received · Tuesday' })}</div><span class="fab" id="pFab" data-act="fab">${ic('send', 16)} Send</span>${navBar(2)}</div>`;
+const MAP = `<svg class="map" viewBox="0 0 250 532" preserveAspectRatio="xMidYMid slice"><rect width="250" height="532" fill="#eef2ea"/><path d="M0 360C70 330 130 390 250 345V532H0z" fill="#c3e4f3"/><rect x="18" y="110" width="84" height="66" rx="10" fill="#cfe9cf"/><rect x="160" y="250" width="70" height="50" rx="10" fill="#cfe9cf"/><g stroke="#fff" fill="none" stroke-linecap="round"><path d="M-10 228L260 196" stroke-width="10"/><path d="M146 -10L124 540" stroke-width="10"/><path d="M-10 90L260 132" stroke-width="7"/><path d="M44 -10l28 340M208 0l26 300M0 290l250-22" stroke-width="4"/></g></svg>`;
+const vMaps = () => `<div class="p-maps">${MAP}<div class="m3-search" id="pSearch">${ic('search', 14)}<span class="ph" id="pSearchText">Search here</span></div><div class="pin" id="pPin">${ic('pin', 30)}</div><div class="place" id="pPlace"><b>Harbor Café</b><span class="sub2">48 Harbor Lane · Brunch · Open until 3 PM</span><div class="place-row"><span id="pPhone" class="selable">+1 415 555 0136</span><span class="chip" id="pCopy">${ic('copy', 12)} Copy</span></div></div></div>`;
+const vTrip = () => `<div class="trip"><div class="m3-bar"><span class="m3-title">Trips</span></div><div class="hero-img"><b>Lisbon weekend</b></div><ul><li><time>Fri</time>${ic('send', 14)}<span>Flight TP 1361 · 6:40 PM</span></li><li><time>Fri</time>${ic('pin', 14)}<span>Casa do Rio, Alfama</span></li><li><time>Sat</time>${ic('bag', 14)}<span>Time Out Market, 1 PM</span></li><li><time>Sun</time>${ic('camera', 14)}<span>Sunset at Miradouro</span></li></ul></div>`;
+const vNotes = () => `<div class="notes"><div class="m3-bar"><span class="m3-title">Notes</span></div><div class="ncards"><div><b>Lisbon</b><span>Pastéis de nata at 4, then the tram up to the castle</span></div><div><b>Books</b><span>The Overstory, Piranesi</span></div><div><b>Gift ideas</b><span>Film camera, plant</span></div><div><b>Wi‑Fi</b><span>Guest network name</span></div></div><span class="fab" data-act="newnote" style="bottom:30px">${ic('plus', 16)} New</span></div>`;
+const vEditor = () => `<div class="notes"><div class="m3-bar">${ic('back', 16)}<span class="sp"></span>${ic('check', 16)}</div><div class="editor"><h4>Groceries</h4><div id="pNote" class="caret"></div></div></div>`;
+const vGeneric = k => `<div class="generic"><div style="height:60px"></div>${appIcon(k, 64)}<b style="font-size:16px;font-weight:500;margin:12px 0 6px">${APPS[k].n}</b><div class="sk"></div><div class="sk"></div><div class="sk" style="width:60%"></div></div>`;
+
+/* ---------- scenes ---------- */
+let ST = {}, timers = [], mo = null, ci = 0;
+const NOTIFS = {
+  mail:{ k:'mail', t:'Mail', s:'Your weekly summary is ready', time:'9:12' },
+  cal:{ k:'calendar', t:'Calendar', s:'Design review in 15 minutes', time:'9:30' }
+};
+const nRow = (n, id = '', cls = '') => `<div class="nrow ${cls}" ${id ? `id="${id}"` : ''}>${appIcon(n.k, 24)}<div class="t"><b>${n.t}</b><span>${n.s}</span></div><time>${n.time}</time><span class="x">×</span></div>`;
+const TRACKS = [
+  { t:'Neon Coastline', a:'Lumen Arcade', g:'linear-gradient(135deg,#ff9a5a,#ff3d77 50%,#7a3cff)', tint:'#ffe0d8', d:214 },
+  { t:'Paper Satellites', a:'Mira Vale', g:'linear-gradient(135deg,#5ee7df,#3a7bd5 60%,#2b2d8f)', tint:'#d9ecff', d:187 },
+  { t:'Slow Tide', a:'Harbor Lights', g:'linear-gradient(135deg,#fbd786,#f7797d 60%,#c6426e)', tint:'#ffe9d6', d:243 }
+];
+const fmt = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+const SCENES = [
+/* 1 ─ Notifications */
+{ tab:'Notifications', icon:'bell',
+  title:'Every notification, on the screen you’re looking at.',
+  body:'Phone notifications drop out of the MacBook notch with the app’s own buttons. Reply from your keyboard, and when you dismiss something on the Mac, it’s gone from your phone too.',
+  actions:[['Get a message','receive'],['Reply from the Mac','reply'],['Dismiss on the Mac','dismiss']],
+  setup(){
+    phoneView(vHome()); setSicons(['mail','cal']); macApp('Mac n Droid'); setIcons();
+    desk(mndWin('Notifications', `<div id="nList">${nRow(NOTIFS.mail, 'rMail')}${nRow(NOTIFS.cal)}</div>`));
+    ST = { pending:false };
+  },
+  async receive(){
+    hu({ k:'messages', app:'Messages', title:'Priya', text:'Dinner at 8? 🍝', acts:['Reply','Mark as read'] }); addSicon('msg');
+    await wait(1000);
+    await fly(pHu, island, `<span class="gchip">${appIcon('messages', 16)} Priya: Dinner at 8? 🍝</span>`);
+    isl('expanded', { w:330, h:116, body:`<div class="i-card">${appIcon('messages', 28)}<div class="i-txt"><small>Messages · Priya’s phone</small><b>Priya</b><span>Dinner at 8? 🍝</span></div></div><div class="i-acts" id="iActs"><span class="i-btn" id="iReply">Reply</span><span class="i-btn">Mark as read</span></div>` });
+    $('nList').insertAdjacentHTML('afterbegin', nRow({ k:'messages', t:'Priya', s:'Dinner at 8? 🍝', time:'now' }, 'rMsg', 'new'));
+    pHu.classList.remove('show');
+    ST.pending = true; await wait(500);
+  },
+  async reply(){
+    if (!ST.pending){ await this.receive(); await wait(900); }
+    await point($('iReply')); await click();
+    $('iActs').outerHTML = `<div class="i-reply"><span class="i-input" id="iInput"></span><span class="i-send" id="iSend">${ic('send', 12)}</span></div>`;
+    curOff(); await wait(250);
+    await typeInto($('iInput'), 'Sounds good, see you there!', 38);
+    keysFlash('return'); await wait(350);
+    await fly($('iInput'), pHu, `<span class="gchip dark">${ic('send', 12)} Sounds good, see you there!</span>`);
+    isl('compact', { w:200, l:`<span class="ok">${ic('check', 12)}</span>`, r:'Sent' });
+    hu({ k:'messages', app:'Messages', title:'Priya', text:'Dinner at 8? 🍝', me:'You: Sounds good, see you there!' });
+    const r = $('rMsg'); if (r) r.querySelector('.t span').textContent = 'You: Sounds good, see you there!';
+    removeSicon('msg'); ST.pending = false;
+    await wait(1600); pHu.classList.remove('show'); isl('idle'); await wait(300);
+  },
+  async dismiss(){
+    let row = $('rMail');
+    if (!row){ $('nList').insertAdjacentHTML('afterbegin', nRow(NOTIFS.mail, 'rMail', 'new')); addSicon('mail'); await wait(700); row = $('rMail'); }
+    const items = sicons.map(k => ({ mail:['mail','Mail','Your weekly summary is ready'], cal:['calendar','Calendar','Design review in 15 minutes'], msg:['messages','Priya','Dinner at 8? 🍝'] }[k])).filter(Boolean);
+    pShade.innerHTML = `<div class="shade-tiles"><span>${ic('wifi2', 13)} Home Wi‑Fi</span><span>${appIcon('mnd', 18)} Mac n Droid</span><span class="off">${ic('vol', 13)} Sound on</span><span class="off">${ic('bolt', 13)} Battery saver</span></div>${items.map(([k, t, s]) => `<div class="sn" data-k="${k}">${appIcon(k, 24)}<div><b>${t}</b><span>${s}</span></div></div>`).join('')}`;
+    pShade.classList.add('show'); await wait(900);
+    await point(row.querySelector('.x')); await click();
+    row.classList.add('gone'); beam('phone'); await wait(450);
+    const sn = pShade.querySelector('[data-k="mail"]'); if (sn) sn.classList.add('gone'); removeSicon('mail');
+    await wait(700); row.remove(); curOff();
+    await wait(900); pShade.classList.remove('show'); await wait(400);
+  },
+  async tour(){ await wait(800); await this.receive(); await wait(1300); await this.reply(); await wait(1200); await this.dismiss(); }
+},
+
+/* 2 ─ Codes */
+{ tab:'Codes', icon:'key',
+  title:'Sign-in codes, without picking up your phone.',
+  body:'When a one-time code arrives, the Mac shows it with a Copy button. Or turn on automatic copying and just press ⌘V.',
+  actions:[['Get a sign-in code','code']],
+  setup(){
+    phoneView(vHome()); setSicons([]); macApp('Browser'); setIcons();
+    desk(win({ id:'wWeb', cls:'web', x:110, y:22, w:470, h:310, body:`<div class="urlbar">${ic('lock', 10)} northwind.example/sign-in</div><div class="page"><div class="signin" id="signin"><div class="logo">N</div><h5>Northwind Bank</h5><p>Enter the 6-digit code we sent to your phone.</p><div class="otp" id="otp">${'<span></span>'.repeat(6)}</div><span class="mbtn" id="verify">Verify</span><div class="done"><i>${ic('check', 20)}</i>You’re signed in</div></div></div>` }));  },
+  async code(){
+    $('signin').classList.remove('ok'); [...$('otp').children].forEach(b => { b.textContent = ''; b.classList.remove('f'); });
+    hu({ k:'bank', app:'Northwind Bank', title:'Verification code', text:'482913 is your sign-in code. Never share it with anyone.' }); addSicon('bank');
+    await wait(1000);
+    await fly(pHu, island, `<span class="gchip mono">${ic('key', 12)} 482913</span>`);
+    pHu.classList.remove('show');
+    isl('expanded', { w:330, h:84, body:`<div class="i-card" style="margin-top:4px">${appIcon('bank', 28)}<div class="i-txt"><small>Northwind Bank · code</small><b class="big mono">482 913</b></div><span class="i-copy" id="iCopy">${ic('copy', 12)} Copy 482913</span></div>` });
+    await wait(900);
+    await point($('iCopy')); await click();
+    $('iCopy').innerHTML = `${ic('check', 12)} Copied`; $('iCopy').classList.add('done');
+    await wait(800); isl('idle');
+    const boxes = [...$('otp').children];
+    await point(boxes[0]); await click(); keysFlash('⌘ V');
+    for (let i = 0; i < 6; i++){ boxes[i].textContent = '482913'[i]; boxes[i].classList.add('f'); await wait(60); }
+    await wait(400); await point($('verify')); await click();
+    $('signin').classList.add('ok'); removeSicon('bank'); curOff(); await wait(600);
+  },
+  async tour(){ await wait(800); await this.code(); await wait(1200); }
+},
+
+/* 3 ─ Clipboard */
+{ tab:'Clipboard', icon:'copy',
+  title:'Copy on one. Paste on the other.',
+  body:'Copy on your Mac and it’s on your phone. Copy on your phone and it’s on your Mac. Text and images both work, and passwords from password managers are never sent.',
+  actions:[['Copy on the Mac','fromMac'],['Copy on the phone','fromPhone']],
+  setup(){
+    phoneView(vMaps()); setSicons([]); macApp('Notes'); setIcons();
+    desk(win({ id:'wNotes', x:96, y:24, w:450, h:300, body:`<div class="mnotes"><aside><div class="nn on"><b>Saturday plans</b><span>9:38 AM</span></div><div class="nn"><b>Groceries</b><span>Yesterday</span></div><div class="nn"><b>Gift ideas</b><span>Tuesday</span></div></aside><article><h4>Saturday plans</h4><p>Brunch with Sam at Harbor Café</p><p>Address: <span class="mhl" id="mAddr">48 Harbor Lane</span></p><p>Book a table: <span class="paste" id="mPaste"></span></p><p style="color:#8e8e93">Bring the film camera</p></article></div>` }));
+    ST = { placed:false };
+  },
+  async fromMac(){
+    const src = $('mAddr'); $('mPaste').textContent = ''; $('mPaste').classList.remove('filled');
+    await point(src, .05, .6); await click(); src.classList.add('sel'); await wait(250);
+    keysFlash('⌘ C'); await wait(650);
+    await fly(src, $('pSearch'), `<span class="gchip">${ic('copy', 12)} 48 Harbor Lane</span>`);
+    curOff(); src.classList.remove('sel');
+    await tap($('pSearch'), { long:true });
+    $('pSearch').insertAdjacentHTML('afterend', '<div class="pop" id="pPaste" style="left:24px;top:88px">Paste</div>');
+    await wait(450); await tap($('pPaste')); $('pPaste').remove();
+    $('pSearchText').className = 'val'; $('pSearchText').textContent = '48 Harbor Lane';
+    await wait(350); $('pPin').classList.add('show'); await wait(250); $('pPlace').classList.add('show');
+    ST.placed = true; await wait(600);
+  },
+  async fromPhone(){
+    if (!ST.placed){ $('pSearchText').className = 'val'; $('pSearchText').textContent = '48 Harbor Lane'; $('pPin').classList.add('show'); $('pPlace').classList.add('show'); ST.placed = true; await wait(700); }
+    $('mPaste').textContent = ''; $('mPaste').classList.remove('filled');
+    $('pPhone').classList.add('sel'); await tap($('pCopy'));
+    snack(`${ic('copy', 13)} Copied to clipboard`, 1600); await wait(500);
+    await fly($('pPhone'), $('mPaste'), `<span class="gchip">${ic('call', 12)} +1 415 555 0136</span>`);
+    isl('compact', { w:220, l:ic('copy', 12), r:'From phone' });
+    $('pPhone').classList.remove('sel');
+    await point($('mPaste'), .2); await click(); keysFlash('⌘ V'); await wait(250);
+    $('mPaste').textContent = '+1 415 555 0136'; $('mPaste').classList.add('filled');
+    await wait(1100); isl('idle'); curOff(); await wait(300);
+  },
+  async tour(){ await wait(800); await this.fromMac(); await wait(1200); await this.fromPhone(); }
+},
+
+/* 4 ─ Files */
+{ tab:'Files', icon:'folder',
+  title:'Files, both ways, without a cable.',
+  body:'Drop a file on Mac n Droid to send it to your phone. On the phone, use Share → Send to Mac. Photos, videos and PDFs keep real previews on both sides.',
+  actions:[['Send from the Mac','fromMac'],['Send from the phone','fromPhone']],
+  setup(){
+    phoneView(vFiles()); setSicons([]); macApp('Finder');
+    setIcons([{ n:'Boarding-pass.pdf', k:'pdf', id:'dFile' }, { n:'Projects', k:'folder' }]);
+    const fr = (n, k, size, date, cls = '') => `<div class="frow2 ${cls}"><span class="nm">${thumb(k)}${n}</span><span>${size}</span><span>${date}</span></div>`;
+    ST.fr = fr;
+    desk(win({ id:'wFinder', cls:'finder', title:'Downloads', x:70, y:30, w:470, h:270,
+      body:`<div class="fside"><small>Favorites</small><div class="si">${ic('folder', 12)}Recents</div><div class="si">${ic('folder', 12)}Desktop</div><div class="si on">${ic('dl', 12)}Downloads</div><div class="si">${ic('folder', 12)}Documents</div></div><div class="flist2"><div class="fhead"><span>Name</span><span>Size</span><span>Date Added</span></div><div id="fList">${fr('Receipt-October.pdf', 'pdf', '182 KB', 'Yesterday')}${fr('Quarterly-notes.txt', 'txt', '4 KB', 'Tuesday')}</div></div>` }));
+  },
+  async fromMac(){
+    const f = $('dFile'), dock = $('dockMnd');
+    await point(f); await click(); f.classList.add('lift');
+    const ghost = `<span class="gfile">${thumb('pdf')}<small>Boarding-pass.pdf</small></span>`;
+    point(dock).catch(() => {});
+    await fly(f, dock, ghost, { dur:700, dir:'mac' });
+    dock.classList.add('bounce'); f.classList.remove('lift'); curOff();
+    await fly(dock, $('pFiles'), ghost, { dur:1000 });
+    $('pFiles').insertAdjacentHTML('afterbegin', pRow({ n:'Boarding-pass.pdf', k:'pdf', s:'Receiving…', prog:true, cls:'new' }));
+    const row = $('pFiles').firstElementChild; await wait(60);
+    row.querySelector('.prog i').style.width = '100%'; await wait(1050);
+    row.querySelector('.prog').remove(); row.querySelector('small').textContent = 'Received · just now';
+    snack(`${ic('check', 13)} Saved to Downloads/Mac n Droid`, 1800);
+    dock.classList.remove('bounce'); await wait(800);
+  },
+  async fromPhone(){
+    await tap($('pFab'));
+    pSheet.innerHTML = `<div class="sh-prev"><i class="ph" id="shPrev"></i><div><b style="font-weight:500">IMG_2041.jpg</b><br><span style="color:var(--onsv)">Photo · 3.2 MB</span></div></div><div class="sh-targets"><span id="shMac">${appIcon('mnd', 44)}Send to Mac</span><span>${appIcon('messages', 44)}Messages</span><span>${appIcon('mail', 44)}Mail</span><span>${appIcon('files', 44)}Files</span></div>`;
+    pSheet.classList.add('show'); await wait(900);
+    await tap($('shMac'));
+    const p = fly($('shPrev'), $('fList'), `<span class="gfile">${thumb('img')}<small>IMG_2041.jpg</small></span>`);
+    await wait(60); pSheet.classList.remove('show');
+    await p;
+    $('fList').insertAdjacentHTML('afterbegin', ST.fr('IMG_2041.jpg', 'img', '3.2 MB', 'Today, 9:41', 'new'));
+    $('pFiles').insertAdjacentHTML('afterbegin', pRow({ n:'IMG_2041.jpg', k:'img', s:'Sent · just now', cls:'new' }));
+    isl('compact', { w:240, l:`${thumb('img')}`.replace('class="thumb img"', 'class="thumb img" style="width:14px;height:14px;border-radius:3px"'), r:'Saved' });
+    await wait(1600); isl('idle'); await wait(300);
+  },
+  async tour(){ await wait(800); await this.fromMac(); await wait(1100); await this.fromPhone(); }
+},
+
+/* 5 ─ Screenshots */
+{ tab:'Screenshots', icon:'shot',
+  title:'Take a screenshot on your phone. Paste it on your Mac.',
+  body:'Phone screenshots go straight to your Mac’s clipboard, ready to drop into a note, a chat or a document.',
+  actions:[['Take a screenshot','shot']],
+  setup(){
+    phoneView(vTrip()); setSicons([]); macApp('Notes'); setIcons();
+    desk(win({ id:'wNotes', x:96, y:24, w:450, h:310, body:`<div class="mnotes"><aside><div class="nn on"><b>Lisbon trip</b><span>9:40 AM</span></div><div class="nn"><b>Packing list</b><span>Yesterday</span></div></aside><article><h4>Lisbon trip</h4><p>Itinerary for Sam:</p><div id="mDrop" class="paste" style="min-width:120px;min-height:16px"></div></article></div>` }));
+  },
+  async shot(){
+    $('mDrop').innerHTML = ''; $('mDrop').className = 'paste';
+    phoneEl.classList.add('btns'); await wait(380);
+    pFlash.classList.add('on'); await wait(90); pFlash.classList.remove('on'); phoneEl.classList.remove('btns');
+    const snapSmall = snapHTML(.26);
+    pShot.innerHTML = `${snapSmall}<div class="acts"><span>Share</span><span>Edit</span></div>`;
+    pShot.classList.add('show'); await wait(900);
+    await fly(pShot, island, `<span style="display:block;box-shadow:0 12px 28px -6px rgba(0,0,0,.5);border-radius:8px">${snapHTML(.3)}</span>`, { dur:1100 });
+    pShot.classList.remove('show');
+    isl('compact', { w:210, l:ic('shot', 13), r:'Copied' });
+    await wait(700);
+    await point($('mDrop'), .1); await click(); keysFlash('⌘ V'); await wait(250);
+    $('mDrop').className = 'pasted-img'; $('mDrop').innerHTML = snapHTML(.36);
+    await wait(1200); isl('idle'); curOff(); await wait(300);
+  },
+  async tour(){ await wait(900); await this.shot(); await wait(1400); }
+},
+
+/* 6 ─ Music */
+{ tab:'Music', icon:'music',
+  title:'Your phone’s music, in the notch.',
+  body:'Whatever’s playing on your phone shows up on your Mac with artwork and progress, from any player app. Play, pause and skip from either one. They stay in sync.',
+  actions:[['Pause from the Mac','toggleMac'],['Skip on the phone','nextPhone']],
+  hint:'Or use the controls on either screen.',
+  setup(){
+    ST = { i:0, playing:true, pos:52 };
+    phoneView(`<div class="player" id="pPlayer"><div style="text-align:center;color:var(--onsv);font-size:10.5px;font-weight:500">Now playing</div><div class="art" id="pArt"></div><b id="pTitle"></b><span class="by" id="pArtist"></span><div class="bar"><i id="pProg"></i></div><div class="times"><span id="pPos"></span><span id="pDur"></span></div><div class="ctl"><span data-act="m:prev" id="pPrev">${ic('prev', 22)}</span><span class="big" data-act="m:toggle" id="pPlay"></span><span data-act="m:next" id="pNext">${ic('next', 22)}</span></div></div>`);
+    setSicons([]); macApp('Mac n Droid'); setIcons();
+    desk(mndWin('Overview', `<div class="ov"><div class="ov-np"><div class="ov-art" id="oArt"></div><div class="ov-meta"><small>Playing on your phone</small><b id="oTitle"></b><span id="oArtist"></span><div class="ov-bar"><i id="oProg"></i></div></div><div class="ov-ctl"><span data-act="m:prev" id="oPrev">${ic('prev', 14)}</span><span class="pp" data-act="m:toggle" id="oPlay"></span><span data-act="m:next" id="oNext">${ic('next', 14)}</span></div></div><div class="ov-grid"><div class="ov-card">${ic('phone', 16)}<div><b>64%</b><span>Phone battery</span></div></div><div class="ov-card">${ic('wifi2', 16)}<div><b>Connected</b><span>Home Wi‑Fi · encrypted</span></div></div></div></div>`));
+    this.render();
+    timers.push(setInterval(() => { if (!ST.playing) return; ST.pos++; if (ST.pos >= TRACKS[ST.i].d){ ST.i = (ST.i + 1) % TRACKS.length; ST.pos = 0; this.render(); } else this.progress(); }, 1000));
+  },
+  island(){ const t = TRACKS[ST.i]; isl('compact', { w:200, l:`<span class="i-art" style="background:${t.g}"></span>`, r:`<span class="bars ${ST.playing ? '' : 'paused'}"><i></i><i></i><i></i><i></i></span>` }); },
+  render(){
+    const t = TRACKS[ST.i];
+    $('pArt').style.background = t.g; $('oArt').style.background = t.g; $('pPlayer').style.setProperty('--tint', t.tint);
+    $('pTitle').textContent = $('oTitle').textContent = t.t; $('pArtist').textContent = $('oArtist').textContent = t.a;
+    $('pPlay').innerHTML = ic(ST.playing ? 'pause' : 'play', 26); $('pPlay').classList.toggle('paused', !ST.playing);
+    $('oPlay').innerHTML = ic(ST.playing ? 'pause' : 'play', 13);
+    this.island(); this.progress();
+  },
+  progress(){ const t = TRACKS[ST.i]; const w = (ST.pos / t.d * 100) + '%'; $('pProg').style.width = w; $('oProg').style.width = w; $('pPos').textContent = fmt(ST.pos); $('pDur').textContent = fmt(t.d); },
+  async cmd(c, from, animate = true){
+    const btn = $((from === 'mac' ? 'o' : 'p') + { toggle:'Play', next:'Next', prev:'Prev' }[c]);
+    if (animate){ if (from === 'mac'){ await point(btn); await click(); } else await tap(btn); }
+    btn.classList.remove('press'); void btn.offsetWidth; btn.classList.add('press');
+    if (from === 'mac') beam('phone'); else beam('mac');
+    if (c === 'toggle') ST.playing = !ST.playing;
+    else { ST.i = (ST.i + (c === 'next' ? 1 : TRACKS.length - 1)) % TRACKS.length; ST.pos = 0; ST.playing = true; }
+    this.render();
+    if (c !== 'toggle'){
+      const t = TRACKS[ST.i];
+      isl('expanded', { w:300, h:78, body:`<div class="i-card" style="margin-top:2px"><span class="i-art" style="width:38px;height:38px;border-radius:8px;background:${t.g}"></span><div class="i-txt"><small>Now playing on your phone</small><b>${t.t}</b><span>${t.a}</span></div><span class="bars"><i></i><i></i><i></i><i></i></span></div>` });
+      await wait(1700); this.island();
+    }
+    await wait(300); curOff();
+  },
+  toggleMac(){ return this.cmd('toggle', 'mac'); },
+  nextPhone(){ return this.cmd('next', 'phone'); },
+  onAct(a, el, from){ if (a.startsWith('m:')) return this.cmd(a.slice(2), from, false); },
+  async tour(){ await wait(1500); await this.cmd('toggle', 'mac'); await wait(1300); await this.cmd('toggle', 'phone'); await wait(1300); await this.cmd('next', 'mac'); await wait(1200); await this.cmd('next', 'phone'); await wait(1200); }
+},
+
+/* 7 ─ Live activities */
+{ tab:'Live activities', icon:'live',
+  title:'Live activities, right beside the notch.',
+  body:'Timers, stopwatches, calls and downloads keep counting on your Mac. Click one for details. Music shows up here too.',
+  actions:[['See details','details'],['Start a download','download']],
+  setup(){
+    ST = { total:480, rem:452, dl:false };
+    phoneView(`<div class="clockapp"><div class="m3-bar"><span class="m3-title">Clock</span></div><div class="tabs3"><span>Alarm</span><span>Clock</span><span class="on">Timer</span><span>Stopwatch</span></div><div class="ring"><svg width="200" height="200"><circle cx="100" cy="100" r="88" fill="none" stroke="var(--sch)" stroke-width="10"/><circle id="pRing" cx="100" cy="100" r="88" fill="none" stroke="var(--p)" stroke-width="10" stroke-linecap="round" stroke-dasharray="553" style="transition:stroke-dashoffset 1s linear"/></svg><div class="lab"><b id="pTime"></b><span>Pasta</span></div></div><div class="clockbtns"><span>+1:00</span><span class="pri">${ic('pauseO', 18)}</span></div></div>`);
+    setSicons(['clock']); macApp('Pages'); setIcons();
+    desk(win({ id:'wDoc', cls:'docwin', title:'Weekend menu', x:110, y:28, w:420, h:300, body:`<h4>Weekend menu</h4>${[100, 92, 96, 60, 0, 88, 95, 70].map(w => w ? `<div class="ln" style="width:${w}%"></div>` : '<div style="height:10px"></div>').join('')}` }));
+    this.render(); this.island();
+    timers.push(setInterval(() => { ST.rem = ST.rem > 0 ? ST.rem - 1 : ST.total; this.render(); if (!ST.dl && island.classList.contains('compact')) this.island(); }, 1000));
+  },
+  render(){ $('pTime').textContent = fmt(ST.rem); $('pRing').style.strokeDashoffset = 553 * (1 - ST.rem / ST.total); const d = $('iTime'); if (d) d.textContent = fmt(ST.rem); const p = $('iProg'); if (p) p.style.width = (ST.rem / ST.total * 100) + '%'; },
+  island(){ isl('compact', { w:210, l:`<span style="color:#ff9f0a;display:inline-flex">${ic('clock', 13)}</span>`, r:`<span style="color:#ff9f0a">${fmt(ST.rem)}</span>` }); },
+  async details(){
+    await point(island, .8, .5); await click();
+    isl('expanded', { w:320, h:92, body:`<div class="i-card" style="margin-top:2px">${appIcon('clock', 28)}<div class="i-txt"><small>Clock · Timer</small><b>Pasta</b></div><b id="iTime" style="font-size:22px;font-weight:600;color:#ff9f0a;font-variant-numeric:tabular-nums">${fmt(ST.rem)}</b></div><div class="i-prog"><i id="iProg" style="width:${ST.rem / ST.total * 100}%"></i></div>` });
+    curOff(); await wait(2600); this.island(); await wait(300);
+  },
+  async download(){
+    ST.dl = true; addSicon('dl');
+    hu({ k:'files', app:'Files', title:'Downloading Lisbon-guide.pdf', text:'0%' });
+    await wait(700); beam('mac');
+    const ringSvg = p => `<svg width="14" height="14" viewBox="0 0 14 14" style="transform:rotate(-90deg)"><circle cx="7" cy="7" r="5.5" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="2"/><circle cx="7" cy="7" r="5.5" fill="none" stroke="#0a84ff" stroke-width="2" stroke-dasharray="34.6" stroke-dashoffset="${34.6 * (1 - p / 100)}"/></svg>`;
+    for (let p = 0; p <= 100; p += 5){
+      isl('compact', { w:220, l:ringSvg(p), r:`${p}%` });
+      pHu.querySelector('.hu-body p').textContent = p < 100 ? `${p}% · 12.4 MB` : 'Download complete';
+      await wait(120);
+    }
+    isl('compact', { w:230, l:`<span class="ok">${ic('check', 12)}</span>`, r:'Done' });
+    removeSicon('dl'); await wait(1300); pHu.classList.remove('show'); ST.dl = false; this.island(); await wait(300);
+  },
+  async tour(){ await wait(1500); await this.details(); await wait(1000); await this.download(); await wait(1500); }
+},
+
+/* 8 ─ Mirroring */
+{ tab:'Mirroring', icon:'screen',
+  title:'Your phone, in a window.',
+  body:'Mirror your phone’s screen to your Mac and use it with your trackpad and keyboard: click, scroll, type, paste, and Back, Home or Recents.',
+  actions:[['Open an app from the Mac','openNotes'],['Type on the Mac keyboard','type'],['Go home','home']],
+  hint:'Or click the mirrored screen.',
+  setup(){
+    phoneView(vHome()); setSicons([]); macApp('Mac n Droid'); setIcons();
+    desk(win({ id:'wMirror', cls:'mirrorwin', title:'', x:170, y:18, w:150, h:28 + 266 + 28,
+      body:`<div class="mirror" id="mirror"></div><div class="mbar"><span data-act="back">${ic('back', 13)}</span><span data-act="home">${ic('home', 13)}</span><span data-act="recents">${ic('recents', 12)}</span></div>` }));
+    ST = { app:'home' };
+    const sync = () => {
+      const m = $('mirror'); if (!m) return;
+      const c = pScreen.cloneNode(true); c.removeAttribute('id'); c.querySelectorAll('[id]').forEach(e => e.removeAttribute('id'));
+      c.querySelectorAll('.swap').forEach(e => e.classList.remove('swap'));
+      m.replaceChildren(c);
+    };
+    let raf = 0;
+    mo = new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; sync(); }); });
+    mo.observe(pScreen, { subtree:true, childList:true, attributes:true, characterData:true });
+    sync();
+  },
+  open(k){ ST.app = k; phoneView(k === 'notes' ? vNotes() : vGeneric(k)); },
+  mt(sel){ return $('mirror').querySelector(sel); },
+  async openNotes(){
+    if (ST.app !== 'home'){ this.open('home'); phoneView(vHome()); ST.app = 'home'; await wait(500); }
+    await point(this.mt('[data-act="open:notes"]')); await click(); beam('phone');
+    this.open('notes'); await wait(700); curOff();
+  },
+  async type(){
+    if (ST.app !== 'notes' && ST.app !== 'editor'){ await this.openNotes(); await wait(400); }
+    if (ST.app !== 'editor'){ await point(this.mt('[data-act="newnote"]')); await click(); beam('phone'); phoneView(vEditor()); ST.app = 'editor'; await wait(500); }
+    curOff(); keysFlash('~Typing_on_your_Mac', 2600); beam('phone');
+    const el = $('pNote'); el.textContent = '';
+    await typeInto(el, 'Lemons, basil, fresh pasta, parmesan', 55); await wait(600);
+  },
+  async home(){
+    await point(this.mt('.p-gesture') || $('mirror')); await click(); beam('phone');
+    phoneView(vHome()); ST.app = 'home'; await wait(500); curOff();
+  },
+  onAct(a){
+    if (a.startsWith('open:')){ beam('phone'); this.open(a.slice(5)); }
+    else if (a === 'home' || a === 'back' || a === 'recents'){ beam('phone'); phoneView(vHome()); ST.app = 'home'; }
+    else if (a === 'newnote'){ beam('phone'); phoneView(vEditor()); ST.app = 'editor'; }
+  },
+  async tour(){ await wait(900); await this.openNotes(); await wait(900); await this.type(); await wait(1000); await this.home(); }
+},
+
+/* 9 ─ Battery & ring */
+{ tab:'Find my phone', icon:'vol',
+  title:'Your phone’s battery, and a way to find it.',
+  body:'Your phone’s charge sits in the menu bar next to your Mac’s. Lost it in the couch? Ring it at full volume from your Mac, even when it’s on silent.',
+  actions:[['Ring my phone','ring'],['Plug in the phone','plug']],
+  setup(){
+    batt = { p:64, ch:false }; renderBatt();
+    phoneView(vHome()); setSicons([]); macApp('Finder'); setIcons(); desk('');
+    mMenu.innerHTML = `<div class="mm-head">${appIcon('mnd', 26)}<div><b>Phone</b><span id="mmSub">64% · Connected over Wi‑Fi</span></div></div><hr><div class="mm-i" id="mmRing" data-act="ring">Ring Phone</div><div class="mm-i">Send Clipboard</div><div class="mm-i">Send Files…</div><hr><div class="mm-i">Open Mac n Droid</div><div class="mm-i">Settings…</div>`;
+  },
+  async ring(animate = true){
+    if (animate){ await point(mExtra); await click(); }
+    mExtra.classList.add('on'); mMenu.classList.add('show'); await wait(700);
+    if (animate){ await point($('mmRing')); }
+    $('mmRing').classList.add('hot'); await click(); await wait(120);
+    mMenu.classList.remove('show'); mExtra.classList.remove('on'); $('mmRing').classList.remove('hot'); curOff();
+    beam('phone'); await wait(500);
+    pOverlay.innerHTML = `<div class="ringing"><div class="pulse">${ic('vol', 40)}</div><b>Ringing from your Mac</b><span>Full volume, even on silent</span><span class="stop" id="ringStop" data-act="stop">I found it</span></div>`;
+    pOverlay.className = 'p-overlay show'; phoneEl.classList.add('shake');
+    await wait(2800); await tap($('ringStop'));
+    pOverlay.className = 'p-overlay'; phoneEl.classList.remove('shake'); await wait(400);
+  },
+  async plug(){
+    const on = !batt.ch;
+    this.actions[1][0] = on ? 'Unplug the phone' : 'Plug in the phone'; renderActions();
+    if (on){
+      pOverlay.innerHTML = `<div class="charging"><div class="c">${ic('bolt', 40)}</div><b style="font-size:20px;font-weight:500">${batt.p}%</b><span style="opacity:.7">Charging</span></div>`;
+      pOverlay.className = 'p-overlay show'; await wait(1100); pOverlay.className = 'p-overlay';
+    }
+    batt.ch = on; renderBatt(); beam('mac');
+    isl('compact', { w:200, l:`<span style="color:${on ? '#30d158' : '#fff'};display:inline-flex">${ic(on ? 'bolt' : 'phone', 12)}</span>`, r:`${batt.p}%` });
+    $('mmSub').textContent = `${batt.p}%${on ? ' · Charging' : ''} · Connected over Wi‑Fi`;
+    if (on) for (let i = 0; i < 3; i++){ await wait(800); batt.p++; renderBatt(); isl('compact', { w:200, l:`<span style="color:#30d158;display:inline-flex">${ic('bolt', 12)}</span>`, r:`${batt.p}%` }); }
+    else await wait(1200);
+    await wait(800); isl('idle');
+  },
+  onAct(a){ if (a === 'extra' || a === 'ring') return this.ring(false); if (a === 'stop'){ pOverlay.className = 'p-overlay'; phoneEl.classList.remove('shake'); } },
+  async tour(){ await wait(900); await this.ring(); await wait(1000); await this.plug(); await wait(1300); }
+}
+];
+
+/* ---------- engine ---------- */
+let autoplay = !RM, inView = false, started = false;
+const tabsEl = $('tabs'), actionsEl = $('actions'), tourBtn = $('tourBtn');
+
+function clearTransient(idle = false){
+  [pHu, pShade, pSheet, pShot, pSnack, mMenu, mKeys, mThumb].forEach(e => e.classList.remove('show', 'on'));
+  pOverlay.className = 'p-overlay'; pTouch.className = 'p-touch'; curOff(); mExtra.classList.remove('on');
+  phoneEl.classList.remove('shake', 'btns'); S.querySelectorAll('.ghost').forEach(g => g.remove());
+  const sc = SCENES[ci]; if (!idle && sc && sc.island) sc.island(); else isl('idle');
+}
+function reset(){
+  token++; timers.forEach(clearInterval); timers = []; if (mo){ mo.disconnect(); mo = null; }
+  batt = { p:64, ch:false }; renderBatt();
+}
+function renderTabs(){
+  tabsEl.innerHTML = SCENES.map((s, i) => `<button class="tab" role="tab" type="button" aria-selected="${i === ci}" data-i="${i}">${ic(s.icon, 15)}${s.tab}</button>`).join('');
+  const t = tabsEl.children[ci]; if (t && tabsEl.scrollWidth > tabsEl.clientWidth) tabsEl.scrollTo({ left: t.offsetLeft - tabsEl.clientWidth / 2 + t.offsetWidth / 2, behavior: RM ? 'auto' : 'smooth' });
+}
+function renderActions(){
+  const s = SCENES[ci];
+  actionsEl.innerHTML = s.actions.map(([l, f], i) => `<button class="act ${i ? 'alt' : ''}" type="button" data-f="${f}">${l}</button>`).join('') + (s.hint ? `<span class="hint">${s.hint}</span>` : '');
+}
+function renderCaption(){ const s = SCENES[ci]; $('capTitle').textContent = s.title; $('capBody').textContent = s.body; renderActions(); }
+function renderTourBtn(){ tourBtn.innerHTML = autoplay ? `${ic('pause', 12)} Pause the tour` : `${ic('play', 12)} Play the tour`; }
+
+async function show(i, { demo = true } = {}){
+  ci = i; renderTabs(); renderCaption(); reset(); clearTransient(true);
+  const s = SCENES[i]; s.setup(); if (!s.island) isl('idle');
+  if (!demo) return;
+  try {
+    await s.tour();
+    if (autoplay){ await wait(2000); show((i + 1) % SCENES.length); }
+  } catch (e){ if (e !== CANCEL) console.error(e); }
+}
+function stopTour(){ autoplay = false; renderTourBtn(); }
+async function run(fn){
+  stopTour(); token++; clearTransient();
+  try { await fn(); } catch (e){ if (e !== CANCEL) console.error(e); }
+}
+
+tabsEl.addEventListener('click', e => {
+  const b = e.target.closest('.tab'); if (!b) return;
+  stopTour(); show(+b.dataset.i);
+});
+tabsEl.addEventListener('keydown', e => {
+  if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+  const n = (ci + (e.key === 'ArrowRight' ? 1 : SCENES.length - 1)) % SCENES.length;
+  stopTour(); show(n, { demo:false }); tabsEl.children[n].focus();
+});
+actionsEl.addEventListener('click', e => {
+  const b = e.target.closest('.act'); if (!b) return;
+  const s = SCENES[ci]; run(() => s[b.dataset.f]());
+});
+tourBtn.addEventListener('click', () => {
+  if (autoplay){ stopTour(); token++; clearTransient(); }
+  else { autoplay = true; renderTourBtn(); show(ci); }
+});
+S.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]'); const s = SCENES[ci];
+  if (!el || !s.onAct) return;
+  const from = el.closest('.mac') ? 'mac' : 'phone';
+  run(() => Promise.resolve(s.onAct(el.dataset.act, el, from)));
+});
+
+new IntersectionObserver(([en]) => {
+  inView = en.isIntersecting;
+  if (inView && autoplay){ show(ci); started = true; }
+  else if (!inView && autoplay && started){ token++; clearTransient(); }
+}, { threshold:.45 }).observe(W);
+
+renderTourBtn(); show(0, { demo:false });
+
+/* ---------- static sections ---------- */
+const MORE = [
+  ['call','Answer calls on your Mac','Incoming calls show Answer and Decline right in the notch.'],
+  ['filter','Only what matters','Choose which apps come through, grouped by category, on the phone or on the Mac.'],
+  ['live','The notch, your way','Small, Compact or Large notch notifications, or standard macOS banners.'],
+  ['photo','Images on the clipboard','Copy a picture on one device and paste it on the other.'],
+  ['tile','Quick Settings tile','Send your clipboard to the Mac from the phone’s Quick Settings.'],
+  ['menubar','Menu bar only','Keep Mac n Droid out of the Dock and live in the menu bar.'],
+  ['sync','Reconnects by itself','Finds your phone again after Wi‑Fi changes, sleep or a restart.'],
+  ['screen','Feels native on both','SwiftUI on the Mac with light and dark mode. Material You on Android.']
+];
+$('moreGrid').innerHTML = MORE.map(([i, t, d]) => `<div class="card"><div class="ci">${ic(i, 18)}</div><h3>${t}</h3><p>${d}</p></div>`).join('');
+const PV = [
+  ['wifi2','Local Wi‑Fi only','Your phone and your Mac connect directly on your own network.'],
+  ['lock','End-to-end encrypted','Every message is sealed with AES-256-GCM before it leaves the device.'],
+  ['qr','Paired with a QR code','No account, no sign-in, no cloud. Nothing to sign up for.']
+];
+$('pvGrid').innerHTML = PV.map(([i, t, d]) => `<div><div class="ci">${ic(i, 24)}</div><b>${t}</b><span>${d}</span></div>`).join('');
+})();
+</script>
+</body>
+</html>

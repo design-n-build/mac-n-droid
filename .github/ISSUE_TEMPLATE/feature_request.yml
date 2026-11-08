@@ -1,0 +1,16 @@
+name: Feature idea
+description: Suggest something Mac n Droid could do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Describe the problem you have or what you'd like to do. "When I'm … I want to …" works well.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Apps that do this well, screenshots, sketches.

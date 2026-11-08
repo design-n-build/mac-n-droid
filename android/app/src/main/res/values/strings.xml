@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Mac n Droid</string>
+    <string name="share_label">Send to Mac</string>
+    <string name="tile_label">Send clipboard to Mac</string>
+    <string name="copy_watcher_label">Mac n Droid clipboard sync</string>
+    <string name="copy_watcher_desc">Sends text and images you copy on this phone to your Mac automatically. Mac n Droid only reacts to Copy actions. While you mirror this screen to your Mac, it also carries out the taps and typing you do there. It doesn\'t read or store what\'s on your screen.</string>
+</resources>

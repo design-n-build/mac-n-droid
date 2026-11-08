@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Secrets: NEVER commit these. Anyone with the keystore could publish fake updates as you.
+android/keystore/
+android/keystore.properties
+*.jks
+*.keystore
+*.p12
+mac/signing/
+
+# Machine-specific
+android/local.properties
+.idea/
+*.iml
+
+# Build output (installers go to GitHub Releases, not the repo)
+mac/.build/
+mac/dist/
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+release/
+*.apk
+*.dmg

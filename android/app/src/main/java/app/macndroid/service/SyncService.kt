@@ -1,0 +1,262 @@
+package app.macndroid.service
+
+import android.app.Notification
+import android.app.PendingIntent
+import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.Uri
+import android.os.BatteryManager
+import android.os.Build
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import app.macndroid.MacNDroidApp
+import app.macndroid.R
+import app.macndroid.core.Link
+import app.macndroid.core.Prefs
+import app.macndroid.ui.MainActivity
+import app.macndroid.ui.SendClipboardActivity
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+
+/** Foreground service that owns the Mac connection for as long as the phone is paired. */
+class SyncService : Service() {
+    private val main = Handler(Looper.getMainLooper())
+    private var statusJob: Job? = null
+    private var lastBattery = -1 to false
+    private lateinit var ringer: Ringer
+    lateinit var files: FileTransfers
+        private set
+    lateinit var media: MediaSync
+        private set
+    private lateinit var screenshots: ScreenshotWatcher
+
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) = reportBattery(i, force = false)
+    }
+
+    private val netCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) = Link.kick()
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+        ringer = Ringer(this)
+        files = FileTransfers(this)
+        media = MediaSync(this)
+        screenshots = ScreenshotWatcher(this)
+        startInForeground(Link.status.value)
+        media.start()
+        screenshots.refresh()
+
+        Link.onMessage = ::handle
+        Link.onConnected = {
+            lastBattery = -1 to false
+            app.macndroid.core.Haptics.play(app.macndroid.core.Haptics.Kind.Tick)
+            registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let { reportBattery(it, force = true) }
+            NotificationMirror.instance?.syncAll()
+            ClipboardSync.flushPending()
+            app.macndroid.ui.ShareShortcuts.publish(this)
+            media.resync()
+            main.post { screenshots.refresh() }
+        }
+        Link.onDisconnected = {
+            files.abortIncoming()
+            main.post { ScreenMirror.stop(notifyMac = false) }
+            NotificationMirror.instance?.resetSession()
+        }
+        Link.start(this)
+
+        registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(netCallback)
+
+        statusJob = Link.scope.launch {
+            combine(Link.status, Prefs.pairing) { s, _ -> s }.collect { s -> main.post { updateNotification(s) } }
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_SEND_URIS -> {
+                val uris = buildList {
+                    intent.clipData?.let { cd -> for (i in 0 until cd.itemCount) cd.getItemAt(i).uri?.let(::add) }
+                    intent.data?.let(::add)
+                }.distinct()
+                files.send(uris)
+            }
+            ACTION_STOP_RING -> ringer.stop(notifyMac = true)
+            ACTION_TEST_RING -> {
+                ringer.start()
+                main.postDelayed({ ringer.stop(notifyMac = false) }, 3000)
+            }
+            ACTION_RECONNECT -> Link.kick()
+            ACTION_REFRESH -> { screenshots.refresh(); media.start() }
+        }
+        if (Prefs.pairing.value == null) stopSelf()
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        instance = null
+        statusJob?.cancel()
+        ScreenMirror.stop(notifyMac = false)
+        media.stop()
+        screenshots.stop()
+        ringer.stop(notifyMac = false)
+        runCatching { unregisterReceiver(batteryReceiver) }
+        runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(netCallback) }
+        Link.stop()
+        super.onDestroy()
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    // MARK: messages from the Mac (IO thread, in order)
+
+    private fun handle(msg: JSONObject) {
+        when (msg.optString("t")) {
+            "clip" -> if (Prefs.receiveClipboard.value || msg.optBoolean("explicit")) {
+                ClipboardSync.receiveText(this, msg.optString("text"))
+            }
+            "notif_dismiss" -> NotificationMirror.instance?.dismiss(msg.optString("key"))
+            "notif_action" -> NotificationMirror.instance?.perform(
+                msg.optString("key"), msg.optInt("i"), msg.optString("text").ifEmpty { null })
+            "ring" -> main.post { ringer.start() }
+            "ring_stop" -> main.post { ringer.stop(notifyMac = false) }
+            "file_start", "file_chunk", "file_end" -> files.handleIncoming(msg)
+            "mirror_start" -> main.post { ScreenMirror.request(this) }
+            "mirror_stop" -> main.post { ScreenMirror.stop(notifyMac = false) }
+            "mirror_key" -> ScreenMirror.requestKeyFrame()
+            "input" -> {
+                val cw = CopyWatcher.instance
+                if (cw == null) {
+                    Link.post(JSONObject().put("t", "input_unavailable"))
+                } else {
+                    val pts = msg.optJSONArray("p")
+                    val points = (0 until (pts?.length() ?: 0)).mapNotNull { i ->
+                        pts?.optJSONArray(i)?.let { it.optDouble(0).toFloat() to it.optDouble(1).toFloat() }
+                    }
+                    when {
+                        msg.has("key") -> cw.key(msg.optString("key"))
+                        msg.has("text") -> cw.type(msg.optString("text"))
+                        else -> cw.gesture(points, msg.optLong("dur", 60))
+                    }
+                }
+            }
+            "media_cmd" -> media.command(msg.optString("cmd"), msg.optLong("pos"), msg.optString("id").ifEmpty { null })
+        }
+    }
+
+    private fun reportBattery(i: Intent, force: Boolean) {
+        val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
+        val status = i.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+        val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+        val pct = if (level >= 0 && scale > 0) level * 100 / scale else return
+        if (!force && lastBattery == pct to charging) return
+        lastBattery = pct to charging
+        Link.post(JSONObject().put("t", "battery").put("level", pct).put("charging", charging))
+    }
+
+    // MARK: status notification
+
+    private fun buildNotification(s: Link.Status): Notification {
+        val mac = Prefs.pairing.value?.macName ?: "Mac"
+        val text = when (s) {
+            Link.Status.Connected -> "Connected to $mac"
+            Link.Status.Connecting -> "Connecting to $mac…"
+            Link.Status.Searching -> "Looking for $mac…"
+            Link.Status.AuthFailed -> "$mac rejected this phone. Pair again."
+            Link.Status.Unpaired -> "Not paired"
+        }
+        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val b = NotificationCompat.Builder(this, MacNDroidApp.CH_STATUS)
+            .setSmallIcon(R.drawable.ic_stat_logo)
+            .setContentTitle(text)
+            .setContentIntent(open)
+            .setOngoing(true)
+            .setSilent(true)
+            .setShowWhen(false)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        if (s == Link.Status.Connected) {
+            val clip = PendingIntent.getActivity(
+                this, 1, Intent(this, SendClipboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE)
+            b.addAction(R.drawable.ic_clipboard, "Send clipboard", clip)
+        } else if (s != Link.Status.Unpaired) {
+            val retry = PendingIntent.getService(
+                this, 2, Intent(this, SyncService::class.java).setAction(ACTION_RECONNECT), PendingIntent.FLAG_IMMUTABLE)
+            b.addAction(R.drawable.ic_stat_logo, "Retry now", retry)
+        }
+        return b.build()
+    }
+
+    private fun startInForeground(s: Link.Status) {
+        val n = buildNotification(s)
+        if (Build.VERSION.SDK_INT >= 29) {
+            startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        } else {
+            startForeground(NOTIF_ID, n)
+        }
+    }
+
+    /** Adds/removes the mediaProjection foreground type around a mirroring session. */
+    fun setProjectionForeground(on: Boolean) {
+        val n = buildNotification(Link.status.value)
+        runCatching {
+            if (on && Build.VERSION.SDK_INT >= 29) {
+                startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            } else startInForeground(Link.status.value)
+        }.onFailure { android.util.Log.w("SyncService", "foreground type change failed", it) }
+    }
+
+    private fun updateNotification(s: Link.Status) {
+        runCatching {
+            getSystemService(android.app.NotificationManager::class.java).notify(NOTIF_ID, buildNotification(s))
+        }
+    }
+
+    companion object {
+        const val NOTIF_ID = 1
+        const val ACTION_SEND_URIS = "app.macndroid.SEND_URIS"
+        const val ACTION_STOP_RING = "app.macndroid.STOP_RING"
+        const val ACTION_RECONNECT = "app.macndroid.RECONNECT"
+        const val ACTION_TEST_RING = "app.macndroid.TEST_RING"
+        const val ACTION_REFRESH = "app.macndroid.REFRESH"
+
+        @Volatile var instance: SyncService? = null
+            private set
+
+        fun start(ctx: Context) {
+            if (Prefs.pairing.value == null) return
+            runCatching { ContextCompat.startForegroundService(ctx, Intent(ctx, SyncService::class.java)) }
+        }
+
+        fun stop(ctx: Context) = ctx.stopService(Intent(ctx, SyncService::class.java))
+
+        /** Hands URIs (with read grants) to the service so transfers outlive the calling activity. */
+        fun sendUris(ctx: Context, uris: List<Uri>) {
+            if (uris.isEmpty()) return
+            val i = Intent(ctx, SyncService::class.java).setAction(ACTION_SEND_URIS)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val cd = ClipData.newRawUri("files", uris.first())
+            uris.drop(1).forEach { cd.addItem(ClipData.Item(it)) }
+            i.clipData = cd
+            ContextCompat.startForegroundService(ctx, i)
+        }
+    }
+}
