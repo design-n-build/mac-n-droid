@@ -92,5 +92,11 @@ Bug reports and ideas are welcome: open an [issue](https://github.com/santosh-mu
 Mac n Droid is free software under the [GNU General Public License v3.0](LICENSE). You can use,
 study, change and share it; copies and changed versions you share must stay open source under the same license.
 
+### Name and logo
+The name **Mac n Droid** and the Mac n Droid logo are trademarks of Santosh Mudragada and are not
+covered by the GPL. You're welcome to fork the code, but please give your version a different name
+and logo so people don't confuse it with the official app. Using the name to refer to this project
+(for example "works with Mac n Droid" or a review) is fine.
+
 ## Next up (from RESEARCH.md roadmap)
 SMS view/send, screen mirroring, phone as webcam, call audio through the Mac, media controls, clipboard history.
