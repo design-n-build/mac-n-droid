@@ -75,7 +75,7 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 ```bash
 # Mac app → mac/dist/Mac n Droid.app + .dmg (needs only Command Line Tools)
-cd mac && ./scripts/build-app.sh 0.11.0
+cd mac && ./scripts/build-app.sh 0.11.1
 
 # Android APK → android/app/build/outputs/apk/release/app-release.apk
 cd android
