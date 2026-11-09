@@ -19,5 +19,17 @@ someone already reported it, add a 👍 reaction or a comment with your phone an
 Build instructions are in the [README](README.md#build-from-source). The phone ↔ Mac messages are
 described in [PROTOCOL.md](PROTOCOL.md).
 
-By contributing, you agree that your contribution is licensed under the project's
-[GPL-3.0 license](LICENSE).
+## Contributor agreement (CLA)
+Before a code change can be merged, you agree to the following by ticking the box in the pull request:
+
+1. **You keep the copyright** to your contribution.
+2. Your contribution is licensed under the project's [GPL-3.0 license](LICENSE), like the rest of the code.
+3. You also give the Mac n Droid maintainer a **permanent, worldwide, royalty-free right to use, change
+   and share your contribution under other licenses too**, including in paid or closed-source versions
+   of Mac n Droid. This keeps the project able to offer things like a paid store version or extra
+   features later, without having to find every past contributor for permission.
+4. **The work is yours to give:** you wrote it, or you have the right to contribute it (for example,
+   your employer allows it), and it doesn't include code you copied from somewhere with a license
+   that doesn't allow this.
+
+Small fixes to documentation and typos are welcome too and follow the same agreement.
