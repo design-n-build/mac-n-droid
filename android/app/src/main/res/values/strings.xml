@@ -1,7 +1,9 @@
 <resources>
     <string name="app_name">Mac n Droid</string>
     <string name="share_label">Send to Mac</string>
-    <string name="tile_label">Send clipboard to Mac</string>
     <string name="copy_watcher_label">Mac n Droid clipboard sync</string>
-    <string name="copy_watcher_desc">Sends text and images you copy on this phone to your Mac automatically. Mac n Droid only reacts to Copy actions. While you mirror this screen to your Mac, it also carries out the taps and typing you do there. It doesn\'t read or store what\'s on your screen.</string>
+    <string name="copy_watcher_desc">Sends text and images you copy on this phone to your Mac automatically. Mac n Droid only reacts to Copy actions and notices which app is open. It can\'t tap or type on your screen, and it doesn\'t read or store what\'s on it.</string>
+    <string name="phone_control_label">Mac n Droid phone control</string>
+    <string name="phone_control_desc">Lets you use this phone from the Phone Screen window on your paired Mac: clicks become taps, and you can scroll, type and use Back, Home and Recents. It only acts on what you do in that window. It doesn\'t read or store what\'s on your screen. Some banking apps show a warning while this is on.</string>
+    <string name="files_tile_label">Send files to Mac</string>
 </resources>

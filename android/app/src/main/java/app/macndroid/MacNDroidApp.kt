@@ -41,6 +41,20 @@ class MacNDroidApp : Application() {
                 NotificationChannel(CH_RING, "Find my phone", NotificationManager.IMPORTANCE_HIGH).apply {
                     setSound(null, null)
                 },
+                NotificationChannel(CH_LEFT_BEHIND, "Left-behind alerts", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Tells you when you walk away from your Mac while it's awake"
+                    setSound(raw(R.raw.mnd_left_behind), soft)
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 250, 150, 250)
+                },
+                NotificationChannel(CH_LINKS, "Links from Mac", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Links sent from your Mac, when they can't open by themselves"
+                    setSound(null, null)
+                },
+                NotificationChannel(CH_MAC_MUSIC, "Music on your Mac", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Play, pause and skip what's playing on your Mac"
+                    setShowBadge(false)
+                },
             )
         )
     }
@@ -51,5 +65,8 @@ class MacNDroidApp : Application() {
         const val CH_SENT = "files_sent"
         const val CH_RING = "ring"
         const val CH_MIRROR = "mirror"
+        const val CH_LEFT_BEHIND = "left_behind"
+        const val CH_LINKS = "links"
+        const val CH_MAC_MUSIC = "mac_music"
     }
 }

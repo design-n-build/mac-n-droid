@@ -46,7 +46,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
                     textInputButtonTitle: "Send", textInputPlaceholder: "Message"))
             } else {
                 actions.append(UNNotificationAction(
-                    identifier: "a\(a.id)", title: a.title,
+                    identifier: "a\(a.id)", title: a.displayTitle,
                     options: a.title.lowercased().contains("decline") ? [.destructive] : []))
             }
         }

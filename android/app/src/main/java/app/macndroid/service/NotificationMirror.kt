@@ -61,16 +61,27 @@ class NotificationMirror : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        runCatching { ChatNotifications.onPosted(this, sbn) }
         if (!Link.isConnected) return
         if (forwardLive(sbn)) return
-        forward(sbn, silent = false)
+        // WhatsApp and others re-post every unread chat at once (after "Clear all", or when one new
+        // message arrives). Those carry the time of their own last message: old ones go quietly.
+        val whenMs = sbn.notification.`when`
+        val stale = whenMs > 0 && System.currentTimeMillis() - whenMs > 5 * 60_000
+        forward(sbn, silent = stale)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        ChatNotifications.onRemoved(sbn)
         if (liveSent.containsKey(sbn.key)) {
             // Clock (and others) hide their live notification while the app itself is open. Keep it on
             // the Mac until the app is left; then it either comes back or really ended.
-            if (CopyWatcher.foregroundPackage == sbn.packageName) {
+            // Never for calls (a removed call notification means the call ended), and never while the
+            // phone is locked (the "app on screen" is then stale, so it would stick until unlock).
+            val isCall = sbn.notification.category == Notification.CATEGORY_CALL
+            val unlocked = getSystemService(android.os.PowerManager::class.java)?.isInteractive == true &&
+                getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != true
+            if (!isCall && unlocked && CopyWatcher.foregroundPackage == sbn.packageName) {
                 heldLive[sbn.key] = sbn.packageName
             } else {
                 liveSent.remove(sbn.key)
@@ -203,7 +214,9 @@ class NotificationMirror : NotificationListenerService() {
             // Redacted (sensitive) notifications can carry actions with blank titles: skip those.
             val label = a.title?.toString()?.takeIf { it.isNotBlank() } ?: return@forEachIndexed
             val reply = a.remoteInputs?.any { it.allowFreeFormInput } == true
-            actions.put(JSONObject().put("i", i).put("title", label).put("reply", reply))
+            // Opens a screen on the phone (Gmail's Reply has no text box, even on the phone itself).
+            val opens = !reply && Build.VERSION.SDK_INT >= 31 && runCatching { a.actionIntent?.isActivity == true }.getOrDefault(false)
+            actions.put(JSONObject().put("i", i).put("title", label).put("reply", reply).put("opens", opens))
         }
 
         // Skip no-op updates (progress ticks, re-posts with identical content).

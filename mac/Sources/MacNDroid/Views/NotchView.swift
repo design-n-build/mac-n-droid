@@ -77,6 +77,20 @@ final class TopPanelHost<Content: View> {
 
     func makeKey() { panel?.makeKey() }
 
+    /// Puts the text cursor in the first text field, unless one is already being typed in.
+    func focusTextInput() {
+        guard let p = panel, let root = p.contentView else { return }
+        if !p.isKeyWindow { p.makeKey() }
+        if let editing = p.firstResponder as? NSTextView, editing.isEditable { return }
+        func find(_ v: NSView) -> NSView? {
+            if let t = v as? NSTextField, t.isEditable { return t }
+            if let t = v as? NSTextView, t.isEditable { return t }
+            for sub in v.subviews { if let f = find(sub) { return f } }
+            return nil
+        }
+        if let field = find(root) { p.makeFirstResponder(field) }
+    }
+
     private func ensurePanel() -> TopPanel {
         if let panel { return panel }
         let p = TopPanel(contentRect: NSRect(origin: .zero, size: size),
@@ -181,6 +195,13 @@ final class NotchController {
         model.onBeginReply = { [weak self] in
             self?.hideWork?.cancel()
             self?.host.makeKey()
+            // The field appears with the grow animation; put the cursor in it as soon as it exists.
+            for delay in [0.05, 0.18, 0.4] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    guard let self, self.model.replying else { return }
+                    self.host.focusTextInput()
+                }
+            }
         }
         model.onReply = { [weak self] key, index, text in
             self?.state?.performAction(key: key, index: index, text: text)
@@ -628,8 +649,8 @@ struct NotchView: View {
                 let lower = a.title.lowercased()
                 let answer = lower.contains("answer")
                 let decline = lower.contains("decline") || lower.contains("hang")
-                NotchButton(title: a.title,
-                            symbol: answer ? "phone.fill" : (decline ? "phone.down.fill" : nil),
+                NotchButton(title: a.displayTitle,
+                            symbol: answer ? "phone.fill" : (decline ? "phone.down.fill" : (a.opensOnPhone ? "arrow.up.forward.app" : nil)),
                             tint: answer ? .green : (decline ? .red : nil)) {
                     model.onAction(n.id, a.id)
                 }
@@ -650,6 +671,7 @@ struct NotchView: View {
                 .padding(.vertical, 8)
                 .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .focused($replyFocused)
+                .onAppear { replyFocused = true }
                 .onSubmit { send(n, reply) }
                 .onExitCommand { withAnimation(smooth) { model.replying = false } }
             HStack(spacing: 8) {

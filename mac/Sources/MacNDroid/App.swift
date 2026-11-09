@@ -14,12 +14,16 @@ struct MacNDroidApp: App {
         }
         .defaultSize(width: 900, height: 600)
         .commands {
+            CommandGroup(after: .appInfo) { CheckForUpdatesButton() }
             CommandGroup(after: .newItem) {
                 Button("Send Files to Phone…") { state.chooseFilesToSend() }
                     .keyboardShortcut("o", modifiers: [.command, .shift])
                     .disabled(!state.isConnected)
                 Button("Send Clipboard to Phone") { state.sendClipboardNow() }
                     .keyboardShortcut("v", modifiers: [.command, .shift])
+                    .disabled(!state.isConnected)
+                Button("Send Browser Tab to Phone") { state.sendBrowserTab() }
+                    .keyboardShortcut("p", modifiers: [.control, .option])
                     .disabled(!state.isConnected)
                 Button("Ring Phone") { state.ringPhone() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
@@ -40,6 +44,7 @@ struct MacNDroidApp: App {
                     .disabled(!state.isConnected)
                 KeepOnTopToggle()
             }
+            PhoneCommands(state: state)
         }
 
         MenuBarExtra {
@@ -59,6 +64,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         DockVisibility.apply()
         AppState.shared.start()
+        _ = Updater.shared
+        // Right-click → Services → "Open on Phone" / "Send to Phone".
+        NSApp.servicesProvider = ServiceProvider()
+        NSUpdateDynamicServices()
     }
 
     /// Files dropped on the Dock icon (or "Open With") go straight to the phone.

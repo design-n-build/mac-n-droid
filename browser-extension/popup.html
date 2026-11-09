@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    :root { color-scheme: light dark; font: 13px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+    body { margin: 0; width: 260px; padding: 14px; }
+    .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    img { width: 28px; height: 28px; }
+    .name { font-weight: 600; }
+    .status { color: GrayText; font-size: 12px; }
+    button { width: 100%; padding: 7px 10px; border-radius: 7px; border: none; font: inherit; font-weight: 500;
+             background: #0a84ff; color: white; cursor: pointer; }
+    button:disabled { background: color-mix(in srgb, GrayText 35%, transparent); color: GrayText; cursor: default; }
+    .media { margin-bottom: 12px; padding: 8px 10px; border-radius: 7px; font-size: 12px; line-height: 1.35;
+             background: color-mix(in srgb, GrayText 14%, transparent); }
+    .note { margin-top: 10px; color: GrayText; font-size: 12px; line-height: 1.35; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <img src="icons/icon-48.png" alt="">
+    <div>
+      <div class="name" id="phone">Mac n Droid</div>
+      <div class="status" id="status">Checking…</div>
+    </div>
+  </div>
+  <div class="media" id="media"></div>
+  <button id="send" disabled>Send This Page to Phone</button>
+  <div class="note" id="note">Music and videos playing in this browser can be paused and skipped from your phone. Right-click a link to open it on your phone.</div>
+  <script src="popup.js"></script>
+</body>
+</html>

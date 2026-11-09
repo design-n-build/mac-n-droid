@@ -24,12 +24,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.macndroid.R
-import app.macndroid.service.ClipboardTileService
+import app.macndroid.service.FilesTileService
 import app.macndroid.service.SyncService
 
 enum class Tip(val title: String, val summary: String, val icon: ImageVector) {
-    Share("Share anything to your Mac", "Use Share → Send to Mac in any app", Icons.Outlined.Share),
-    Tile("Quick Settings tile", "One tap sends your clipboard to your Mac", Icons.Outlined.Dashboard),
+    Share("Share anything to your Mac", "Files, photos and links from any app", Icons.Outlined.Share),
+    Tile("Quick Settings tile", "Send photos and files in one tap", Icons.Outlined.Dashboard),
     Ring("Find your phone", "Ring it from your Mac, even on silent", Icons.Outlined.NotificationsActive),
     Mirror("Use your phone from your Mac", "See and control this screen in a Mac window", Icons.Outlined.ScreenShare),
     Webcam("Phone as webcam", "Use this camera in FaceTime, Zoom or Meet", Icons.Outlined.Videocam),
@@ -64,22 +64,22 @@ fun TipSheet(tip: Tip, macName: String, onDismiss: () -> Unit) {
             Spacer(Modifier.height(24.dp))
             when (tip) {
                 Tip.Share -> Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Got it") }
-                Tip.Tile -> Button(
-                    onClick = {
+                Tip.Tile -> {
+                    fun add(service: Class<*>, label: Int, icon: Int) {
                         if (Build.VERSION.SDK_INT >= 33) {
                             ctx.getSystemService(StatusBarManager::class.java).requestAddTileService(
-                                ComponentName(ctx, ClipboardTileService::class.java),
-                                ctx.getString(R.string.tile_label),
-                                AndroidIcon.createWithResource(ctx, R.drawable.ic_clipboard),
-                                ctx.mainExecutor,
+                                ComponentName(ctx, service), ctx.getString(label),
+                                AndroidIcon.createWithResource(ctx, icon), ctx.mainExecutor,
                             ) { }
                         } else {
                             Toast.makeText(ctx, "Swipe down twice, tap ✎ and drag the tile in", Toast.LENGTH_LONG).show()
                         }
-                        onDismiss()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Icon(Icons.Outlined.Add, null); Spacer(Modifier.width(8.dp)); Text("Add tile to Quick Settings") }
+                    }
+                    Button(
+                        onClick = { add(FilesTileService::class.java, R.string.files_tile_label, R.drawable.ic_upload) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Icon(Icons.Outlined.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Add tile to Quick Settings") }
+                }
                 Tip.Ring -> Button(
                     onClick = {
                         ctx.startService(Intent(ctx, SyncService::class.java).setAction(SyncService.ACTION_TEST_RING))
@@ -95,13 +95,13 @@ fun TipSheet(tip: Tip, macName: String, onDismiss: () -> Unit) {
 private fun steps(tip: Tip, mac: String) = when (tip) {
     Tip.Share -> listOf(
         "In any app (Photos, Chrome, Files…), tap Share.",
-        "Choose Send to Mac. Pin it so it's always first.",
-        "Files land in Downloads on $mac, and links and text land on its clipboard.",
+        "Choose $mac in the top row, or Mac n Droid in the list.",
+        "Files land in Downloads on $mac, links open in its browser, and other text lands on its clipboard.",
     )
     Tip.Tile -> listOf(
-        "Copy something on your phone.",
-        "Swipe down and tap Send clipboard to Mac.",
-        "Press ⌘V on $mac to paste.",
+        "Add the tile below, then swipe down from the top of the screen.",
+        "Tap Send files to Mac and pick photos or files.",
+        "They land in Downloads on $mac.",
     )
     Tip.Ring -> listOf(
         "On $mac, click the phone icon in the menu bar.",
@@ -111,7 +111,7 @@ private fun steps(tip: Tip, mac: String) = when (tip) {
     Tip.Mirror -> listOf(
         "On $mac, click Mirror Screen in the menu bar or the Overview page.",
         "On your phone, tap Start. Android asks every time, for your privacy.",
-        "Click, scroll and type in the Mac window to use your phone. Controls need \"Clipboard to Mac automatically\" turned on.",
+        "Click, scroll and type in the Mac window to use your phone. Controls need \"Control from Mac\" turned on.",
     )
     Tip.Webcam -> listOf(
         "Connect your phone to $mac with a USB cable.",
@@ -144,7 +144,7 @@ private fun SharePreview(mac: String) {
         Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
             ShareTarget(Icons.Outlined.Email, "Gmail", false)
             ShareTarget(Icons.Outlined.Chat, "Messages", false)
-            ShareTarget(Icons.Outlined.LaptopMac, "Send to Mac", true)
+            ShareTarget(Icons.Outlined.LaptopMac, mac, true)
             ShareTarget(Icons.Outlined.CloudUpload, "Drive", false)
         }
         Spacer(Modifier.height(16.dp))
@@ -174,11 +174,11 @@ private fun TilePreview(mac: String) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             QsTile(Icons.Outlined.Wifi, "Internet", "Home Wi-Fi", false)
-            QsTile(Icons.Outlined.Bluetooth, "Bluetooth", "On", false)
+            QsTile(Icons.Outlined.FlashlightOn, "Flashlight", "Off", false)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            QsTile(Icons.Outlined.ContentPaste, "Send clipboard", mac, true)
-            QsTile(Icons.Outlined.FlashlightOn, "Flashlight", "Off", false)
+            QsTile(Icons.Outlined.UploadFile, "Send files", mac, true)
+            QsTile(Icons.Outlined.Bluetooth, "Bluetooth", "On", false)
         }
     }
 }

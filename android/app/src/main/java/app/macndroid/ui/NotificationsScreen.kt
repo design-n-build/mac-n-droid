@@ -115,11 +115,11 @@ fun NotificationsScreen() {
                         }
                         if (!hasAccess) {
                             ListItem(
-                                modifier = Modifier.clickableRow { openListenerSettings(ctx) },
+                                modifier = Modifier.tileRow().clickableRow { openListenerSettings(ctx) },
                                 headlineContent = { Text("Allow notification access") },
                                 supportingContent = { Text("Needed to read notifications and music. Tap to open settings.") },
                                 leadingContent = { Icon(Icons.Outlined.NotificationsOff, null, tint = MaterialTheme.colorScheme.error) },
-                                colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                                colors = ListItemDefaults.colors(containerColor = tileColor),
                             )
                         }
                     }

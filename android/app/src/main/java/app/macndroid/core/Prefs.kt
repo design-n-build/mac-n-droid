@@ -47,6 +47,14 @@ object Prefs {
     private val _blockedApps = MutableStateFlow<Set<String>>(emptySet())
     /** Apps whose notifications are NOT sent to the Mac. */
     val blockedApps: StateFlow<Set<String>> = _blockedApps
+    private val _leftBehind = MutableStateFlow(true)
+    val leftBehind: StateFlow<Boolean> = _leftBehind
+    private val _macMusic = MutableStateFlow(true)
+    /** Show what's playing on the Mac as a media player here. */
+    val macMusic: StateFlow<Boolean> = _macMusic
+    private val _smsOnMac = MutableStateFlow(false)
+    /** Read and reply to SMS from the Mac (needs SMS permissions). */
+    val smsOnMac: StateFlow<Boolean> = _smsOnMac
     private val _haptics = MutableStateFlow(true)
     val haptics: StateFlow<Boolean> = _haptics
     private val _screenshotsToMac = MutableStateFlow(true)
@@ -59,6 +67,9 @@ object Prefs {
         _receiveClipboard.value = sp.getBoolean("receiveClipboard", true)
         _screenshotsToMac.value = sp.getBoolean("screenshotsToMac", true)
         _haptics.value = sp.getBoolean("haptics", true)
+        _leftBehind.value = sp.getBoolean("leftBehind", true)
+        _macMusic.value = sp.getBoolean("macMusic", true)
+        _smsOnMac.value = sp.getBoolean("smsOnMac", false)
         _blockedApps.value = sp.getStringSet("blockedApps", emptySet()).orEmpty().toSet()
     }
 
@@ -106,6 +117,12 @@ object Prefs {
     fun setBlockedApps(apps: Set<String>) {
         sp.edit().putStringSet("blockedApps", apps).apply(); _blockedApps.value = apps
     }
+
+    fun setLeftBehind(on: Boolean) { sp.edit().putBoolean("leftBehind", on).apply(); _leftBehind.value = on }
+
+    fun setMacMusic(on: Boolean) { sp.edit().putBoolean("macMusic", on).apply(); _macMusic.value = on }
+
+    fun setSmsOnMac(on: Boolean) { sp.edit().putBoolean("smsOnMac", on).apply(); _smsOnMac.value = on }
 
     fun setHaptics(on: Boolean) {
         sp.edit().putBoolean("haptics", on).apply(); _haptics.value = on

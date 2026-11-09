@@ -17,6 +17,7 @@ private struct GeneralSettings: View {
     @EnvironmentObject private var state: AppState
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @AppStorage(Prefs.showInDock) private var showInDock = true
+    @ObservedObject private var updater = Updater.shared
 
     var body: some View {
         Form {
@@ -29,6 +30,23 @@ private struct GeneralSettings: View {
                 Text("When off, Mac n Droid lives only in the menu bar and keeps running in the background. Closing its window never quits it.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section {
+                Toggle("Check for updates automatically", isOn: Binding(
+                    get: { updater.automaticallyChecks }, set: { updater.automaticallyChecks = $0 }))
+                Toggle("Download and install updates in the background", isOn: Binding(
+                    get: { updater.automaticallyDownloads }, set: { updater.automaticallyDownloads = $0 }))
+                    .disabled(!updater.automaticallyChecks)
+                HStack {
+                    Spacer()
+                    Button("Check Now") { updater.checkForUpdates() }.disabled(!updater.canCheck)
+                }
+            } header: {
+                Text("Updates")
+            } footer: {
+                Text("New versions come from Mac n Droid's GitHub releases. Each one is signed, so only genuine updates install.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .disabled(!updater.isAvailable)
             LabeledContent("Received files", value: "Downloads")
             LabeledContent("Paired phone", value: state.lastPhoneName ?? "None")
         }
@@ -45,6 +63,8 @@ private struct SyncSettings: View {
     @AppStorage(Prefs.liveActivities) private var liveActivities = true
     @AppStorage(Prefs.transferSounds) private var transferSounds = true
     @AppStorage(Prefs.callPanel) private var callPanel = true
+    @AppStorage(Prefs.leftBehind) private var leftBehind = true
+    @AppStorage(Prefs.dropOnNotch) private var dropOnNotch = true
 
     private var hasNotch: Bool { NSScreen.screens.contains { $0.safeAreaInsets.top > 0 } }
 
@@ -72,15 +92,42 @@ private struct SyncSettings: View {
                 Text("A small glance in the menu bar for timers, stopwatches, calls, rides and deliveries, downloads and music playing on your phone. Click it for details and controls.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Files") {
+            Section {
+                Toggle("Alert me if I leave my phone behind", isOn: $leftBehind)
+            } header: {
+                Text("Left Behind")
+            } footer: {
+                Text("Plays a chime if this Mac moves to a different network without your phone, usually right after you open it somewhere else. Your phone gives the same alert if you walk away from this Mac while it's awake.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Drop files on the notch to send them", isOn: $dropOnNotch)
                 Toggle("Play a sound when files are sent or received", isOn: $transferSounds)
+            } header: {
+                Text("Files")
+            } footer: {
+                Text("Drag files or a link up to the top of the screen, then let go on the drop target to send them to your phone. Right-click → Services → Send to Phone works in Finder too.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                LabeledContent {
+                    Button("Show Extension in Finder") { BrowserExtension.reveal() }
+                } label: {
+                    Text("Browser extension")
+                    Text("Pause, play and skip browser music and videos from your phone, and send pages to it. Works in Helium, Chrome, Edge, Brave and Arc.")
+                }
+                Text("To install: open your browser's Extensions page (for example chrome://extensions), turn on Developer mode, click Load unpacked, and choose the Browser Extension folder.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Browser")
             }
             Section {
                 Toggle("Sync clipboard automatically", isOn: $syncClipboard)
             } header: {
                 Text("Clipboard")
             } footer: {
-                Text("Text you copy on this Mac is sent to your phone. Passwords copied from password managers are never sent.")
+                Text("Text and images you copy on this Mac are sent to your phone, and the last 20 copies from both are kept in Clipboard history. Passwords copied from password managers are never sent or kept.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

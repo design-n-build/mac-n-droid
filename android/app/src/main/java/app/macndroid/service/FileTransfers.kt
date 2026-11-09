@@ -116,9 +116,26 @@ class FileTransfers(private val ctx: Context) {
         val uri = f.uri ?: return
         ctx.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
         Transfers.update(id) { it.copy(bytes = f.written, state = TransferItem.State.Done) }
-        app.macndroid.core.Haptics.play(app.macndroid.core.Haptics.Kind.Success)
-        notifyReceived(f)
+        synchronized(receivedBatch) { receivedBatch.add(f) }
+        // One sound, tap and notification for a batch, shortly after the last file.
+        main.removeCallbacks(receivedSummary)
+        main.postDelayed(receivedSummary, 900)
     }
+
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val receivedBatch = mutableListOf<Incoming>()
+    private val receivedSummary: Runnable = object : Runnable {
+        override fun run() {
+            if (runCatching { incoming.values.any { it.clipFile == null } }.getOrDefault(false)) { main.postDelayed(this, 900); return }
+            val batch = synchronized(receivedBatch) { receivedBatch.toList().also { receivedBatch.clear() } }
+            if (batch.isEmpty()) return
+            app.macndroid.core.Haptics.play(app.macndroid.core.Haptics.Kind.Success)
+            notifyReceived(batch)
+        }
+    }
+
+    private val sendBatch = mutableListOf<Pair<String, Boolean>>()
+    @Volatile private var sendsActive = 0
 
     fun abortIncoming() {
         incoming.forEach { (id, f) ->
@@ -130,16 +147,23 @@ class FileTransfers(private val ctx: Context) {
         incoming.clear()
     }
 
-    private fun notifyReceived(f: Incoming) {
+    private fun notifyReceived(batch: List<Incoming>) {
+        val f = batch.last()
         val uri = f.uri ?: return
-        val mime = ctx.contentResolver.getType(uri) ?: "*/*"
-        val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        val pi = PendingIntent.getActivity(ctx, uri.hashCode(), view, PendingIntent.FLAG_IMMUTABLE)
+        // One file opens directly; several open the app's Files tab.
+        val pi = if (batch.size == 1) {
+            val mime = ctx.contentResolver.getType(uri) ?: "*/*"
+            val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            PendingIntent.getActivity(ctx, uri.hashCode(), view, PendingIntent.FLAG_IMMUTABLE)
+        } else {
+            PendingIntent.getActivity(ctx, 0, Intent(ctx, app.macndroid.ui.MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        }
+        val mac = app.macndroid.core.Prefs.pairing.value?.macName ?: "Mac"
         val n = NotificationCompat.Builder(ctx, MacNDroidApp.CH_FILES)
             .setSmallIcon(R.drawable.ic_stat_logo)
-            .setContentTitle("Received from Mac")
-            .setContentText(f.name)
+            .setContentTitle(if (batch.size == 1) "Received from $mac" else "${batch.size} files from $mac")
+            .setContentText(if (batch.size == 1) f.name else batch.joinToString(", ") { it.name })
             .setContentIntent(pi)
             .setAutoCancel(true)
             .build()
@@ -156,7 +180,10 @@ class FileTransfers(private val ctx: Context) {
             val (name, size) = meta(uri)
             val id = UUID.randomUUID().toString()
             val mime = ctx.contentResolver.getType(uri) ?: "application/octet-stream"
-            if (!clip) Transfers.add(TransferItem(id, name, size, outgoing = true, uri = uri, mime = mime))
+            if (!clip) {
+                Transfers.add(TransferItem(id, name, size, outgoing = true, uri = uri, mime = mime))
+                synchronized(sendBatch) { sendsActive++ }
+            }
             Link.scope.launch {
                 sendLock.withLock { stream(uri, id, name, size, mime, clip) }
             }
@@ -190,16 +217,34 @@ class FileTransfers(private val ctx: Context) {
         Transfers.update(id) {
             it.copy(bytes = sent, state = if (ok) TransferItem.State.Done else TransferItem.State.Failed)
         }
-        if (!clip) notifySent(name, ok)
-        app.macndroid.core.Haptics.play(if (!ok) app.macndroid.core.Haptics.Kind.Failure else if (clip) app.macndroid.core.Haptics.Kind.Tick else app.macndroid.core.Haptics.Kind.Success)
+        if (clip) {
+            app.macndroid.core.Haptics.play(if (ok) app.macndroid.core.Haptics.Kind.Tick else app.macndroid.core.Haptics.Kind.Failure)
+            return
+        }
+        // One confirmation for the whole batch, after the last file.
+        val batch = synchronized(sendBatch) {
+            sendBatch.add(name to ok)
+            sendsActive--
+            if (sendsActive > 0) null else sendBatch.toList().also { sendBatch.clear() }
+        } ?: return
+        val failed = batch.count { !it.second }
+        notifySent(batch.map { it.first }, failed)
+        app.macndroid.core.Haptics.play(if (failed > 0) app.macndroid.core.Haptics.Kind.Failure else app.macndroid.core.Haptics.Kind.Success)
     }
 
     /** Short-lived confirmation with the channel's (subtle) sound. */
-    private fun notifySent(name: String, ok: Boolean) {
+    private fun notifySent(names: List<String>, failed: Int) {
         val mac = app.macndroid.core.Prefs.pairing.value?.macName ?: "Mac"
+        val ok = failed == 0
+        val name = names.joinToString(", ")
         val n = NotificationCompat.Builder(ctx, MacNDroidApp.CH_SENT)
             .setSmallIcon(R.drawable.ic_stat_logo)
-            .setContentTitle(if (ok) "Sent to $mac" else "Couldn't send to $mac")
+            .setContentTitle(when {
+                !ok && names.size > 1 -> "Couldn't send $failed of ${names.size} files to $mac"
+                !ok -> "Couldn't send to $mac"
+                names.size > 1 -> "Sent ${names.size} files to $mac"
+                else -> "Sent to $mac"
+            })
             .setContentText(name)
             .setTimeoutAfter(if (ok) 5_000 else 30_000)
             .setAutoCancel(true)

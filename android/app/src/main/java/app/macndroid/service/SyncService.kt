@@ -63,7 +63,11 @@ class SyncService : Service() {
         screenshots.refresh()
 
         Link.onMessage = ::handle
+        LeftBehind.start(this)
         Link.onConnected = {
+            LeftBehind.onConnected()
+            // Which extras this phone wants from the Mac.
+            Link.post(JSONObject().put("t", "mac_media_want").put("on", Prefs.macMusic.value))
             lastBattery = -1 to false
             app.macndroid.core.Haptics.play(app.macndroid.core.Haptics.Kind.Tick)
             registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let { reportBattery(it, force = true) }
@@ -71,12 +75,14 @@ class SyncService : Service() {
             ClipboardSync.flushPending()
             app.macndroid.ui.ShareShortcuts.publish(this)
             media.resync()
-            main.post { screenshots.refresh() }
+            main.post { screenshots.refresh(); SmsBridge.start(this) }
         }
         Link.onDisconnected = {
+            LeftBehind.onDisconnected()
             files.abortIncoming()
             main.post { ScreenMirror.stop(notifyMac = false) }
             NotificationMirror.instance?.resetSession()
+            main.post { MacMusic.end(); SmsBridge.stop(this) }
         }
         Link.start(this)
 
@@ -103,7 +109,8 @@ class SyncService : Service() {
                 main.postDelayed({ ringer.stop(notifyMac = false) }, 3000)
             }
             ACTION_RECONNECT -> Link.kick()
-            ACTION_REFRESH -> { screenshots.refresh(); media.start() }
+            ACTION_REFRESH -> { screenshots.refresh(); media.start(); SmsBridge.stop(this); if (Link.isConnected) SmsBridge.start(this) }
+            ACTION_MAC_MEDIA -> intent.getStringExtra("cmd")?.let(MacMusic::command)
         }
         if (Prefs.pairing.value == null) stopSelf()
         return START_STICKY
@@ -116,6 +123,9 @@ class SyncService : Service() {
         media.stop()
         screenshots.stop()
         ringer.stop(notifyMac = false)
+        LeftBehind.stop()
+        MacMusic.end()
+        SmsBridge.stop(this)
         runCatching { unregisterReceiver(batteryReceiver) }
         runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(netCallback) }
         Link.stop()
@@ -140,10 +150,18 @@ class SyncService : Service() {
             "mirror_start" -> main.post { ScreenMirror.request(this) }
             "mirror_stop" -> main.post { ScreenMirror.stop(notifyMac = false) }
             "mirror_key" -> ScreenMirror.requestKeyFrame()
+            "bye" -> LeftBehind.onMacSleeping()
             "input" -> {
-                val cw = CopyWatcher.instance
-                if (cw == null) {
+                val cw = PhoneControl.instance
+                val key = msg.optString("key")
+                if (key == "volume_up" || key == "volume_down") {
+                    // Works without the control service: the system volume panel shows on the phone.
+                    getSystemService(android.media.AudioManager::class.java).adjustSuggestedStreamVolume(
+                        if (key == "volume_up") android.media.AudioManager.ADJUST_RAISE else android.media.AudioManager.ADJUST_LOWER,
+                        android.media.AudioManager.USE_DEFAULT_STREAM_TYPE, android.media.AudioManager.FLAG_SHOW_UI)
+                } else if (cw == null) {
                     Link.post(JSONObject().put("t", "input_unavailable"))
+                    main.post { PhoneControlPrompt.show(this) }
                 } else {
                     val pts = msg.optJSONArray("p")
                     val points = (0 until (pts?.length() ?: 0)).mapNotNull { i ->
@@ -156,6 +174,14 @@ class SyncService : Service() {
                     }
                 }
             }
+            "open_url" -> main.post { Handoff.openFromMac(this, msg.optString("url")) }
+            "clip_history" -> ClipHistory.receive(msg)
+            "mac_media" -> main.post { MacMusic.receive(this, msg) }
+            "mac_media_end" -> main.post { MacMusic.end() }
+            "sms_threads" -> SmsBridge.sendThreads(this)
+            "sms_thread" -> SmsBridge.sendThread(this, msg.optString("id"))
+            "contacts_search" -> SmsBridge.searchContacts(this, msg.optString("q"))
+            "sms_send" -> SmsBridge.send(this, msg.optString("address"), msg.optString("text"), msg.optString("id"), msg.optString("thread"))
             "media_cmd" -> media.command(msg.optString("cmd"), msg.optLong("pos"), msg.optString("id").ifEmpty { null })
         }
     }
@@ -237,6 +263,7 @@ class SyncService : Service() {
         const val ACTION_RECONNECT = "app.macndroid.RECONNECT"
         const val ACTION_TEST_RING = "app.macndroid.TEST_RING"
         const val ACTION_REFRESH = "app.macndroid.REFRESH"
+        const val ACTION_MAC_MEDIA = "app.macndroid.MAC_MEDIA"
 
         @Volatile var instance: SyncService? = null
             private set

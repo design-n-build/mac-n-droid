@@ -84,10 +84,12 @@ class MediaSync(private val ctx: Context) {
     }
 
     private fun refreshSessions() {
-        handler.post { runCatching { sync(msm.getActiveSessions(component)) } }
+        // Skip our own "music on your Mac" player, or it would bounce back to the Mac.
+        handler.post { runCatching { sync(msm.getActiveSessions(component).filter { it.packageName != ctx.packageName }) } }
     }
 
-    private fun sync(list: List<MediaController>) {
+    private fun sync(all: List<MediaController>) {
+        val list = all.filter { it.packageName != ctx.packageName }
         val tokens = list.map { it.sessionToken }.toSet()
         players.keys.filter { it !in tokens }.forEach { t ->
             players.remove(t)?.let { p ->

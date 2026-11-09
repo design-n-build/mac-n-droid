@@ -20,6 +20,31 @@
 	<string>Mac n Droid connects to your Android phone over your local Wi-Fi network to sync notifications, clipboard and files.</string>
 	<key>NSBonjourServices</key>
 	<array><string>_macndroid._tcp</string></array>
+	<key>SUFeedURL</key>
+	<string>https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>E7ffdKnvElZafD/8/7ymQAg20BBVNBOvg7ljRliJO5Q=</string>
+	<key>SUEnableAutomaticChecks</key><true/>
+	<key>SUScheduledCheckInterval</key><integer>86400</integer>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Mac n Droid reads the page open in your browser when you send it to your phone, and plays, pauses or skips Music and Spotify when you use the controls on your phone.</string>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key><dict><key>default</key><string>Open on Phone</string></dict>
+			<key>NSMessage</key><string>openOnPhone</string>
+			<key>NSPortName</key><string>Mac n Droid</string>
+			<key>NSSendTypes</key><array><string>public.url</string><string>public.utf8-plain-text</string></array>
+			<key>NSRequiredContext</key><dict/>
+		</dict>
+		<dict>
+			<key>NSMenuItem</key><dict><key>default</key><string>Send to Phone</string></dict>
+			<key>NSMessage</key><string>sendToPhone</string>
+			<key>NSPortName</key><string>Mac n Droid</string>
+			<key>NSSendFileTypes</key><array><string>public.item</string></array>
+			<key>NSRequiredContext</key><dict/>
+		</dict>
+	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

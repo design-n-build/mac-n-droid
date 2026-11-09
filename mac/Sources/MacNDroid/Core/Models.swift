@@ -11,6 +11,14 @@ struct NotifAction: Hashable, Identifiable {
     let id: Int
     let title: String
     let isReply: Bool
+    /// The action opens an app screen on the phone instead of acting in the background, like Gmail's
+    /// Reply (Gmail doesn't allow replying from a notification, even on the phone).
+    var opensOnPhone = false
+
+    /// "Reply" that can't take text here reads "Reply on Phone", so the button says what it does.
+    var displayTitle: String {
+        opensOnPhone && !isReply && title.lowercased().hasPrefix("reply") ? "\(title) on Phone" : title
+    }
 }
 
 struct PhoneNotification: Identifiable, Equatable {
@@ -108,6 +116,8 @@ enum Prefs {
     static let mutedApps = "mutedApps"
     static let knownApps = "knownApps"
     static let keepOnTop = "keepOnTop"
+    static let leftBehind = "leftBehind"
+    static let dropOnNotch = "dropOnNotch"
 
     static func registerDefaults() {
         // 0.6 and earlier had an on/off switch; keep "off" for people who turned it off.
@@ -126,6 +136,8 @@ enum Prefs {
             transferSounds: true,
             showInDock: true,
             callPanel: true,
+            leftBehind: true,
+            dropOnNotch: true,
         ])
     }
 

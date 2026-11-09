@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Combine
 import Foundation
 import ServiceManagement
@@ -42,6 +43,28 @@ final class AppState: ObservableObject {
     var nowPlaying: NowPlaying? { players.first }
     var mediaArt: NSImage? { nowPlaying.flatMap { playerArt[$0.id] } }
 
+    @Published private(set) var clipHistory: [ClipItem] = []
+    private let clipStore = ClipHistoryStore()
+    private var lastNotifAt = Date.distantPast
+    private var burstCount = 0
+    private var clipPushWork: DispatchWorkItem?
+
+    @Published private(set) var smsState: SmsAvailability = .unknown
+    @Published private(set) var smsThreads: [SmsThread] = []
+    @Published private(set) var smsMessages: [String: [SmsMessage]] = [:]
+    @Published private(set) var contactResults: [PhoneContact] = []
+    @Published private(set) var contactsAllowed = true
+    private var contactQuery = ""
+    /// After a new message, select its conversation once it shows up.
+    @Published var smsSelectAddress: String?
+    /// The conversation open in Messages, refreshed when texts arrive.
+    var openSmsThread: String?
+
+    private let macMedia = MacMediaMonitor()
+    let browserBridge = BrowserBridge()
+    private var phoneWantsMacMedia = false
+    private var macMediaArt: (track: String, jpeg: Data)?
+
     @Published private(set) var knownApps: [String: KnownApp] = AppState.loadKnownApps()
     @Published private(set) var mutedApps: Set<String> = Set(UserDefaults.standard.stringArray(forKey: Prefs.mutedApps) ?? [])
     /// Injected like `openMainWindow`.
@@ -58,6 +81,7 @@ final class AppState: ObservableObject {
     private lazy var server = Server(identity: identity)
     private var active: PhoneConnection?
     private let notifier = Notifier()
+    private let leftBehind = LeftBehindMonitor()
     private let clipboard = ClipboardMonitor()
     private var incoming: [String: (handle: FileHandle, url: URL, isClip: Bool)] = [:]
     private let fileQueue = DispatchQueue(label: "app.macndroid.files")
@@ -79,14 +103,38 @@ final class AppState: ObservableObject {
         clipboard.onChange = { [weak self] text in
             guard let self, Prefs.bool(Prefs.syncClipboard) else { return }
             self.active?.send(["t": "clip", "text": text, "explicit": false])
+            self.recordClip { $0.addText(text, fromPhone: false) }
         }
         clipboard.onImage = { [weak self] png in
             guard let self, Prefs.bool(Prefs.syncClipboard) else { return }
             self.sendClipboardImage(png)
+            self.recordClip { $0.addImage(png, fromPhone: false) }
         }
+        clipHistory = clipStore.items
+        Handoff.start()
+        // ⌃⌥P from inside any browser: open this page on the phone.
+        GlobalHotKey.register(id: 1, keyCode: kVK_ANSI_P, modifiers: controlKey | optionKey) { [weak self] in
+            guard let self, self.isConnected else { return }
+            self.sendBrowserTab()
+        }
+        macMedia.onChange = { [weak self] _ in self?.pushMacMedia(art: false) }
+        macMedia.onArt = { [weak self] jpeg in
+            guard let self, let id = self.macMedia.current?.id else { return }
+            self.macMediaArt = (id, jpeg)
+            self.pushMacMedia(art: true)
+        }
+        macMedia.start()
+        browserBridge.onMedia = { [weak self] key, t in self?.macMedia.setBrowser(key, t) }
+        browserBridge.onArt = { [weak self] key, jpeg in self?.macMedia.setBrowserArt(key, jpeg) }
+        browserBridge.onSendURL = { [weak self] url in self?.sendLink(url) }
+        macMedia.browserCommand = { [weak self] cmd, key in self?.browserBridge.command(cmd, key: key) }
+        browserBridge.start()
+        BrowserExtension.install()
         NotchController.shared.state = self
         loadSavedIcons()
         LiveBarController.shared.state = self
+        NotchDropController.shared.state = self
+        NotchDropController.shared.start()
         clipboard.start()
 
         server.onReady = { [weak self] port in DispatchQueue.main.async { self?.listenerReady(port) } }
@@ -98,9 +146,25 @@ final class AppState: ObservableObject {
             self?.active?.send(["t": "ping"])
             self?.refreshAddresses()
         }
-        NotificationCenter.default.addObserver(
-            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
-        ) { [weak self] _ in self?.refreshAddresses() }
+        leftBehind.isConnected = { [weak self] in self?.isConnected ?? false }
+        leftBehind.phoneName = { [weak self] in self?.phone?.name ?? self?.lastPhoneName ?? "your phone" }
+        let ws = NSWorkspace.shared.notificationCenter
+        ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.refreshAddresses()
+            self?.leftBehind.didWake()
+        }
+        // Tell the phone first, so closing the lid and walking off with the phone doesn't alarm it.
+        ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.active?.send(["t": "bye", "reason": "sleep"])
+            self?.leftBehind.willSleep()
+        }
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.active?.send(["t": "bye", "reason": "quit"])
+        }
+    }
+
+    func postLeftBehindAlert(title: String, body: String) {
+        notifier.postLocal(title: title, body: body)
     }
 
     private func listenerReady(_ port: UInt16) {
@@ -170,10 +234,16 @@ final class AppState: ObservableObject {
         lastError = nil
         UserDefaults.standard.set(info.name, forKey: Prefs.lastPhoneName)
         status = .connected
+        browserBridge.setStatus(connected: true, phone: info.name)
+        leftBehind.linked()
         LiveBarController.shared.update()
+        pushClipHistory()
+        if smsState != .unknown { refreshSms() }
     }
 
     private func phoneDisconnected() {
+        if status == .connected { leftBehind.lost() }
+        browserBridge.setStatus(connected: false, phone: lastPhoneName ?? "")
         status = .waiting
         battery = nil
         isRinging = false
@@ -183,6 +253,8 @@ final class AppState: ObservableObject {
         live.removeAll()
         players.removeAll()
         playerArt.removeAll()
+        phoneWantsMacMedia = false
+        if smsState == .loading { smsState = .ready }
         if mirror != .idle { mirror = .stopped }
         mirrorQueue.async { self.mirrorRenderer.reset() }
         LiveBarController.shared.update()
@@ -221,6 +293,7 @@ final class AppState: ObservableObject {
         case "clip":
             if let text = msg["text"] as? String {
                 clipboard.write(text)
+                recordClip { $0.addText(text, fromPhone: true) }
                 if msg["explicit"] as? Bool == true {
                     if NotchStyle.isOn {
                         NotchController.shared.flash(symbol: "doc.on.clipboard.fill", text: "Copied from \(phone?.name ?? "phone")")
@@ -247,12 +320,70 @@ final class AppState: ObservableObject {
             receiveMedia(msg)
         case "media_end":
             if let id = msg["id"] as? String { removePlayer(id); LiveBarController.shared.update() }
+        case "open_url":
+            if let s = msg["url"] as? String, let url = URL(string: s), Handoff.isWebLink(url) {
+                NSWorkspace.shared.open(url)
+                if NotchStyle.isOn {
+                    NotchController.shared.flash(symbol: "safari.fill", text: "Opened \(url.host ?? "link") from \(phone?.name ?? "phone")")
+                }
+            }
+        case "clip_get":
+            if let id = msg["id"] as? String, let item = clipHistory.first(where: { $0.id == id }) {
+                if let text = item.text { active?.send(["t": "clip", "text": text, "explicit": true]) }
+                else if let png = clipStore.png(item) { sendClipboardImage(png) }
+            }
+        case "clip_use":
+            if let id = msg["id"] as? String, let item = clipHistory.first(where: { $0.id == id }) {
+                useClip(item)
+                if NotchStyle.isOn { NotchController.shared.flash(symbol: "doc.on.clipboard.fill", text: "Copied from history") }
+            }
+        case "clip_clear":
+            clearClipHistory()
+        case "mac_media_want":
+            phoneWantsMacMedia = msg["on"] as? Bool ?? false
+            if phoneWantsMacMedia { pushMacMedia(art: true) }
+        case "mac_media_cmd":
+            if let cmd = msg["cmd"] as? String { macMedia.command(cmd) }
+        case "sms_threads":
+            smsThreads = (msg["threads"] as? [Message] ?? []).compactMap(SmsThread.init)
+            smsState = .ready
+        case "sms_thread":
+            if let id = msg["id"] as? String {
+                let fresh = (msg["messages"] as? [Message] ?? []).compactMap(SmsMessage.init)
+                // Keep a just-sent text visible until the phone's copy shows up.
+                let waiting = (smsMessages[id] ?? []).filter { m in
+                    m.id.hasPrefix("local-") && !fresh.contains { $0.outgoing && $0.body == m.body }
+                }
+                smsMessages[id] = fresh + waiting
+            }
+        case "sms_changed":
+            refreshSms()
+        case "sms_sent":
+            if msg["ok"] as? Bool == false, let id = msg["id"] as? String {
+                for (tid, list) in smsMessages {
+                    if let i = list.firstIndex(where: { $0.id == id }) { smsMessages[tid]?[i].failed = true; smsMessages[tid]?[i].pending = false }
+                }
+            } else {
+                refreshSms()
+            }
+        case "contacts":
+            if (msg["q"] as? String) == contactQuery {
+                contactsAllowed = msg["permission"] as? Bool ?? true
+                contactResults = (msg["results"] as? [Message] ?? []).compactMap { m in
+                    guard let number = m["number"] as? String else { return nil }
+                    return PhoneContact(name: m["name"] as? String ?? "", number: number, label: m["label"] as? String ?? "")
+                }
+            }
+        case "sms_unavailable":
+            smsState = (msg["reason"] as? String) == "permission" ? .needsPermission : .off
         case "ping":
             active?.send(["t": "pong"])
         default:
             break
         }
     }
+
+    private static let senderID = try! NSRegularExpression(pattern: #"^[A-Z]{2}-[A-Z0-9]{3,9}(-[A-Z])?$"#)
 
     private func receiveNotification(_ msg: Message) {
         guard let key = msg["key"] as? String else { return }
@@ -267,10 +398,14 @@ final class AppState: ObservableObject {
         guard !isMuted(pkg) else { return }
         let title = msg["title"] as? String ?? ""
         let text = msg["text"] as? String ?? ""
+        // Texts from business sender IDs ("AD-ICICIB-S") can't be answered, though apps offer Reply.
+        let noReplySender = Self.senderID.firstMatch(in: title, range: NSRange(title.startIndex..., in: title)) != nil
         let actions = (msg["actions"] as? [Message] ?? []).compactMap { a -> NotifAction? in
             guard let i = a["i"] as? Int, let title = a["title"] as? String,
                   !title.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
-            return NotifAction(id: i, title: title, isReply: a["reply"] as? Bool ?? false)
+            if noReplySender, a["reply"] as? Bool == true { return nil }
+            return NotifAction(id: i, title: title, isReply: a["reply"] as? Bool ?? false,
+                               opensOnPhone: a["opens"] as? Bool ?? false)
         }
         let n = PhoneNotification(
             id: key, pkg: pkg, app: msg["app"] as? String ?? pkg,
@@ -290,7 +425,15 @@ final class AppState: ObservableObject {
         // Calls get the panel with Answer / Decline buttons even when notch notifications are off,
         // because macOS hides notification buttons behind "Options".
         let callPanel = n.isCall && Prefs.bool(Prefs.callPanel)
-        let sound = Prefs.bool(Prefs.notificationSound) && !isUpdate
+        // A burst (many arriving within a couple of seconds) chimes once and shows only the first few;
+        // the rest are in the Notifications list. Calls always alert.
+        let now = Date()
+        let inBurst = now.timeIntervalSince(lastNotifAt) < 2.5
+        lastNotifAt = now
+        burstCount = inBurst ? burstCount + 1 : 1
+        let quiet = inBurst && !n.isCall
+        if quiet && burstCount > 3 { return }
+        let sound = Prefs.bool(Prefs.notificationSound) && !isUpdate && !quiet
         if NotchStyle.isOn || callPanel {
             // Notch only: macOS shows its own banner for any posted notification while another app is
             // in front, so posting as well would show everything twice. History stays in this app.
@@ -470,6 +613,17 @@ final class AppState: ObservableObject {
         var m: Message = ["t": "notif_action", "key": key, "i": index]
         if let text { m["text"] = text }
         active?.send(m)
+        // Say where it went, so "Reply" in Gmail doesn't look like it did nothing.
+        if text == nil, let n = notifications.first(where: { $0.id == key }),
+           let a = n.actions.first(where: { $0.id == index }), a.opensOnPhone {
+            let where_ = "\(n.app) on \(phone?.name ?? "your phone")"
+            if mirror == .live { showMirrorWindow() }
+            if NotchStyle.isOn {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    NotchController.shared.flash(symbol: "arrow.up.forward.app.fill", text: "Opened \(where_)")
+                }
+            }
+        }
     }
 
     func dismissOnPhone(_ key: String) {
@@ -532,6 +686,140 @@ final class AppState: ObservableObject {
         }
     }
 
+    // MARK: Clipboard history
+
+    private func recordClip(_ change: (ClipHistoryStore) -> Void) {
+        change(clipStore)
+        clipHistory = clipStore.items
+        pushClipHistory()
+    }
+
+    func clipImage(_ item: ClipItem) -> NSImage? { clipStore.image(item) }
+
+    /// Puts a history item back on the Mac clipboard (and the phone's, if clipboard sync is on).
+    func useClip(_ item: ClipItem) {
+        if let text = item.text {
+            clipboard.write(text)
+            if Prefs.bool(Prefs.syncClipboard) { active?.send(["t": "clip", "text": text, "explicit": false]) }
+        } else if let png = clipStore.png(item) {
+            clipboard.writeImage(png)
+        }
+        clipStore.touch(item.id)
+        clipHistory = clipStore.items
+        pushClipHistory()
+    }
+
+    func sendClipToPhone(_ item: ClipItem) {
+        if let text = item.text { active?.send(["t": "clip", "text": text, "explicit": true]) }
+        else if let png = clipStore.png(item) { sendClipboardImage(png) }
+    }
+
+    func removeClip(_ item: ClipItem) {
+        recordClip { $0.remove(item.id) }
+    }
+
+    func clearClipHistory() {
+        recordClip { $0.clear() }
+    }
+
+    /// The phone shows the same list. Sent shortly after a change so bursts go as one message.
+    private func pushClipHistory() {
+        clipPushWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, let conn = self.active else { return }
+            let items: [Message] = self.clipHistory.map { item in
+                var m: Message = ["id": item.id, "kind": item.kind.rawValue, "from": item.fromPhone ? "phone" : "mac",
+                                  "time": Int64(item.time.timeIntervalSince1970 * 1000)]
+                if let text = item.text {
+                    m["text"] = String(text.prefix(20_000))
+                    if text.count > 20_000 { m["truncated"] = true }
+                } else if let png = self.clipStore.png(item), let thumb = MacMediaMonitor.jpeg(png, max: 360) {
+                    m["thumb"] = thumb.base64EncodedString()
+                }
+                return m
+            }
+            conn.send(["t": "clip_history", "items": items])
+        }
+        clipPushWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+    }
+
+    // MARK: Link handoff
+
+    func sendLink(_ url: URL) {
+        guard Handoff.isWebLink(url), let conn = active else { return }
+        conn.send(["t": "open_url", "url": url.absoluteString])
+        if NotchStyle.isOn {
+            NotchController.shared.flash(symbol: "arrow.up.forward.app.fill", text: "Opening \(url.host ?? "link") on \(phone?.name ?? "phone")")
+        }
+    }
+
+    /// File → Send Browser Tab to Phone.
+    func sendBrowserTab() {
+        Handoff.currentTab { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .url(let url): self.sendLink(url)
+            case .noBrowser: self.handoffProblem("Open a page in your browser first.")
+            case .unsupported(let name): self.handoffProblem("\(name) doesn't share its current tab. Right-click a link → Services → Open on Phone instead.")
+            case .denied(let name): self.handoffProblem("Allow Mac n Droid to control \(name) in System Settings → Privacy & Security → Automation.")
+            case .failed: self.handoffProblem("There's no web page open in the front window.")
+            }
+        }
+    }
+
+    private func handoffProblem(_ text: String) {
+        if NotchStyle.isOn {
+            NotchController.shared.flash(symbol: "exclamationmark.triangle.fill", text: "Couldn't send the tab")
+        }
+        notifier.postLocal(title: "Couldn't send the tab", body: text)
+    }
+
+    // MARK: Music on the Mac → phone
+
+    private func pushMacMedia(art: Bool) {
+        guard phoneWantsMacMedia, let conn = active else { return }
+        guard let t = macMedia.current else { conn.send(["t": "mac_media_end"]); return }
+        var m: Message = ["t": "mac_media", "app": t.app, "title": t.title, "artist": t.artist, "album": t.album,
+                          "playing": t.playing, "dur": t.duration, "pos": t.position]
+        if art, let a = macMediaArt, a.track == t.id { m["art"] = a.jpeg.base64EncodedString() }
+        conn.send(m)
+    }
+
+    // MARK: Messages (SMS)
+
+    func refreshSms() {
+        guard let conn = active else { return }
+        if smsState == .unknown || smsState == .off || smsState == .needsPermission { smsState = .loading }
+        conn.send(["t": "sms_threads"])
+        if let id = openSmsThread { conn.send(["t": "sms_thread", "id": id]) }
+    }
+
+    func loadSmsThread(_ id: String) {
+        openSmsThread = id
+        active?.send(["t": "sms_thread", "id": id])
+    }
+
+    func searchContacts(_ q: String) {
+        contactQuery = q
+        if q.trimmingCharacters(in: .whitespaces).isEmpty { contactResults = []; return }
+        active?.send(["t": "contacts_search", "q": q])
+    }
+
+    /// `threadId` nil = a new conversation; it shows up in the list once the phone has sent it.
+    func sendSms(to address: String, text: String, threadId: String?) {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty, !address.isEmpty || threadId != nil, let conn = active else { return }
+        let localId = "local-" + UUID().uuidString
+        if let tid = threadId ?? smsThreads.first(where: { SmsThread.numberKey($0.address) == SmsThread.numberKey(address) })?.id {
+            smsMessages[tid, default: []].append(SmsMessage(id: localId, body: body, date: Date(), outgoing: true, pending: true))
+            if threadId == nil { smsSelectAddress = address }
+        } else {
+            smsSelectAddress = address
+        }
+        conn.send(["t": "sms_send", "address": address, "text": body, "id": localId, "thread": threadId ?? ""])
+    }
+
     // MARK: Files → phone
 
     func chooseFilesToSend() {
@@ -586,11 +874,19 @@ final class AppState: ObservableObject {
         DispatchQueue.main.async {
             self.updateTransfer(id) { $0.bytes = final; $0.state = ok ? .done : .failed }
             guard !clip else { return }
+            self.sentBatch.append((url.lastPathComponent, ok))
+            // One sound and one message for a batch, once the last file is through.
+            guard !self.transfers.contains(where: { $0.direction == .toPhone && $0.state == .active }) else { return }
+            let batch = self.sentBatch
+            self.sentBatch.removeAll()
+            let failed = batch.filter { !$0.ok }.count
             let phone = self.phone?.name ?? "phone"
-            Feedback.play(ok ? .sent : .failed)
+            Feedback.play(failed == 0 ? .sent : .failed)
             if NotchStyle.isOn {
-                NotchController.shared.flash(symbol: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                                             text: ok ? "Sent \(url.lastPathComponent) to \(phone)" : "Couldn't send \(url.lastPathComponent)")
+                let text = failed > 0
+                    ? (batch.count == 1 ? "Couldn't send \(batch[0].name)" : "Couldn't send \(failed) of \(batch.count) files")
+                    : (batch.count == 1 ? "Sent \(batch[0].name) to \(phone)" : "Sent \(batch.count) files to \(phone)")
+                NotchController.shared.flash(symbol: failed == 0 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill", text: text)
             }
         }
     }
@@ -648,6 +944,7 @@ final class AppState: ObservableObject {
             DispatchQueue.main.async {
                 guard let data else { return }
                 self.clipboard.writeImage(data)
+                self.recordClip { $0.addImage(data, fromPhone: true) }
                 if NotchStyle.isOn {
                     NotchController.shared.flash(symbol: "photo.on.rectangle", text: "Image copied from \(self.phone?.name ?? "phone")")
                 }
@@ -656,15 +953,40 @@ final class AppState: ObservableObject {
         }
         DispatchQueue.main.async {
             self.updateTransfer(id) { $0.state = .done; $0.bytes = max($0.bytes, $0.size) }
+            self.receivedBatch.append(file.url)
+            self.scheduleReceivedSummary()
+        }
+    }
+
+    private var sentBatch: [(name: String, ok: Bool)] = []
+    private var receivedBatch: [URL] = []
+    private var receivedWork: DispatchWorkItem?
+
+    /// Several files in a row (e.g. a few photos) get one sound and one message, after the last one.
+    private func scheduleReceivedSummary() {
+        receivedWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if self.transfers.contains(where: { $0.direction == .fromPhone && $0.state == .active }) {
+                self.scheduleReceivedSummary()
+                return
+            }
+            let urls = self.receivedBatch
+            self.receivedBatch.removeAll()
+            guard let first = urls.first else { return }
             let phone = self.phone?.name ?? "phone"
+            let text = urls.count == 1 ? "\(first.lastPathComponent) from \(phone)" : "\(urls.count) files from \(phone)"
             Feedback.play(.received)
             if NotchStyle.isOn {
-                NotchController.shared.flash(symbol: "arrow.down.circle.fill", text: "\(file.url.lastPathComponent) from \(phone)")
-            }
-            if !NotchStyle.isOn {
-                self.notifier.postLocal(title: "Received from \(phone)", body: file.url.lastPathComponent, fileURL: file.url)
+                NotchController.shared.flash(symbol: "arrow.down.circle.fill", text: text)
+            } else {
+                self.notifier.postLocal(title: "Received from \(phone)",
+                                        body: urls.count == 1 ? first.lastPathComponent : "\(urls.count) files in Downloads",
+                                        fileURL: urls.count == 1 ? first : nil)
             }
         }
+        receivedWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
     }
 
     private func updateTransfer(_ id: String, _ change: (inout Transfer) -> Void) {

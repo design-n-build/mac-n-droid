@@ -73,11 +73,20 @@ struct MenuBarView: View {
                                   : "Notifications appear as regular banners. Click to show them in the notch.")
                 }
 
-                Button {
-                    state.showMirrorWindow()
-                } label: {
-                    Label("Mirror Phone Screen", systemImage: "rectangle.on.rectangle")
-                        .frame(maxWidth: .infinity)
+                HStack(spacing: 8) {
+                    Button {
+                        state.showMirrorWindow()
+                    } label: {
+                        Label("Mirror Screen", systemImage: "rectangle.on.rectangle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    Button {
+                        state.sendBrowserTab()
+                    } label: {
+                        Label("Send Tab", systemImage: "safari")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .help("Open the page you're looking at in your browser on \(state.phone?.name ?? "your phone")")
                 }
                 .controlSize(.large)
 
@@ -106,6 +115,9 @@ struct MenuBarView: View {
                     Text("Settings…").frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(MenuRowStyle())
+                if Updater.shared.isAvailable {
+                    MenuRow(title: "Check for Updates…") { Updater.shared.checkForUpdates() }
+                }
                 MenuRow(title: "Quit Mac n Droid") { NSApp.terminate(nil) }
             }
         }

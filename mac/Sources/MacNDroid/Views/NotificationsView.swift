@@ -27,22 +27,31 @@ struct NotificationsView: View {
             } else if filtered.isEmpty {
                 ContentUnavailableView.search(text: search)
             } else {
-                List {
+                // A plain stack instead of List: List kept a stale height for a row added at the top,
+                // which cut the newest notification in half.
+                ScrollView {
                     let groups = AppCategory.allCases.filter { c in filtered.contains { $0.category == c } }
-                    ForEach(groups) { c in
-                        Section {
-                            ForEach(filtered.filter { $0.category == c }) { n in
-                                NotificationRow(notification: n, compact: false)
-                                    .padding(.vertical, 4)
-                            }
-                        } header: {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(groups) { c in
                             if group == nil && groups.count > 1 {
                                 Label(c.title, systemImage: c.symbol)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.top, 18)
+                                    .padding(.bottom, 4)
+                            }
+                            let rows = filtered.filter { $0.category == c }
+                            ForEach(rows) { n in
+                                NotificationRow(notification: n, compact: false)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                if n.id != rows.last?.id { Divider().padding(.leading, 48) }
                             }
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
                 }
-                .listStyle(.inset)
             }
         }
         .navigationTitle("Notifications")
@@ -81,6 +90,7 @@ struct NotificationRow: View {
     let compact: Bool
     @State private var replyText = ""
     @State private var replying = false
+    @FocusState private var replyFocused: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -107,6 +117,9 @@ struct NotificationRow: View {
                     HStack {
                         TextField("Reply", text: $replyText)
                             .textFieldStyle(.roundedBorder)
+                            .focused($replyFocused)
+                            .onAppear { DispatchQueue.main.async { replyFocused = true } }
+                            .onExitCommand { replying = false }
                             .onSubmit(sendReply)
                         Button("Send", action: sendReply)
                             .buttonStyle(.borderedProminent)
@@ -134,11 +147,14 @@ struct NotificationRow: View {
                         .buttonStyle(.borderedProminent)
                 }
                 ForEach(notification.actions) { a in
-                    Button(a.title) {
+                    Button {
                         if a.isReply { replying.toggle() } else {
                             state.performAction(key: notification.id, index: a.id, text: nil)
                         }
+                    } label: {
+                        if a.opensOnPhone { Label(a.displayTitle, systemImage: "arrow.up.forward.app") } else { Text(a.title) }
                     }
+                    .help(a.opensOnPhone ? "Opens \(notification.app) on your phone" : "")
                     .tint(a.title.lowercased().contains("decline") ? .red : nil)
                 }
                 Spacer()

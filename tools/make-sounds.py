@@ -1,7 +1,7 @@
 """Generates Mac n Droid's own subtle sounds (soft marimba-like blips) as 16-bit WAV.
 
 Usage: python3 tools/make-sounds.py <out_dir>
-Writes mnd_sent.wav, mnd_received.wav, mnd_tap.wav (Mac notification).
+Writes mnd_sent.wav, mnd_received.wav, mnd_tap.wav (Mac notification) and mnd_left_behind.wav.
 """
 import math
 import os
@@ -64,6 +64,16 @@ def main(out):
     write(os.path.join(out, "mnd_tap.wav"), render([
         note(698, 0.32, s(0.0), 13, 0.07, attack_s=0.012, octave=0.06),  # F5, almost pure sine
     ], 0.34))
+    # Left behind: a clear rising C–E–G chime, twice. Noticeably louder than the others (~-7 dBFS)
+    # so you hear it from a pocket, but rounded and short so it never feels like an alarm.
+    chime = []
+    for rep in (0.0, 1.05):
+        chime += [
+            note(1047, 0.5, s(rep + 0.00), 7, 0.42, attack_s=0.008, octave=0.12),  # C6
+            note(1319, 0.5, s(rep + 0.16), 7, 0.40, attack_s=0.008, octave=0.12),  # E6
+            note(1568, 0.8, s(rep + 0.32), 5, 0.40, attack_s=0.008, octave=0.12),  # G6
+        ]
+    write(os.path.join(out, "mnd_left_behind.wav"), render(chime, 2.3))
 
 if __name__ == "__main__":
     main(sys.argv[1])

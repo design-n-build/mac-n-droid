@@ -19,8 +19,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
@@ -30,6 +32,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -182,8 +185,9 @@ private fun PairScreen(initialLink: String?, onPaired: () -> Unit) {
 
 private enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
     Home("Home", Icons.Outlined.Home, Icons.Filled.Home),
-    Notifications("Notifications", Icons.Outlined.Notifications, Icons.Filled.Notifications),
     Files("Files", Icons.Outlined.Folder, Icons.Filled.Folder),
+    Clipboard("Clipboard", Icons.Outlined.ContentPaste, Icons.Filled.ContentPaste),
+    Notifications("Notifications", Icons.Outlined.Notifications, Icons.Filled.Notifications),
 }
 
 @Composable
@@ -195,7 +199,7 @@ private fun AppShell() {
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
                 Tab.entries.forEach { t ->
                     NavigationBarItem(
                         selected = tab == t,
@@ -215,6 +219,7 @@ private fun AppShell() {
             when (tab) {
                 Tab.Home -> HomeScreen()
                 Tab.Notifications -> NotificationsScreen()
+                Tab.Clipboard -> ClipboardScreen()
                 Tab.Files -> FilesScreen()
             }
         }
@@ -232,10 +237,16 @@ private fun HomeScreen() {
     val clip by Prefs.receiveClipboard.collectAsState()
     val shots by Prefs.screenshotsToMac.collectAsState()
     val haptics by Prefs.haptics.collectAsState()
+    val leftBehind by Prefs.leftBehind.collectAsState()
+    val macMusic by Prefs.macMusic.collectAsState()
+    val smsOn by Prefs.smsOnMac.collectAsState()
+    var smsAllowed by remember { mutableStateOf(app.macndroid.service.SmsBridge.hasPermission(ctx)) }
 
     var shotsAllowed by remember { mutableStateOf(app.macndroid.service.ScreenshotWatcher.hasPermission(ctx)) }
     var perms by remember { mutableStateOf(PermissionState.read(ctx)) }
     var autoClip by remember { mutableStateOf(ClipboardSync.isAutoEnabled(ctx)) }
+    var control by remember { mutableStateOf(app.macndroid.service.PhoneControl.isEnabled(ctx)) }
+    var explainControl by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var confirmUnpair by remember { mutableStateOf(false) }
     var explainAutoClip by remember { mutableStateOf(false) }
@@ -245,7 +256,9 @@ private fun HomeScreen() {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         perms = PermissionState.read(ctx)
         autoClip = ClipboardSync.isAutoEnabled(ctx)
+        control = app.macndroid.service.PhoneControl.isEnabled(ctx)
         shotsAllowed = app.macndroid.service.ScreenshotWatcher.hasPermission(ctx)
+        smsAllowed = app.macndroid.service.SmsBridge.hasPermission(ctx)
     }
     fun refreshService() = runCatching {
         ctx.startService(Intent(ctx, SyncService::class.java).setAction(SyncService.ACTION_REFRESH))
@@ -253,6 +266,12 @@ private fun HomeScreen() {
     val photosPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         shotsAllowed = ok
         if (ok) Prefs.setScreenshotsToMac(true)
+        refreshService()
+    }
+
+    val smsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        smsAllowed = app.macndroid.service.SmsBridge.hasPermission(ctx)
+        if (smsAllowed) Prefs.setSmsOnMac(true)
         refreshService()
     }
 
@@ -284,9 +303,29 @@ private fun HomeScreen() {
     ) { pad ->
         LazyColumn(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = pad.calculateTopPadding(), bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            item { StatusCard(status, pairing?.macName ?: "Mac") }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    StatusCard(status, pairing?.macName ?: "Mac")
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        FilledTonalButton(
+                            onClick = { pickFiles.launch(arrayOf("*/*")) },
+                            enabled = status == Link.Status.Connected,
+                            modifier = Modifier.weight(1f).height(56.dp),
+                        ) {
+                            Icon(Icons.Outlined.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Send files", maxLines = 1)
+                        }
+                        FilledTonalButton(
+                            onClick = { ctx.startActivity(Intent(ctx, SendClipboardActivity::class.java)) },
+                            enabled = status == Link.Status.Connected,
+                            modifier = Modifier.weight(1f).height(56.dp),
+                        ) {
+                            Icon(Icons.Outlined.ContentPaste, null); Spacer(Modifier.width(8.dp)); Text("Send clipboard", maxLines = 1)
+                        }
+                    }
+                }
+            }
 
             if (!perms.allGranted) {
                 item {
@@ -301,39 +340,48 @@ private fun HomeScreen() {
             }
 
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FilledTonalButton(
-                        onClick = { ctx.startActivity(Intent(ctx, SendClipboardActivity::class.java)) },
-                        enabled = status == Link.Status.Connected,
-                        modifier = Modifier.weight(1f).height(56.dp),
-                    ) {
-                        Icon(Icons.Outlined.ContentPaste, null); Spacer(Modifier.width(8.dp)); Text("Send clipboard")
-                    }
-                    FilledTonalButton(
-                        onClick = { pickFiles.launch(arrayOf("*/*")) },
-                        enabled = status == Link.Status.Connected,
-                        modifier = Modifier.weight(1f).height(56.dp),
-                    ) {
-                        Icon(Icons.Outlined.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Send files")
+                SectionCard("Clipboard") {
+                    SwitchRow(Icons.Outlined.ContentCopy, "From Mac", "Copy on your Mac, paste here", clip) { Prefs.setReceiveClipboard(it) }
+                    SwitchRow(Icons.Outlined.AutoAwesome, "To Mac automatically",
+                        if (autoClip) "Copy here, paste on your Mac" else "Copy here, paste on your Mac. Needs one setting.",
+                        autoClip) { explainAutoClip = true }
+                    SwitchRow(Icons.Outlined.Screenshot, "Screenshots",
+                        if (shotsAllowed) "New screenshots are ready to paste on your Mac" else "Needs access to photos",
+                        shots && shotsAllowed) { on ->
+                        if (on && !shotsAllowed) photosPermission.launch(app.macndroid.service.ScreenshotWatcher.permission)
+                        else { Prefs.setScreenshotsToMac(on); refreshService() }
                     }
                 }
             }
 
             item {
-                SectionCard("Sync") {
-                    SwitchRow(Icons.Outlined.ContentCopy, "Clipboard from Mac", "Text and images you copy on your Mac appear here",
-                        clip) { Prefs.setReceiveClipboard(it) }
-                    SwitchRow(Icons.Outlined.AutoAwesome, "Clipboard to Mac automatically",
-                        if (autoClip) "Anything you copy here is ready to paste on your Mac" else "Copy on your phone, paste on your Mac. Needs one setting.",
-                        autoClip) { explainAutoClip = true }
-                    SwitchRow(Icons.Outlined.Screenshot, "Screenshots to Mac clipboard",
-                        if (shots && shotsAllowed) "Take a screenshot here, paste it on your Mac" else "Needs access to photos to notice new screenshots",
-                        shots && shotsAllowed) { on ->
-                        if (on && !shotsAllowed) photosPermission.launch(app.macndroid.service.ScreenshotWatcher.permission)
-                        else { Prefs.setScreenshotsToMac(on); refreshService() }
+                SectionCard("Messages and music") {
+                    SwitchRow(Icons.Outlined.Sms, "Messages on Mac",
+                        if (smsAllowed) "Read and reply to texts from ${pairing?.macName ?: "your Mac"}" else "Read and reply to texts. Needs access to SMS.",
+                        smsOn && smsAllowed) { on ->
+                        if (on && !smsAllowed) smsPermission.launch(app.macndroid.service.SmsBridge.permissions)
+                        else { Prefs.setSmsOnMac(on); refreshService() }
                     }
+                    SwitchRow(Icons.Outlined.MusicNote, "Music on your Mac",
+                        "Play, pause and skip from your phone",
+                        macMusic) { on ->
+                        Prefs.setMacMusic(on)
+                        if (!on) app.macndroid.service.MacMusic.end()
+                        app.macndroid.core.Link.post(org.json.JSONObject().put("t", "mac_media_want").put("on", on))
+                    }
+                }
+            }
+
+            item {
+                SectionCard("Phone") {
+                    SwitchRow(Icons.Outlined.TouchApp, "Control from Mac",
+                        if (control) "Tap and type here from the Phone Screen window" else "Mirroring is watch-only without it. Needs one setting.",
+                        control) { explainControl = true }
+                    SwitchRow(Icons.Outlined.NotificationsActive, "Left-behind alerts",
+                        "A chime if you walk away from ${pairing?.macName ?: "your Mac"} while it's awake",
+                        leftBehind) { Prefs.setLeftBehind(it) }
                     SwitchRow(Icons.Outlined.Vibration, "Haptic feedback",
-                        "A light tap when files arrive or are sent, the clipboard syncs, or mirroring starts",
+                        "A light tap when things sync",
                         haptics) { Prefs.setHaptics(it) }
                 }
             }
@@ -342,12 +390,12 @@ private fun HomeScreen() {
                 SectionCard("Tips") {
                     Tip.entries.forEach { tip ->
                         ListItem(
-                            modifier = Modifier.clickableRow { openTip = tip },
+                            modifier = Modifier.tileRow().clickableRow { openTip = tip },
                             headlineContent = { Text(tip.title) },
                             supportingContent = { Text(tip.summary) },
                             leadingContent = { Icon(tip.icon, null) },
                             trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
-                            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                            colors = ListItemDefaults.colors(containerColor = tileColor),
                         )
                     }
                 }
@@ -367,7 +415,7 @@ private fun HomeScreen() {
                     if (autoClip) "In the next screen, open Mac n Droid clipboard sync and turn it off."
                     else "Android only lets the app you're using read the clipboard. Mac n Droid can watch for when you tap Copy, " +
                         "then pass what you copied to your Mac.\n\nIn the next screen, open Installed apps → Mac n Droid clipboard sync and turn it on. " +
-                        "Mac n Droid never reads or stores what's on your screen."
+                        "It can't tap or type on your screen, and never reads or stores what's on it."
                 )
             },
             confirmButton = {
@@ -377,6 +425,30 @@ private fun HomeScreen() {
                 }) { Text("Open settings") }
             },
             dismissButton = { TextButton(onClick = { explainAutoClip = false }) { Text("Not now") } },
+        )
+    }
+
+    if (explainControl) {
+        AlertDialog(
+            onDismissRequest = { explainControl = false },
+            icon = { Icon(Icons.Outlined.TouchApp, null) },
+            title = { Text(if (control) "Turn off control from Mac?" else "Use this phone from your Mac") },
+            text = {
+                Text(
+                    if (control) "In the next screen, open Mac n Droid phone control and turn it off. Mirroring still works, watch-only."
+                    else "While you mirror this screen, clicks on your Mac become taps here, and you can scroll, type and use Back and Home.\n\n" +
+                        "It only acts on what you do in the Phone Screen window on your paired Mac.\n\n" +
+                        "Some banking and UPI apps show a warning while this is on, because it can tap on other apps. " +
+                        "You can turn it off at any time.\n\nIn the next screen, open Installed apps → Mac n Droid phone control and turn it on."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    explainControl = false
+                    ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                }) { Text("Open settings") }
+            },
+            dismissButton = { TextButton(onClick = { explainControl = false }) { Text("Not now") } },
         )
     }
 
@@ -400,41 +472,43 @@ private fun HomeScreen() {
     }
 }
 
+/** The paired Mac: its name as the heading, connection at the top right, then a line of detail. */
 @Composable
 private fun StatusCard(status: Link.Status, macName: String) {
-    val connected = status == Link.Status.Connected
+    val scheme = MaterialTheme.colorScheme
     val (label, detail) = when (status) {
         Link.Status.Connected -> "Connected" to "Notifications, clipboard and files are syncing."
-        Link.Status.Connecting -> "Connecting…" to "Securing the connection."
-        Link.Status.Searching -> "Looking for $macName" to "Make sure Mac n Droid is open on your Mac and you're on the same Wi-Fi."
-        Link.Status.AuthFailed -> "Pairing expired" to "Your Mac reset its pairing code. Unpair, then scan the new QR code."
+        Link.Status.Connecting -> "Connecting" to "Securing the connection."
+        Link.Status.Searching -> "Searching" to "Make sure Mac n Droid is open on your Mac and you're on the same Wi-Fi."
+        Link.Status.AuthFailed -> "Expired" to "Your Mac reset its pairing code. Unpair, then scan the new QR code."
         Link.Status.Unpaired -> "Not paired" to ""
     }
-    // Text always uses the matching "on" color for the container, so it stays readable with any wallpaper palette.
-    val container = if (connected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
-    val onContainer = if (connected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
-    val secondary = if (connected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
-    ElevatedCard(colors = CardDefaults.elevatedCardColors(containerColor = container, contentColor = onContainer)) {
-        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.LaptopMac, null, Modifier.size(48.dp), tint = onContainer)
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(macName, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (connected) {
-                        Surface(shape = CircleShape, color = onContainer, modifier = Modifier.size(8.dp)) {}
-                        Spacer(Modifier.width(6.dp))
-                    }
-                    Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
-                        color = if (status == Link.Status.AuthFailed) MaterialTheme.colorScheme.error else onContainer)
+    val dot = when (status) {
+        Link.Status.Connected -> scheme.primary
+        Link.Status.AuthFailed -> scheme.error
+        else -> scheme.outline
+    }
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = scheme.surfaceContainerHigh, contentColor = scheme.onSurface),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(macName, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(12.dp))
+                if (status == Link.Status.Searching || status == Link.Status.Connecting) {
+                    CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp, color = scheme.onSurfaceVariant)
+                } else {
+                    Surface(shape = CircleShape, color = dot, modifier = Modifier.size(8.dp)) {}
                 }
-                if (detail.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(detail, style = MaterialTheme.typography.bodyMedium, color = secondary)
-                }
+                Spacer(Modifier.width(8.dp))
+                Text(label, style = MaterialTheme.typography.labelLarge,
+                    color = if (status == Link.Status.AuthFailed) scheme.error else scheme.onSurfaceVariant)
             }
-            if (status == Link.Status.Searching || status == Link.Status.Connecting) {
-                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp, color = onContainer)
+            if (detail.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text(detail, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
             }
         }
     }
@@ -456,11 +530,12 @@ private fun SetupCard(p: PermissionState, onNotifPermission: () -> Unit, onListe
 @Composable
 private fun SetupRow(icon: ImageVector, title: String, body: String, onClick: () -> Unit) {
     ListItem(
+        modifier = Modifier.tileRow(),
         headlineContent = { Text(title) },
         supportingContent = { Text(body) },
         leadingContent = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) },
         trailingContent = { Button(onClick = onClick) { Text("Allow") } },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = ListItemDefaults.colors(containerColor = tileColor),
     )
 }
 
@@ -474,22 +549,22 @@ internal fun SwitchRow(icon: ImageVector, title: String, body: String, checked: 
         onChange(on)
     }
     ListItem(
-        modifier = Modifier.clickableRow { change(!checked) },
+        modifier = Modifier.tileRow().clickableRow { change(!checked) },
         headlineContent = { Text(title) },
         supportingContent = { Text(body) },
         leadingContent = { Icon(icon, null) },
         trailingContent = { Switch(checked, change) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = ListItemDefaults.colors(containerColor = tileColor),
     )
 }
 
 @Composable
 fun SectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column {
-        Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-            Column(Modifier.padding(vertical = 4.dp), content = content)
-        }
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
+        // Gboard-style group: rounded outside, rows separated by a thin gap.
+        Column(Modifier.clip(RoundedCornerShape(24.dp)), verticalArrangement = Arrangement.spacedBy(2.dp), content = content)
     }
 }
 

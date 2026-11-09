@@ -42,7 +42,10 @@ class SendClipboardActivity : Activity() {
     companion object { const val EXTRA_AUTO = "auto" }
 }
 
-/** Receives "Share → Send to Mac" for text, links and files. */
+/**
+ * "Share → Send to Mac" (and the Mac's Direct Share entry). One target for everything:
+ * files are sent, a shared link opens in the Mac's browser, other text goes to its clipboard.
+ */
 class ShareActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,6 +54,9 @@ class ShareActivity : Activity() {
             Intent.ACTION_SEND_MULTIPLE -> intent.parcelableList<Uri>(Intent.EXTRA_STREAM)
             else -> emptyList()
         }
+        val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+        // "Look at this https://…" is a link; a long note that happens to contain one is text.
+        val link = text?.takeIf { it.length <= 500 }?.let { app.macndroid.service.Handoff.findLink(it) }
         when {
             !Link.isConnected -> toast(this, "Not connected to your Mac")
             uris.isNotEmpty() -> {
@@ -58,9 +64,48 @@ class ShareActivity : Activity() {
                 SyncService.sendUris(this, uris)
                 toast(this, if (uris.size == 1) "Sending to ${macName()}…" else "Sending ${uris.size} files to ${macName()}…")
             }
-            else -> sendText(this, intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString())
+            link != null -> {
+                ShareShortcuts.reportUsed(this)
+                if (app.macndroid.service.Handoff.sendToMac(link)) toast(this, "Opening on ${macName()}")
+            }
+            else -> {
+                ShareShortcuts.reportUsed(this)
+                sendText(this, text)
+            }
         }
         finish()
+    }
+}
+
+/** Quick Settings "Send files to Mac": shows the file picker over whatever's on screen, then sends. */
+class PickFilesActivity : Activity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (savedInstanceState != null) return
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("*/*")
+            .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        runCatching { startActivityForResult(pick, 1) }.onFailure { finish() }
+    }
+
+    @Deprecated("Activity result API isn't available on plain Activity")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uris = buildList {
+            data?.clipData?.let { cd -> for (i in 0 until cd.itemCount) cd.getItemAt(i).uri?.let(::add) }
+            if (isEmpty()) data?.data?.let(::add)
+        }
+        when {
+            resultCode != RESULT_OK || uris.isEmpty() -> {}
+            !Link.isConnected -> toast(this, "Not connected to your Mac")
+            else -> {
+                SyncService.sendUris(this, uris)
+                toast(this, if (uris.size == 1) "Sending to ${macName()}…" else "Sending ${uris.size} files to ${macName()}…")
+            }
+        }
+        finish()
+        @Suppress("DEPRECATION") overridePendingTransition(0, 0)
     }
 }
 

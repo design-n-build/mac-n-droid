@@ -133,8 +133,8 @@ private fun FileCard(t: TransferItem, mac: String) {
         onClick = { if (canOpen) open() },
         enabled = canOpen,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = tileColor,
+            disabledContainerColor = tileColor,
             disabledContentColor = MaterialTheme.colorScheme.onSurface,
         ),
     ) {

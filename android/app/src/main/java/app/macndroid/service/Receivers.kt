@@ -10,7 +10,6 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import app.macndroid.core.Link
 import app.macndroid.core.Prefs
-import app.macndroid.ui.SendClipboardActivity
 
 /** Restarts the link after reboot or an app update. */
 class BootReceiver : BroadcastReceiver() {
@@ -20,8 +19,8 @@ class BootReceiver : BroadcastReceiver() {
     }
 }
 
-/** Quick Settings tile: one tap sends the phone's clipboard to the Mac. */
-class ClipboardTileService : TileService() {
+/** Quick Settings tile: pick files or photos and send them to the Mac. */
+class FilesTileService : TileService() {
     override fun onStartListening() {
         qsTile?.apply {
             state = if (Link.isConnected) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
@@ -32,9 +31,9 @@ class ClipboardTileService : TileService() {
 
     @SuppressLint("StartActivityAndCollapseDeprecated")
     override fun onClick() {
-        val intent = Intent(this, SendClipboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = Intent(this, app.macndroid.ui.PickFilesActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (Build.VERSION.SDK_INT >= 34) {
-            startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE))
+            startActivityAndCollapse(PendingIntent.getActivity(this, 1, intent, PendingIntent.FLAG_IMMUTABLE))
         } else {
             @Suppress("DEPRECATION") startActivityAndCollapse(intent)
         }

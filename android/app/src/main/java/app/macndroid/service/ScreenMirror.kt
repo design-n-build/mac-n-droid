@@ -38,7 +38,7 @@ import kotlin.math.roundToInt
 
 /**
  * Screen mirroring: MediaProjection → VirtualDisplay → hardware H.264 encoder → encrypted link.
- * The Mac decodes it with VideoToolbox. Taps and keys from the Mac are injected by [CopyWatcher].
+ * The Mac decodes it with VideoToolbox. Taps and keys from the Mac are injected by [PhoneControl].
  */
 object ScreenMirror {
     private const val TAG = "ScreenMirror"

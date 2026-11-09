@@ -7,48 +7,55 @@ struct MirrorWindowView: View {
     @AppStorage(Prefs.keepOnTop) private var keepOnTop = false
 
     var body: some View {
-        ZStack {
-            Color.black
-            MirrorSurface(renderer: state.mirrorRenderer, videoSize: state.mirrorSize) { state.sendInput($0) }
-                .opacity(state.mirror == .live ? 1 : 0)
-            if state.mirror != .live { placeholder }
-        }
-        .overlay(alignment: .bottom) {
-            if state.mirror == .live && state.controlUnavailable {
-                Label("To control your phone from here, turn on \"Clipboard to Mac automatically\" in Mac n Droid on your phone.",
-                      systemImage: "hand.tap")
-                    .font(.callout)
-                    .padding(10)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .padding(12)
+        VStack(spacing: 0) {
+            ZStack {
+                Color.black
+                MirrorSurface(renderer: state.mirrorRenderer, videoSize: state.mirrorSize) { state.sendInput($0) }
+                    .opacity(state.mirror == .live ? 1 : 0)
+                if state.mirror != .live { placeholder }
             }
+            .overlay(alignment: .bottom) {
+                if state.mirror == .live && state.controlUnavailable {
+                    Label("To control your phone from here, turn on \"Control from Mac\" on your phone. Tap the notification there to open the setting.",
+                          systemImage: "hand.tap")
+                        .font(.callout)
+                        .padding(10)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .padding(12)
+                }
+            }
+            MirrorNavBar()
+                .disabled(state.mirror != .live)
         }
-        .ignoresSafeArea()
+        .ignoresSafeArea(edges: .top)
         .navigationTitle(state.phone?.name ?? "Phone")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button { state.sendKey("back") } label: { Label("Back", systemImage: "chevron.backward") }
-                    .help("Back (Esc or right-click)")
-                Button { state.sendKey("home") } label: { Label("Home", systemImage: "circle") }
-                    .help("Home")
-                Button { state.sendKey("recents") } label: { Label("Recent Apps", systemImage: "square.on.square") }
-                    .help("Recent apps")
+                Button { state.sendKey("notifications") } label: { Label("Notifications", systemImage: "bell") }
+                    .help("Open notifications (⇧⌘N)")
+                    .disabled(state.mirror != .live)
+                Button { state.sendKey("quick_settings") } label: { Label("Quick Settings", systemImage: "switch.2") }
+                    .help("Open Quick Settings (⌥⌘N)")
+                    .disabled(state.mirror != .live)
                 Menu {
-                    Button("Notifications") { state.sendKey("notifications") }
-                    Button("Quick Settings") { state.sendKey("quick_settings") }
                     Button("Take Screenshot") { state.sendKey("screenshot") }
+                    Divider()
+                    Button("Volume Up") { state.sendKey("volume_up") }
+                    Button("Volume Down") { state.sendKey("volume_down") }
                     Divider()
                     Button("Lock Phone") { state.sendKey("lock") }
                 } label: {
                     Label("More", systemImage: "ellipsis.circle")
                 }
                 .help("More phone controls")
+                .disabled(state.mirror != .live)
                 Button { WindowPin.toggle() } label: {
                     Label("Keep on Top", systemImage: keepOnTop ? "pin.fill" : "pin")
                 }
                 .help(keepOnTop ? "Stop keeping windows on top" : "Keep this window above other apps")
             }
         }
+        .focusedSceneValue(\.mirrorLive, state.mirror == .live)
         .onAppear { state.startMirroring() }
         .onDisappear { state.stopMirroring() }
         .frame(minWidth: 240, minHeight: 400)
@@ -75,6 +82,74 @@ struct MirrorWindowView: View {
         .multilineTextAlignment(.center)
         .foregroundStyle(.white)
         .padding(24)
+    }
+}
+
+/// Android's three navigation buttons, under the phone screen.
+struct MirrorNavBar: View {
+    @EnvironmentObject private var state: AppState
+    static let height: CGFloat = 40
+
+    var body: some View {
+        HStack(spacing: 0) {
+            button("Back", "arrowtriangle.backward", "back", "Back (Esc, ⌘[ or right-click)")
+            button("Home", "circle", "home", "Home (⇧⌘H or middle-click)")
+            button("Recent Apps", "square", "recents", "Recent apps (⇧⌘A)")
+        }
+        .frame(height: Self.height)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    private func button(_ title: String, _ symbol: String, _ key: String, _ help: String) -> some View {
+        Button { state.sendKey(key) } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .medium))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(title)
+        .help(help)
+    }
+}
+
+struct MirrorLiveKey: FocusedValueKey { typealias Value = Bool }
+extension FocusedValues {
+    /// True while the Phone Screen window is focused and showing the phone (enables the Phone menu).
+    var mirrorLive: Bool? {
+        get { self[MirrorLiveKey.self] }
+        set { self[MirrorLiveKey.self] = newValue }
+    }
+}
+
+/// The Phone menu: navigation and system actions, with shortcuts, while the Phone Screen window is in front.
+struct PhoneCommands: Commands {
+    @FocusedValue(\.mirrorLive) private var live
+    let state: AppState
+
+    var body: some Commands {
+        CommandMenu("Phone") {
+            item("Back", "back", "[", [.command])
+            item("Home", "home", "h", [.command, .shift])
+            item("Recent Apps", "recents", "a", [.command, .shift])
+            Divider()
+            item("Notifications", "notifications", "n", [.command, .shift])
+            item("Quick Settings", "quick_settings", "n", [.command, .option])
+            Divider()
+            item("Volume Up", "volume_up", .upArrow, [.command])
+            item("Volume Down", "volume_down", .downArrow, [.command])
+            Divider()
+            item("Take Screenshot", "screenshot", "s", [.command, .option])
+            item("Lock Phone", "lock", "l", [.command, .option])
+        }
+    }
+
+    private func item(_ title: String, _ key: String, _ shortcut: KeyEquivalent, _ mods: EventModifiers) -> some View {
+        Button(title) { state.sendKey(key) }
+            .keyboardShortcut(shortcut, modifiers: mods)
+            .disabled(live != true)
     }
 }
 
@@ -140,12 +215,15 @@ final class MirrorNSView: NSView {
     /// Lock the window to the phone's aspect ratio and give it a sensible first size.
     private func fitWindow() {
         guard let window, videoSize.width > 0, videoSize.height > 0 else { return }
-        window.contentAspectRatio = videoSize
+        let bar = MirrorNavBar.height
         let screenH = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 900
-        let currentH = window.contentLayoutRect.height
-        let h = min(max(currentH, 560), screenH - 80)
+        let currentH = window.contentLayoutRect.height - bar
+        let h = min(max(currentH, 560), screenH - 80 - bar)
         let w = h * videoSize.width / videoSize.height
-        var frame = window.frameRect(forContentRect: NSRect(x: 0, y: 0, width: w, height: h))
+        // Phone + navigation bar. The bar is a fixed height, so the ratio drifts a little as the
+        // window is resized; the video is aspect-fit on black, so that only shows as thin black edges.
+        window.contentAspectRatio = CGSize(width: w, height: h + bar)
+        var frame = window.frameRect(forContentRect: NSRect(x: 0, y: 0, width: w, height: h + bar))
         frame.origin = NSPoint(x: window.frame.minX, y: window.frame.maxY - frame.height)
         window.setFrame(frame, display: true, animate: false)
     }
@@ -195,6 +273,10 @@ final class MirrorNSView: NSView {
     }
 
     override func rightMouseDown(with event: NSEvent) { send(["t": "input", "key": "back"]) }
+    /// Middle button (wheel click) = Home, as in other phone mirroring tools.
+    override func otherMouseDown(with event: NSEvent) {
+        if event.buttonNumber == 2 { send(["t": "input", "key": "home"]) } else { super.otherMouseDown(with: event) }
+    }
 
     override func scrollWheel(with event: NSEvent) {
         if scrollOrigin == nil { scrollOrigin = normalized(event) }

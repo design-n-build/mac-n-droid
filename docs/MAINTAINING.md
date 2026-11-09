@@ -64,8 +64,19 @@ You'll get emails and notifications at github.com/notifications (bell icon, top 
   `android/keystore.properties` are excluded automatically. **Back them up** somewhere private
   (a USB drive or a password manager). If you lose them, users can't install updates over the old
   app. If someone steals them, they could publish fake updates as you.
+- **The Mac update key never goes on GitHub either.** `mac/signing/sparkle_ed25519_private.key` signs
+  every Mac update, and installed apps only accept updates signed with it. Back it up with the Android
+  key. If you lose it, existing users can't update automatically. If someone steals it, they could
+  push a fake update to everyone.
 - Don't paste passwords, tokens or personal data into issues, commits or code.
 - Your commits use a private GitHub email address, so your real email isn't shown publicly.
+
+## How Mac updates reach people
+
+The Mac app checks GitHub once a day for a newer version (Sparkle). Every release must include
+two Mac files: the `.dmg` and the `appcast.xml` that the build makes next to it in `mac/dist/`.
+Claude uploads both when you say "make a release". Updates only work once the repo is **public**,
+because a private repo's downloads need a GitHub login.
 
 ## Free now, paid features later?
 

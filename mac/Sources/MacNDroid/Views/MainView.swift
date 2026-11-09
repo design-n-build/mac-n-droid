@@ -2,13 +2,15 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Pane: String, CaseIterable, Identifiable {
-    case overview, notifications, files, pair
+    case overview, notifications, messages, clipboard, files, pair
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .overview: "Overview"
         case .notifications: "Notifications"
+        case .messages: "Messages"
+        case .clipboard: "Clipboard"
         case .files: "Files"
         case .pair: "Pair a Phone"
         }
@@ -18,6 +20,8 @@ enum Pane: String, CaseIterable, Identifiable {
         switch self {
         case .overview: "smartphone"
         case .notifications: "bell.badge"
+        case .messages: "message"
+        case .clipboard: "doc.on.clipboard"
         case .files: "folder"
         case .pair: "qrcode"
         }
@@ -33,7 +37,7 @@ struct MainView: View {
         NavigationSplitView {
             List(selection: $selection) {
                 Section(state.phone?.name ?? "Phone") {
-                    ForEach([Pane.overview, .notifications, .files]) { pane in
+                    ForEach([Pane.overview, .notifications, .messages, .clipboard, .files]) { pane in
                         Label(pane.title, systemImage: pane.symbol)
                             .badge(pane == .notifications ? state.notifications.count : 0)
                             .tag(pane)
@@ -50,6 +54,8 @@ struct MainView: View {
                 switch selection ?? .overview {
                 case .overview: OverviewView(selection: $selection)
                 case .notifications: NotificationsView()
+                case .messages: MessagesView()
+                case .clipboard: ClipboardView()
                 case .files: FilesView()
                 case .pair: PairView()
                 }

@@ -8,39 +8,72 @@ Free, private continuity between an Android phone and a Mac, with no account and
 | **Android app** | Jetpack Compose + Material 3 with Material You dynamic color. Android 10+. |
 | **Link** | Local Wi-Fi only, QR-code pairing, AES-256-GCM end-to-end encryption. See [PROTOCOL.md](PROTOCOL.md). |
 
-## Features (v0.2)
-- **Notifications on your Mac:** native macOS banners with the app's action buttons (Reply, Mark as read, Answer/Decline for calls). Dismiss on the Mac and it's dismissed on the phone.
-- **Verification codes:** codes in notifications get a **Copy 482913** button (optionally auto-copied).
-- **Clipboard:** copy on the Mac and it's on the phone. Phone → Mac via the Quick Settings tile, the status notification's **Send clipboard** button, or Share. Passwords from password managers are never sent.
-- **Files both ways:** drag onto the Mac window or Dock icon, or **Share → Send to Mac** on the phone. Mac saves to `~/Downloads`, phone to `Downloads/Mac n Droid`.
-- **Notch notifications:** phone notifications drop out of the MacBook notch, Dynamic Island style, with Copy code and Answer/Decline buttons. Macs without a notch get them at the top of the screen. You can switch back to standard banners in Settings.
-- **Real app names and logos** (Gmail, Flipkart…) in the list, banners and notch.
-- **Clipboard images both ways.** Copy a screenshot on the Mac and paste it on the phone, and the other way round.
-- **Automatic phone → Mac clipboard (optional):** Settings → Accessibility → Mac n Droid clipboard sync. It reacts only to Copy actions.
-- **Files** with real previews (photos, videos, PDFs) on both sides, Quick Look on the Mac, and a Files tab on Android.
-- **Phone battery** in the Mac menu bar.
-- **Ring my phone** at full volume, even on silent.
-- Auto-reconnect: Bonjour discovery, reconnects after Wi-Fi changes, sleep or reboot.
+## Features
+
+### Notifications
+- **Phone notifications on your Mac:** native banners, or Dynamic Island–style drops from the MacBook notch (top of the screen on Macs without a notch). App names and logos (Gmail, WhatsApp…), and the app's own buttons: Reply, Mark as read, Answer/Decline for calls. Dismiss on the Mac and it's dismissed on the phone.
+- **Reply right from the notch:** the text box is ready to type into as soon as you click Reply. Buttons that only open the phone are labelled "Reply on Phone".
+- **No notification storms:** a burst of notifications (like WhatsApp re-posting every unread chat) plays one sound and shows only the first few.
+- **Verification codes:** codes get a **Copy 482913** button, and can be copied automatically.
+- **Live activities:** timers, ongoing calls, rides and deliveries stay live on the Mac while they run.
+
+### Messages
+- **Read and reply to texts from your Mac** (Messages page). Start new conversations with contact search. Google Messages chat (RCS) messages that arrive while connected also show up, and replies go back through the chat.
+
+### Clipboard
+- **Copy on one, paste on the other:** text and images, both ways. Automatic phone → Mac copying is optional (Settings → Accessibility → Mac n Droid clipboard sync). Passwords from password managers are never sent.
+- **Clipboard history:** the last 20 copies from both devices, on both devices. Tap to copy again; clear it from either side.
+- **Screenshots** taken on the phone are ready to paste on the Mac.
+
+### Files and links
+- **Files both ways:** drag onto the Mac window, Dock icon or the **notch**; on the phone use **Share → Mac n Droid**, the **Send files** button, or the **Send files to Mac** Quick Settings tile. Several files at once give one sound and one notification.
+- **Link handoff:** share a link on the phone to open it in the Mac's browser. Send the current browser tab from the Mac with **⌃⌥P** (any browser) and it opens on the phone, right after you unlock it if it's locked.
+- **One share target:** your Mac appears in the share sheet's top row by name. Files are sent, links open, other text is copied.
+
+### Music and media
+- **Phone music on the Mac:** see and control what's playing on the phone.
+- **Mac music on the phone:** play, pause and skip Music, Spotify and (with the browser extension) YouTube, YouTube Music, Spotify Web, SoundCloud and other sites, from the phone's media controls.
+
+### Phone
+- **Mirror and control your phone** in a Mac window (control needs the optional Mac n Droid phone control setting).
+- **Phone as webcam** over USB (Android 14+).
+- **Ring my phone** at full volume, even on silent. **Phone battery** in the menu bar.
+- **Left-behind alerts:** a chime if you walk away from your Mac while it's awake.
+
+### Browser extension (Helium, Chrome, Edge, Brave, Arc…)
+- Control music and videos playing in the browser from your phone.
+- Click the toolbar icon for **Send This Page to Phone**, or right-click a link for **Open Link on Phone**.
+- Talks only to the Mac n Droid app on your own Mac (127.0.0.1); websites can't connect to it.
+
+### Everything else
+- **Automatic updates** for the Mac app (Sparkle), once the repo is public.
+- Native look on both sides: macOS design on the Mac, Material 3 with your wallpaper colours on Android.
+- Auto-reconnect after Wi-Fi changes, sleep or reboot. No account, no cloud.
 
 ## Install
 
 ### Mac
-1. Download **MacNDroid-0.8.2.dmg** from [Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest), open it and drag **Mac n Droid** to Applications.
+1. Download the latest **MacNDroid-x.y.z.dmg** from [Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest), open it and drag **Mac n Droid** to Applications.
 2. First launch: the app isn't notarized yet, so macOS blocks it. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
 3. Allow **Local Network** and **Notifications** when asked.
 
 ### Android
-1. On the phone, download **MacNDroid-0.8.5.apk** from [Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest) and open it. Allow "install unknown apps" for the app you opened it from.
+1. On the phone, download the latest **MacNDroid-x.y.z.apk** from [Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest) and open it. Allow "install unknown apps" for the app you opened it from.
 2. Open Mac n Droid → **Scan QR code** → scan the code on the Mac (**Pair a Phone**).
 3. Tap **Allow** on each item in **Finish setup**.
    - **Notification access greyed out?** Sideloaded apps on Android 13+ need: Settings → Apps → Mac n Droid → ⋮ → **Allow restricted settings**, then try again.
    - On Xiaomi/Samsung/Oppo/OnePlus also set battery to **Unrestricted** and enable autostart (see dontkillmyapp.com).
 
+### Browser extension (optional)
+1. On the Mac, open **Mac n Droid → Settings → Sync → Browser → Show Extension in Finder**.
+2. In your browser, open `chrome://extensions` (Helium: `helium://extensions`), turn on **Developer mode**, click **Load unpacked** and choose the **Browser Extension** folder.
+3. Pin it from the puzzle-piece menu. After a Mac app update, click ↻ on the extension to load the new version.
+
 ## Build from source
 
 ```bash
 # Mac app → mac/dist/Mac n Droid.app + .dmg (needs only Command Line Tools)
-cd mac && ./scripts/build-app.sh 0.2.0
+cd mac && ./scripts/build-app.sh 0.10.4
 
 # Android APK → android/app/build/outputs/apk/release/app-release.apk
 cd android
@@ -79,7 +112,8 @@ security import id.p12 -k ~/Library/Keychains/login.keychain-db -P macndroid -T 
 ```
 mac/        SwiftUI app (Swift Package) + build scripts
 android/    Kotlin/Compose app (Gradle)
-tools/      FakePhone.java protocol test client
+browser-extension/  Browser extension (Manifest V3), bundled into the Mac app
+tools/      FakePhone.java protocol test client, icon and sound generators
 docs/       Maintainer guide
 PROTOCOL.md Wire protocol
 RESEARCH.md Market research and roadmap
@@ -99,4 +133,5 @@ and logo so people don't confuse it with the official app. Using the name to ref
 (for example "works with Mac n Droid" or a review) is fine.
 
 ## Next up (from RESEARCH.md roadmap)
-SMS view/send, screen mirroring, phone as webcam, call audio through the Mac, media controls, clipboard history.
+Call audio through the Mac, browsing phone photos from the Mac, Do Not Disturb sync, hotspot in one click,
+the browser extension in the Chrome Web Store, and a Play Store listing.
