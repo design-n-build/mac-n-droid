@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Logo green (public/logo_droid_greenbg.png). -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#0CCE6B" />
+    <solid android:color="#0DA457" />
 </shape>

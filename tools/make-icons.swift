@@ -7,7 +7,13 @@ import AppKit
 
 let root = FileManager.default.currentDirectoryPath
 func load(_ name: String) -> NSImage { NSImage(contentsOfFile: "\(root)/public/\(name)")! }
-let white = load("logo_nobg_white.png")
+/// Recolors a one-color logo (brand colors come from the logos in public/, see below).
+func tinted(_ img: NSImage, _ c: NSColor) -> NSImage {
+    NSImage(size: img.size, flipped: false) { r in img.draw(in: r); c.set(); r.fill(using: .sourceAtop); return true }
+}
+// Brand off-white (#FAFAFA) and green, as in public/logo_droid_greenbg.svg: softer than pure white and bright green.
+let offWhite = NSColor(srgbRed: 0xFA / 255, green: 0xFA / 255, blue: 0xFA / 255, alpha: 1)
+let white = tinted(load("logo_nobg_white.png"), offWhite)
 let black = load("logo_nobg_black.png")
 let greenBG = load("logo_droid_greenbg.png")
 
@@ -51,10 +57,7 @@ func drawGlyph(_ img: NSImage, in rect: NSRect) {
     img.draw(in: dst, from: glyph, operation: .sourceOver, fraction: 1)
 }
 
-let green: NSColor = {
-    let rep = NSBitmapImageRep(data: greenBG.tiffRepresentation!)!
-    return rep.colorAt(x: 8, y: 8)!.usingColorSpace(.sRGB)!
-}()
+let green = NSColor(srgbRed: 0x0D / 255, green: 0xA4 / 255, blue: 0x57 / 255, alpha: 1)   // public/logo_droid_greenbg.svg
 let greenHex = String(format: "#%02X%02X%02X", Int(green.redComponent * 255), Int(green.greenComponent * 255), Int(green.blueComponent * 255))
 
 // MARK: Mac app icon — macOS grid: 824/1024 body, ~185 radius, soft drop shadow.
@@ -109,7 +112,7 @@ for (dir, px) in [("mdpi", 24), ("hdpi", 36), ("xhdpi", 48), ("xxhdpi", 72), ("x
 
 // MARK: Browser extension — the green logo on transparent, as large as the slot allows, so it stands
 // out in the toolbar next to other extensions.
-let greenLogo = load("logo_nobg_green.png")
+let greenLogo = tinted(load("logo_nobg_green.png"), green)
 let greenGlyph = glyphBounds(greenLogo)
 for px in [16, 32, 48, 128] {
     let rep = bitmap(px, px) { size in
