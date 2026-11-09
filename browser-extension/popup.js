@@ -9,7 +9,6 @@ chrome.runtime.sendMessage({ t: "status" }, (s) => {
   } else {
     $("phone").textContent = s.phone || "Phone";
     $("status").textContent = "Connected";
-    $("send").textContent = `Send This Page to ${s.phone || "Phone"}`;
     $("send").disabled = false;
   }
   // What the phone can control right now: makes it obvious when a tab isn't being picked up.
@@ -23,11 +22,11 @@ $("send").addEventListener("click", async () => {
   $("send").disabled = true;
   chrome.runtime.sendMessage({ t: "send_url", url: tab && tab.url }, (r) => {
     if (r && r.ok) {
-      $("send").textContent = "Sent ✓";
+      $("send").textContent = "Opened on your phone ✓";
       setTimeout(() => window.close(), 700);
     } else {
       $("send").disabled = false;
-      $("note").textContent = (r && r.error) || "Couldn't send this page.";
+      $("note").textContent = (r && r.error) || "Couldn't open this page on your phone.";
     }
   });
 });

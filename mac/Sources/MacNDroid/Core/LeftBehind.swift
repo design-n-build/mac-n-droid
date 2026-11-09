@@ -1,6 +1,6 @@
 import AppKit
 
-/// "You left Pixel 8 behind."
+/// "You left your phone behind."
 ///
 /// The Mac can't measure distance to the phone, so it uses the network instead. When the phone
 /// stops answering *and* this Mac is now on a different network (a different router, or none)

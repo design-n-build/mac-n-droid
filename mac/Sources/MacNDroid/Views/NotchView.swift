@@ -270,7 +270,7 @@ final class NotchController {
         scheduleHide(after: ringing ? 60 : (style == .small ? 4 : 6))
     }
 
-    /// A short status pill, e.g. "Image copied from Pixel 8".
+    /// A short status pill, e.g. "Image copied from phone".
     func flash(symbol: String, text: String) {
         if model.expanded, model.hovering || model.replying || current?.isCall == true { return }
         present { m in

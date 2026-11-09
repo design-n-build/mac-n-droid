@@ -103,27 +103,26 @@ chrome.tabs.onRemoved.addListener((tab) => {
 });
 
 async function sendUrl(url) {
-  if (!/^https?:\/\//.test(url || "")) return { ok: false, error: "Only web pages can be sent." };
+  if (!/^https?:\/\//.test(url || "")) return { ok: false, error: "Only web pages can be opened on your phone." };
   if (!open) return { ok: false, error: "Open the Mac n Droid app first." };
   if (!status.connected) return { ok: false, error: "Your phone isn't connected." };
   send({ t: "send_url", url });
   return { ok: true };
 }
 
-// Right-click → "Open link on Pixel 8" / "Send page to Pixel 8".
+// Right-click → "Open Link on Your Phone" / "Open Page on Your Phone".
 function setUpMenus() {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: "link", title: "Open Link on Phone", contexts: ["link"] });
-    chrome.contextMenus.create({ id: "page", title: "Send Page to Phone", contexts: ["page"] });
+    chrome.contextMenus.create({ id: "link", title: "Open Link on Your Phone", contexts: ["link"] });
+    chrome.contextMenus.create({ id: "page", title: "Open Page on Your Phone", contexts: ["page"] });
     updateMenus();
   });
 }
 
 function updateMenus() {
-  const phone = status.phone || "Phone";
   const enabled = status.connected;
-  chrome.contextMenus.update("link", { title: `Open Link on ${phone}`, enabled }, () => void chrome.runtime.lastError);
-  chrome.contextMenus.update("page", { title: `Send Page to ${phone}`, enabled }, () => void chrome.runtime.lastError);
+  chrome.contextMenus.update("link", { enabled }, () => void chrome.runtime.lastError);
+  chrome.contextMenus.update("page", { enabled }, () => void chrome.runtime.lastError);
 }
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {

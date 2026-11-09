@@ -60,7 +60,9 @@ func drawGlyph(_ img: NSImage, in rect: NSRect) {
 let green = NSColor(srgbRed: 0x0D / 255, green: 0xA4 / 255, blue: 0x57 / 255, alpha: 1)   // public/logo_droid_greenbg.svg
 let greenHex = String(format: "#%02X%02X%02X", Int(green.redComponent * 255), Int(green.greenComponent * 255), Int(green.blueComponent * 255))
 
-// MARK: Mac app icon — macOS grid: 824/1024 body, ~185 radius, soft drop shadow.
+// MARK: Mac app icon — macOS grid: 824/1024 body centered, ~185 radius. No baked-in shadow (the Dock and
+// Finder draw their own). A slightly lifted charcoal with a fine light edge so it stands out on a dark Dock,
+// and a large glyph so it reads at Dock size.
 let iconset = "mac/Resources/AppIcon.iconset"
 for (pt, scales) in [(16, [1, 2]), (32, [1, 2]), (128, [1, 2]), (256, [1, 2]), (512, [1, 2])] {
     for sc in scales {
@@ -68,21 +70,18 @@ for (pt, scales) in [(16, [1, 2]), (32, [1, 2]), (128, [1, 2]), (256, [1, 2]), (
         let rep = bitmap(px, px) { size in
             let s = size.width
             let inset = s * 100 / 1024
-            let body = NSRect(x: inset, y: inset * 1.1, width: s - inset * 2, height: s - inset * 2)
-            let path = NSBezierPath(roundedRect: body, xRadius: s * 185 / 1024, yRadius: s * 185 / 1024)
-            NSGraphicsContext.saveGraphicsState()
-            let shadow = NSShadow()
-            shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
-            shadow.shadowOffset = NSSize(width: 0, height: -s * 10 / 1024)
-            shadow.shadowBlurRadius = s * 22 / 1024
-            shadow.set()
-            NSColor(white: 0.08, alpha: 1).setFill()
-            path.fill()
-            NSGraphicsContext.restoreGraphicsState()
-            // Subtle top-to-bottom sheen, like native dark icons.
-            NSGradient(starting: NSColor(white: 0.20, alpha: 1), ending: NSColor(white: 0.06, alpha: 1))!
+            let body = NSRect(x: inset, y: inset, width: s - inset * 2, height: s - inset * 2)
+            let radius = s * 185 / 1024
+            let path = NSBezierPath(roundedRect: body, xRadius: radius, yRadius: radius)
+            NSGradient(starting: NSColor(white: 0.25, alpha: 1), ending: NSColor(white: 0.11, alpha: 1))!
                 .draw(in: path, angle: -90)
-            drawGlyph(white, in: body.insetBy(dx: body.width * 0.25, dy: body.height * 0.22))
+            // Hairline edge, brighter at the top, like native dark icons.
+            let edge = NSBezierPath(roundedRect: body.insetBy(dx: s / 1024 * 2, dy: s / 1024 * 2),
+                                    xRadius: radius - s / 1024 * 2, yRadius: radius - s / 1024 * 2)
+            edge.lineWidth = max(1, s * 4 / 1024)
+            NSColor(white: 1, alpha: 0.14).setStroke()
+            edge.stroke()
+            drawGlyph(white, in: body.insetBy(dx: body.width * 0.19, dy: body.height * 0.17))
         }
         save(rep, "\(iconset)/icon_\(pt)x\(pt)\(sc == 2 ? "@2x" : "").png")
     }

@@ -14,7 +14,7 @@ body:
     attributes:
       label: Mac
       description: Mac n Droid version (Settings → About) and macOS version
-      placeholder: "0.8.2 on macOS 26.1, MacBook Air M3"
+      placeholder: "0.11.0 on macOS 26.1, MacBook Air M3"
     validations:
       required: true
   - type: input
@@ -22,7 +22,7 @@ body:
     attributes:
       label: Phone
       description: Mac n Droid version, phone model and Android version
-      placeholder: "0.8.5 on Pixel 8, Android 16"
+      placeholder: "0.11.0 on a Pixel phone, Android 16"
     validations:
       required: true
   - type: textarea

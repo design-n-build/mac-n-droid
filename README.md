@@ -9,6 +9,7 @@ Free, private continuity between an Android phone and a Mac, with no account and
 | **Link** | Local Wi-Fi only, QR-code pairing, AES-256-GCM end-to-end encryption. See [PROTOCOL.md](PROTOCOL.md). |
 
 ## Features
+What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 ### Notifications
 - **Phone notifications on your Mac:** native banners, or Dynamic Island–style drops from the MacBook notch (top of the screen on Macs without a notch). App names and logos (Gmail, WhatsApp…), and the app's own buttons: Reply, Mark as read, Answer/Decline for calls. Dismiss on the Mac and it's dismissed on the phone.
@@ -27,9 +28,9 @@ Free, private continuity between an Android phone and a Mac, with no account and
 
 ### Files and links
 - **Share → Send to Phone on the Mac:** in Finder, Photos, Safari, Preview and any app with a Share button. Files and photos are sent, links open on the phone, text goes to its clipboard.
-- **Files both ways:** drag onto the Mac window, Dock icon or the **notch**; on the phone use **Share → Send to <your Mac>**, the **Send files** button, or the **Send files to Mac** Quick Settings tile. Several files at once give one sound and one notification.
+- **Files both ways:** drag onto the Mac window, Dock icon or the **notch**; on the phone use **Share → Send to Mac**, the **Send files** button, or the **Send files to Mac** Quick Settings tile. Several files at once give one sound and one notification.
 - **Link handoff:** share a link on the phone to open it in the Mac's browser. Send the current browser tab from the Mac with **⌃⌥P** (any browser) and it opens on the phone, right after you unlock it if it's locked.
-- **Share sheet:** your Mac appears in the top row by name, with two actions. **Open on <your Mac>** opens a link in its browser; **Send to <your Mac>** sends files to Downloads and text or links to its clipboard. Their icon is a laptop, so it's clear where it's going.
+- **Share sheet:** two actions in the top row, labelled with your Mac's name. **Open on Mac** opens a link in the Mac's browser; **Send to Mac** sends files to Downloads and text or links to the Mac's clipboard. Their icon is a laptop, so it's clear where it's going.
 
 ### Music and media
 - **Phone music on the Mac:** see and control what's playing on the phone.
@@ -43,7 +44,7 @@ Free, private continuity between an Android phone and a Mac, with no account and
 
 ### Browser extension (Helium, Chrome, Edge, Brave, Arc…)
 - Control music and videos playing in the browser from your phone.
-- Click the toolbar icon for **Send This Page to Phone**, or right-click a link for **Open Link on Phone**.
+- Click the toolbar icon for **Open on Your Phone**, or right-click a link or page for **Open Link on Your Phone** / **Open Page on Your Phone**.
 - Talks only to the Mac n Droid app on your own Mac (127.0.0.1); websites can't connect to it.
 
 ### Everything else
@@ -74,7 +75,7 @@ Free, private continuity between an Android phone and a Mac, with no account and
 
 ```bash
 # Mac app → mac/dist/Mac n Droid.app + .dmg (needs only Command Line Tools)
-cd mac && ./scripts/build-app.sh 0.10.4
+cd mac && ./scripts/build-app.sh 0.11.0
 
 # Android APK → android/app/build/outputs/apk/release/app-release.apk
 cd android
