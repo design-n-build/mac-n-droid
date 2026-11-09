@@ -127,4 +127,16 @@ for px in [16, 32, 48, 128] {
     save(rep, "browser-extension/icons/icon-\(px).png")
 }
 
+// MARK: Mac "to the phone" badge — green circle, off-white droid. Shown where the Mac sends something to
+// the phone (green = Android, black = Mac).
+for (suffix, px) in [("", 24), ("@2x", 48)] {
+    let rep = bitmap(px, px) { size in
+        let r = NSRect(x: 0, y: 0, width: size.width, height: size.height)
+        green.setFill()
+        NSBezierPath(ovalIn: r).fill()
+        drawGlyph(white, in: r.insetBy(dx: r.width * 0.24, dy: r.height * 0.22))
+    }
+    save(rep, "mac/Resources/PhoneBadge\(suffix).png")
+}
+
 print("green = \(greenHex)")

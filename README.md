@@ -26,9 +26,9 @@ Free, private continuity between an Android phone and a Mac, with no account and
 - **Screenshots** taken on the phone are ready to paste on the Mac.
 
 ### Files and links
-- **Files both ways:** drag onto the Mac window, Dock icon or the **notch**; on the phone use **Share → Mac n Droid**, the **Send files** button, or the **Send files to Mac** Quick Settings tile. Several files at once give one sound and one notification.
+- **Files both ways:** drag onto the Mac window, Dock icon or the **notch**; on the phone use **Share → Send to <your Mac>**, the **Send files** button, or the **Send files to Mac** Quick Settings tile. Several files at once give one sound and one notification.
 - **Link handoff:** share a link on the phone to open it in the Mac's browser. Send the current browser tab from the Mac with **⌃⌥P** (any browser) and it opens on the phone, right after you unlock it if it's locked.
-- **One share target:** your Mac appears in the share sheet's top row by name. Files are sent, links open, other text is copied.
+- **Share sheet:** your Mac appears in the top row by name, with two actions. **Open on <your Mac>** opens a link in its browser; **Send to <your Mac>** sends files to Downloads and text or links to its clipboard. Icons follow the destination: black for the Mac, green for the Android phone.
 
 ### Music and media
 - **Phone music on the Mac:** see and control what's playing on the phone.

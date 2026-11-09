@@ -42,7 +42,7 @@ sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD/" Resources/Info.plist >
 
 # Icons come from public/ via tools/make-icons.swift.
 iconutil -c icns Resources/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
-cp Resources/MenuBarIcon.png Resources/MenuBarIcon@2x.png "$APP/Contents/Resources/"
+cp Resources/MenuBarIcon.png Resources/MenuBarIcon@2x.png Resources/PhoneBadge.png Resources/PhoneBadge@2x.png "$APP/Contents/Resources/"
 cp Resources/Sounds/*.wav "$APP/Contents/Resources/"
 # The browser extension (music control from the phone, send pages to the phone).
 ditto "$ROOT/../browser-extension" "$APP/Contents/Resources/BrowserExtension"

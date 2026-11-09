@@ -5,4 +5,9 @@
         <data android:mimeType="*/*" />
         <category android:name="app.macndroid.category.SEND_TO_MAC" />
     </share-target>
+    <!-- "Open on <Mac>" for links: opens them in the Mac's browser. -->
+    <share-target android:targetClass="app.macndroid.ui.OpenOnMacActivity">
+        <data android:mimeType="text/plain" />
+        <category android:name="app.macndroid.category.OPEN_ON_MAC" />
+    </share-target>
 </shortcuts>

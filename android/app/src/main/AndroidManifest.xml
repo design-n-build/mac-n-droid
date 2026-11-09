@@ -89,6 +89,21 @@
             </intent-filter>
         </activity>
 
+        <!-- "Share → Open on Mac": a link opens in the Mac's browser. -->
+        <activity
+            android:name=".ui.OpenOnMacActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="@string/open_on_mac_label"
+            android:taskAffinity=""
+            android:theme="@style/Theme.MacNDroid.Invisible">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <!-- Quick Settings "Send files to Mac": the file picker, over whatever's on screen. -->
         <activity
             android:name=".ui.PickFilesActivity"

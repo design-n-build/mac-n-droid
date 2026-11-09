@@ -210,11 +210,19 @@ struct NotchDropView: View {
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Color.accentColor.opacity(model.targeted ? 0.18 : 0)))
                 HStack(spacing: 10) {
-                    Image(systemName: model.sending ? "checkmark.circle.fill"
-                          : (model.isLink ? "safari" : (model.targeted ? "arrow.down.circle.fill" : "smartphone")))
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(model.targeted || model.sending ? Color.accentColor : .white)
-                        .contentTransition(.symbolEffect(.replace))
+                    if model.sending {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                            .transition(.scale.combined(with: .opacity))
+                    } else if let badge = NSImage(named: "PhoneBadge") {
+                        // Green = the Android phone, where this is going.
+                        Image(nsImage: badge)
+                            .resizable()
+                            .frame(width: 24, height: 24)
+                            .scaleEffect(model.targeted ? 1.12 : 1)
+                            .animation(.spring(duration: 0.25), value: model.targeted)
+                    }
                     Text(model.sending ? model.sentText
                          : (model.isLink ? "Drop to open on \(model.phoneName)" : "Drop to send to \(model.phoneName)"))
                         .font(.system(size: 13, weight: .semibold))

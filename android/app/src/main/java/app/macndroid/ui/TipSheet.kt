@@ -95,8 +95,8 @@ fun TipSheet(tip: Tip, macName: String, onDismiss: () -> Unit) {
 private fun steps(tip: Tip, mac: String) = when (tip) {
     Tip.Share -> listOf(
         "In any app (Photos, Chrome, Files…), tap Share.",
-        "Choose $mac in the top row, or Mac n Droid in the list.",
-        "Files land in Downloads on $mac, links open in its browser, and other text lands on its clipboard.",
+        "Choose Open on $mac to open a link in its browser, or Send to $mac to send it.",
+        "Sent files land in Downloads on $mac; sent text and links land on its clipboard.",
     )
     Tip.Tile -> listOf(
         "Add the tile below, then swipe down from the top of the screen.",
@@ -144,7 +144,7 @@ private fun SharePreview(mac: String) {
         Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
             ShareTarget(Icons.Outlined.Email, "Gmail", false)
             ShareTarget(Icons.Outlined.Chat, "Messages", false)
-            ShareTarget(Icons.Outlined.LaptopMac, mac, true)
+            ShareTarget(Icons.Outlined.LaptopMac, "Send to $mac", true)
             ShareTarget(Icons.Outlined.CloudUpload, "Drive", false)
         }
         Spacer(Modifier.height(16.dp))

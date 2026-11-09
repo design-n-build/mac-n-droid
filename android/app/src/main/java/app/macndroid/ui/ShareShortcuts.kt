@@ -9,35 +9,38 @@ import app.macndroid.R
 import app.macndroid.core.Prefs
 
 /**
- * Publishes the paired Mac as a Direct Share target so it shows in the share sheet's first row.
- * One entry for everything: files are sent, links open in the Mac's browser, other text is copied.
+ * Puts the paired Mac in the share sheet's top row (Direct Share), as two clear actions:
+ * "Open on <Mac>" (links open in its browser) and "Send to <Mac>" (files, or text to its clipboard).
+ * Their icon is black, the Mac's color; the app's own entries further down stay green.
  */
 object ShareShortcuts {
-    private const val ID = "send_to_mac"
-    /** From 0.10.0, which had a separate "Open link on <Mac>" entry. */
-    private const val OLD_OPEN_ID = "open_on_mac"
-    const val CATEGORY = "app.macndroid.category.SEND_TO_MAC"
+    const val SEND_ID = "send_to_mac"
+    const val OPEN_ID = "open_on_mac"
+    private const val SEND_CATEGORY = "app.macndroid.category.SEND_TO_MAC"
+    private const val OPEN_CATEGORY = "app.macndroid.category.OPEN_ON_MAC"
 
     fun publish(ctx: Context) {
         val mac = Prefs.pairing.value?.macName ?: return
-        runCatching {
-            ShortcutManagerCompat.removeDynamicShortcuts(ctx, listOf(OLD_OPEN_ID))
-            ShortcutManagerCompat.removeLongLivedShortcuts(ctx, listOf(OLD_OPEN_ID))
-        }
-        val shortcut = ShortcutInfoCompat.Builder(ctx, ID)
-            .setShortLabel(mac)
-            .setLongLabel("Send to $mac")
+        // Shown only when sharing text or a link, first.
+        push(ctx, OPEN_ID, "Open on $mac", OPEN_CATEGORY, rank = 0)
+        push(ctx, SEND_ID, "Send to $mac", SEND_CATEGORY, rank = 1)
+    }
+
+    private fun push(ctx: Context, id: String, label: String, category: String, rank: Int) {
+        val shortcut = ShortcutInfoCompat.Builder(ctx, id)
+            .setShortLabel(label)
+            .setLongLabel(label)
             .setIcon(IconCompat.createWithResource(ctx, R.drawable.ic_share_mac))
             .setIntent(Intent(Intent.ACTION_DEFAULT, null, ctx, MainActivity::class.java))
-            .setCategories(setOf(CATEGORY))
+            .setCategories(setOf(category))
             .setLongLived(true)
-            .setRank(0)
+            .setRank(rank)
             .build()
         runCatching { ShortcutManagerCompat.pushDynamicShortcut(ctx, shortcut) }
     }
 
     /** Helps Android rank the Mac first in the share sheet. */
-    fun reportUsed(ctx: Context) = runCatching { ShortcutManagerCompat.reportShortcutUsed(ctx, ID) }
+    fun reportUsed(ctx: Context, id: String) = runCatching { ShortcutManagerCompat.reportShortcutUsed(ctx, id) }
 
     fun remove(ctx: Context) = runCatching { ShortcutManagerCompat.removeAllDynamicShortcuts(ctx) }
 }
