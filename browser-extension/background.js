@@ -10,11 +10,23 @@ function send(m) {
   if (open) { try { ws.send(JSON.stringify(m)); } catch (e) { /* closed */ } }
 }
 
-function connect() {
+// Connects only when there's a reason to (something playing, the popup, a menu click) and waits longer
+// after each failure, so a Mac n Droid app that isn't running doesn't fill the browser's error list:
+// the browser logs every refused connection, even though it's handled here.
+let failures = 0;
+let lastTry = 0;
+const waiters = [];
+
+function backoff() { return Math.min(5 * 60_000, 15_000 * 2 ** Math.max(0, failures - 1)); }
+
+function connect(force = false) {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  if (!force && failures > 0 && Date.now() - lastTry < backoff()) return;
+  lastTry = Date.now();
   try { ws = new WebSocket(URL_); } catch (e) { return; }
   ws.onopen = () => {
     open = true;
+    failures = 0;
     status.app = true;
     artSent.clear();
     for (const [tab, s] of tabs) forwardMedia(tab, s);
@@ -25,24 +37,40 @@ function connect() {
     if (m.t === "status") {
       status = { app: true, connected: !!m.connected, phone: m.phone || "" };
       updateMenus();
+      while (waiters.length) waiters.shift()();
     } else if (m.t === "cmd" && typeof m.tab === "number") {
       chrome.tabs.sendMessage(m.tab, { t: "cmd", cmd: m.cmd }).catch(() => {});
     }
   };
   ws.onclose = () => {
+    if (!open) failures++;
     open = false;
     status = { app: false, connected: false, phone: "" };
     updateMenus();
+    while (waiters.length) waiters.shift()();
   };
   ws.onerror = () => {};
 }
 
-// Keeps the connection (and this worker) alive, and reconnects once the app is running.
-setInterval(() => { if (open) send({ t: "ping" }); else connect(); }, 20000);
+/** Connects now (for the popup or a menu click) and waits briefly for the app's status. */
+function connectNow() {
+  if (open) return Promise.resolve();
+  return new Promise((resolve) => {
+    waiters.push(resolve);
+    setTimeout(resolve, 1500);
+    connect(true);
+  });
+}
+
+const anythingPlaying = () => [...tabs.values()].some((s) => s.playing);
+
+// While connected: keeps the connection (and this worker) alive. Otherwise retries only while
+// something is playing, so the phone picks it up once the app starts.
+setInterval(() => { if (open) send({ t: "ping" }); else if (anythingPlaying()) connect(); }, 20000);
 chrome.alarms.create("reconnect", { periodInMinutes: 1 });
-chrome.alarms.onAlarm.addListener(() => connect());
-chrome.runtime.onStartup.addListener(() => { connect(); attachToOpenTabs(); });
-chrome.runtime.onInstalled.addListener(() => { setUpMenus(); connect(); attachToOpenTabs(); });
+chrome.alarms.onAlarm.addListener(() => { if (anythingPlaying()) connect(); });
+chrome.runtime.onStartup.addListener(() => attachToOpenTabs());
+chrome.runtime.onInstalled.addListener(() => { setUpMenus(); attachToOpenTabs(); });
 
 // Browsers only add content scripts to pages loaded after the extension: add it to tabs already open
 // (a YouTube tab playing when the extension was installed or updated).
@@ -81,16 +109,18 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
   const tab = sender.tab && sender.tab.id;
   if (m.t === "media" && tab != null) {
     tabs.set(tab, m);
-    connect();
+    if (m.playing) connect();
     forwardMedia(tab, m);
   } else if (m.t === "media_end" && tab != null) {
     tabs.delete(tab);
     artSent.delete(tab);
     send({ t: "media_end", tab });
   } else if (m.t === "status") {
-    connect();
-    const playing = [...tabs.values()].sort((a, b) => (b.playing ? 1 : 0) - (a.playing ? 1 : 0))[0];
-    reply({ ...status, media: playing ? { title: playing.title, site: playing.site, playing: playing.playing } : null });
+    connectNow().then(() => {
+      const playing = [...tabs.values()].sort((a, b) => (b.playing ? 1 : 0) - (a.playing ? 1 : 0))[0];
+      reply({ ...status, media: playing ? { title: playing.title, site: playing.site, playing: playing.playing } : null });
+    });
+    return true;
   } else if (m.t === "send_url") {
     sendUrl(m.url).then(reply);
     return true;
@@ -104,6 +134,7 @@ chrome.tabs.onRemoved.addListener((tab) => {
 
 async function sendUrl(url) {
   if (!/^https?:\/\//.test(url || "")) return { ok: false, error: "Only web pages can be opened on your phone." };
+  await connectNow();
   if (!open) return { ok: false, error: "Open the Mac n Droid app first." };
   if (!status.connected) return { ok: false, error: "Your phone isn't connected." };
   send({ t: "send_url", url });
@@ -120,11 +151,14 @@ function setUpMenus() {
 }
 
 function updateMenus() {
-  const enabled = status.connected;
-  chrome.contextMenus.update("link", { enabled }, () => void chrome.runtime.lastError);
-  chrome.contextMenus.update("page", { enabled }, () => void chrome.runtime.lastError);
+  // Always clickable: the click connects first, so the menu works even before anything has played.
 }
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  sendUrl(info.menuItemId === "link" ? info.linkUrl : (tab && tab.url));
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  const r = await sendUrl(info.menuItemId === "link" ? info.linkUrl : (tab && tab.url));
+  // A short "!" on the toolbar icon when it didn't work (app closed or phone not connected).
+  chrome.action.setBadgeBackgroundColor({ color: r.ok ? "#0DA457" : "#B3261E" });
+  chrome.action.setBadgeText({ text: r.ok ? "✓" : "!" });
+  chrome.action.setTitle({ title: r.ok ? "Mac n Droid" : r.error });
+  setTimeout(() => { chrome.action.setBadgeText({ text: "" }); chrome.action.setTitle({ title: "Mac n Droid" }); }, 3000);
 });

@@ -1,5 +1,11 @@
 # What's new
 
+## 0.11.1
+- Browser extension: no more "connection refused" entries on the browser's Errors page when Mac n
+  Droid isn't running. It now connects only when something plays, when you open its popup or use
+  its menu, and waits longer between retries. The right-click menu shows ✓ or ! on the toolbar
+  icon to say whether it worked.
+
 ## 0.11.0 (Mac and Android)
 
 ### New
