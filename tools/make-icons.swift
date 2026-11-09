@@ -127,16 +127,40 @@ for px in [16, 32, 48, 128] {
     save(rep, "browser-extension/icons/icon-\(px).png")
 }
 
-// MARK: Mac "to the phone" badge — green circle, off-white droid. Shown where the Mac sends something to
-// the phone (green = Android, black = Mac).
-for (suffix, px) in [("", 24), ("@2x", 48)] {
-    let rep = bitmap(px, px) { size in
-        let r = NSRect(x: 0, y: 0, width: size.width, height: size.height)
-        green.setFill()
-        NSBezierPath(ovalIn: r).fill()
-        drawGlyph(white, in: r.insetBy(dx: r.width * 0.24, dy: r.height * 0.22))
+// MARK: Share extension ("Send to Phone" in Share menus) — macOS icon grid, brand green, an off-white phone.
+let shareIconset = "mac/ShareExtension/ShareIcon.iconset"
+for (pt, scales) in [(16, [1, 2]), (32, [1, 2]), (128, [1, 2]), (256, [1, 2]), (512, [1, 2])] {
+    for sc in scales {
+        let px = pt * sc
+        let rep = bitmap(px, px) { size in
+            let s = size.width
+            let inset = s * 100 / 1024
+            let body = NSRect(x: inset, y: inset * 1.1, width: s - inset * 2, height: s - inset * 2)
+            let squircle = NSBezierPath(roundedRect: body, xRadius: s * 185 / 1024, yRadius: s * 185 / 1024)
+            NSGraphicsContext.saveGraphicsState()
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
+            shadow.shadowOffset = NSSize(width: 0, height: -s * 10 / 1024)
+            shadow.shadowBlurRadius = s * 22 / 1024
+            shadow.set()
+            green.setFill()
+            squircle.fill()
+            NSGraphicsContext.restoreGraphicsState()
+            // A phone: off-white body, green screen, small speaker.
+            let pw = body.width * 0.36, ph = body.height * 0.62
+            let phone = NSRect(x: body.midX - pw / 2, y: body.midY - ph / 2, width: pw, height: ph)
+            offWhite.setFill()
+            NSBezierPath(roundedRect: phone, xRadius: pw * 0.2, yRadius: pw * 0.2).fill()
+            let bezel = pw * 0.09
+            let screen = phone.insetBy(dx: bezel, dy: bezel)
+            green.setFill()
+            NSBezierPath(roundedRect: screen, xRadius: pw * 0.12, yRadius: pw * 0.12).fill()
+            let speaker = NSRect(x: phone.midX - pw * 0.14, y: screen.maxY - bezel * 1.5, width: pw * 0.28, height: bezel * 0.7)
+            offWhite.setFill()
+            NSBezierPath(roundedRect: speaker, xRadius: bezel * 0.35, yRadius: bezel * 0.35).fill()
+        }
+        save(rep, "\(shareIconset)/icon_\(pt)x\(pt)\(sc == 2 ? "@2x" : "").png")
     }
-    save(rep, "mac/Resources/PhoneBadge\(suffix).png")
 }
 
 print("green = \(greenHex)")

@@ -11,7 +11,7 @@ import app.macndroid.core.Prefs
 /**
  * Puts the paired Mac in the share sheet's top row (Direct Share), as two clear actions:
  * "Open on <Mac>" (links open in its browser) and "Send to <Mac>" (files, or text to its clipboard).
- * Their icon is black, the Mac's color; the app's own entries further down stay green.
+ * Their icon is a laptop, so it is clear the link or file is going to the Mac.
  */
 object ShareShortcuts {
     const val SEND_ID = "send_to_mac"

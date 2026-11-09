@@ -127,6 +127,12 @@ final class AppState: ObservableObject {
         browserBridge.onMedia = { [weak self] key, t in self?.macMedia.setBrowser(key, t) }
         browserBridge.onArt = { [weak self] key, jpeg in self?.macMedia.setBrowserArt(key, jpeg) }
         browserBridge.onSendURL = { [weak self] url in self?.sendLink(url) }
+        browserBridge.onSendFiles = { [weak self] urls in self?.sendFiles(urls) }
+        browserBridge.onSendText = { [weak self] text in
+            guard let self, let conn = self.active else { return }
+            conn.send(["t": "clip", "text": text, "explicit": true])
+            if NotchStyle.isOn { NotchController.shared.flash(symbol: "doc.on.clipboard.fill", text: "Copied to phone") }
+        }
         macMedia.browserCommand = { [weak self] cmd, key in self?.browserBridge.command(cmd, key: key) }
         browserBridge.start()
         BrowserExtension.install()

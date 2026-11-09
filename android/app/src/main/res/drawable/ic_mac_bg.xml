@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Mac black (public/logo_mac_dark.png): shortcuts that send to the Mac are black, the app itself is green. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="#181818" />
-</shape>

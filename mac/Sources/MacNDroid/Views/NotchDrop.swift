@@ -215,11 +215,13 @@ struct NotchDropView: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(Color.accentColor)
                             .transition(.scale.combined(with: .opacity))
-                    } else if let badge = NSImage(named: "PhoneBadge") {
-                        // Green = the Android phone, where this is going.
-                        Image(nsImage: badge)
-                            .resizable()
-                            .frame(width: 24, height: 24)
+                    } else {
+                        // A phone, so it's clear where this is going.
+                        Image(systemName: model.isLink ? "safari" : "smartphone")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color(red: 0.98, green: 0.98, blue: 0.98))
+                            .frame(width: 26, height: 26)
+                            .background(Circle().fill(Color(red: 0x0D / 255, green: 0xA4 / 255, blue: 0x57 / 255)))
                             .scaleEffect(model.targeted ? 1.12 : 1)
                             .animation(.spring(duration: 0.25), value: model.targeted)
                     }

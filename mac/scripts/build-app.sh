@@ -42,10 +42,28 @@ sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD/" Resources/Info.plist >
 
 # Icons come from public/ via tools/make-icons.swift.
 iconutil -c icns Resources/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
-cp Resources/MenuBarIcon.png Resources/MenuBarIcon@2x.png Resources/PhoneBadge.png Resources/PhoneBadge@2x.png "$APP/Contents/Resources/"
+cp Resources/MenuBarIcon.png Resources/MenuBarIcon@2x.png "$APP/Contents/Resources/"
 cp Resources/Sounds/*.wav "$APP/Contents/Resources/"
 # The browser extension (music control from the phone, send pages to the phone).
 ditto "$ROOT/../browser-extension" "$APP/Contents/Resources/BrowserExtension"
+
+# "Send to Phone" in Share menus: a small Share extension inside the app (Contents/PlugIns).
+echo "▸ Building the Share extension"
+APPEX="$APP/Contents/PlugIns/SendToPhone.appex"
+mkdir -p "$APPEX/Contents/MacOS" "$APPEX/Contents/Resources"
+EXT_BINS=()
+for ARCH in arm64 x86_64; do
+  OUT="$WORK/SendToPhone-$ARCH"
+  swiftc -O -swift-version 5 -module-name SendToPhone -parse-as-library \
+    -target "$ARCH-apple-macos14.0" -sdk "$(xcrun --show-sdk-path --sdk macosx)" \
+    -Xlinker -e -Xlinker _NSExtensionMain -framework Cocoa \
+    ShareExtension/ShareViewController.swift -o "$OUT"
+  EXT_BINS+=("$OUT")
+done
+lipo -create "${EXT_BINS[@]}" -output "$APPEX/Contents/MacOS/SendToPhone"
+rm -f "${EXT_BINS[@]}"
+sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD/" ShareExtension/Info.plist > "$APPEX/Contents/Info.plist"
+iconutil -c icns ShareExtension/ShareIcon.iconset -o "$APPEX/Contents/Resources/ShareIcon.icns"
 
 echo "▸ Signing ($SIGN_ID)"
 xattr -cr "$APP"
@@ -55,6 +73,7 @@ for item in "$SPK/XPCServices/Installer.xpc" "$SPK/XPCServices/Downloader.xpc" "
   if [ -e "$item" ]; then codesign --force --options runtime --timestamp=none --sign "$SIGN_ID" "$item"; fi
 done
 codesign --force --options runtime --timestamp=none --sign "$SIGN_ID" "$APP/Contents/Frameworks/Sparkle.framework"
+codesign --force --options runtime --timestamp=none --entitlements ShareExtension/ShareExtension.entitlements --sign "$SIGN_ID" "$APPEX"
 codesign --force --options runtime --timestamp=none --entitlements Resources/MacNDroid.entitlements --sign "$SIGN_ID" "$APP"
 
 echo "▸ Creating DMG"

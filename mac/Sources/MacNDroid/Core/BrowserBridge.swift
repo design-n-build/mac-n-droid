@@ -1,7 +1,8 @@
 import Foundation
 import Network
 
-/// Connection to the Mac n Droid browser extension (Helium, Chrome, Edge, Brave, Arc…).
+/// Connection to the Mac n Droid browser extension (Helium, Chrome, Edge, Brave, Arc…) and to the
+/// "Send to Phone" Share extension (Share menus in Finder, Photos, Safari…).
 ///
 /// The extension reports music and videos playing in browser tabs and asks to send pages to the
 /// phone; the app sends back play/pause/skip commands. It listens only on 127.0.0.1 (this Mac) and
@@ -25,6 +26,14 @@ final class BrowserBridge {
     var onMedia: ((String, Track?) -> Void)?
     var onArt: ((String, Data) -> Void)?
     var onSendURL: ((URL) -> Void)?
+    /// From the Share extension: files it streamed here (saved in a temporary folder), and plain text.
+    var onSendFiles: (([URL]) -> Void)?
+    var onSendText: ((String) -> Void)?
+
+    /// A file arriving from the Share extension, in pieces.
+    private struct Upload { var current: (url: URL, handle: FileHandle)?; var done: [URL] = [] }
+    private var uploads: [ObjectIdentifier: Upload] = [:]
+    private static let inbox = FileManager.default.temporaryDirectory.appendingPathComponent("Send to Phone", isDirectory: true)
     private var status: [String: Any] = ["t": "status", "connected": false, "phone": ""]
 
     private let queue = DispatchQueue(label: "app.macndroid.browser")
@@ -38,7 +47,8 @@ final class BrowserBridge {
         // Only extensions: web pages send an http(s) Origin and can't fake it.
         ws.setClientRequestHandler(queue) { _, headers in
             let origin = headers.first { $0.name.lowercased() == "origin" }?.value ?? ""
-            let ok = ["chrome-extension://", "moz-extension://", "safari-web-extension://"].contains { origin.hasPrefix($0) }
+            let ok = ["chrome-extension://", "moz-extension://", "safari-web-extension://", "macndroid-share://"]
+                .contains { origin.hasPrefix($0) }
             return NWProtocolWebSocket.Response(status: ok ? .accept : .reject, subprotocol: nil)
         }
         let params = NWParameters.tcp
@@ -46,6 +56,8 @@ final class BrowserBridge {
         params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: Self.port)!)
         params.allowLocalEndpointReuse = true
         guard let l = try? NWListener(using: params) else { return }
+        // Files shared earlier have been sent by now.
+        try? FileManager.default.removeItem(at: Self.inbox)
         l.newConnectionHandler = { [weak self] c in self?.accept(c) }
         l.stateUpdateHandler = { [weak self] state in
             if case .failed = state {
@@ -84,6 +96,7 @@ final class BrowserBridge {
                 self.send(self.status, to: c)
             case .failed, .cancelled:
                 self.connections[id] = nil
+                if let u = self.uploads.removeValue(forKey: id) { try? u.current?.handle.close() }
                 let prefix = "\(id.hashValue):"
                 DispatchQueue.main.async { self.onMedia?(prefix, nil) }   // all of this browser's tabs
             default: break
@@ -95,9 +108,15 @@ final class BrowserBridge {
     }
 
     private func receive(_ c: NWConnection) {
-        c.receiveMessage { [weak self] data, _, _, error in
+        c.receiveMessage { [weak self] data, ctx, _, error in
             guard let self else { return }
-            if let data, let m = try? JSONSerialization.jsonObject(with: data) as? [String: Any] { self.handle(m, from: c) }
+            let meta = ctx?.protocolMetadata(definition: NWProtocolWebSocket.definition) as? NWProtocolWebSocket.Metadata
+            if meta?.opcode == .binary, let data {
+                // A piece of the file being shared.
+                try? self.uploads[ObjectIdentifier(c)]?.current?.handle.write(contentsOf: data)
+            } else if let data, let m = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                self.handle(m, from: c)
+            }
             if error == nil { self.receive(c) } else { c.cancel() }
         }
     }
@@ -120,6 +139,30 @@ final class BrowserBridge {
             }
         case "media_end":
             DispatchQueue.main.async { self.onMedia?(key, nil) }
+        case "file_begin":
+            let id = ObjectIdentifier(c)
+            var u = uploads[id] ?? Upload()
+            try? u.current?.handle.close()
+            // Keep the original name (just the last part, so it can't point anywhere else).
+            let name = ((m["name"] as? String) ?? "File").split(separator: "/").last.map(String.init) ?? "File"
+            let dir = Self.inbox.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            let url = dir.appendingPathComponent(name.isEmpty || name.hasPrefix(".") ? "File" : name)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+            u.current = (try? FileHandle(forWritingTo: url)).map { (url, $0) }
+            uploads[id] = u
+        case "file_end":
+            let id = ObjectIdentifier(c)
+            if let cur = uploads[id]?.current {
+                try? cur.handle.close()
+                uploads[id]?.done.append(cur.url)
+                uploads[id]?.current = nil
+            }
+        case "files_done":
+            let files = uploads.removeValue(forKey: ObjectIdentifier(c))?.done ?? []
+            if !files.isEmpty { DispatchQueue.main.async { self.onSendFiles?(files) } }
+        case "send_text":
+            if let text = m["text"] as? String, !text.isEmpty { DispatchQueue.main.async { self.onSendText?(text) } }
         case "send_url":
             if let s = m["url"] as? String, let url = URL(string: s) {
                 DispatchQueue.main.async { self.onSendURL?(url) }
