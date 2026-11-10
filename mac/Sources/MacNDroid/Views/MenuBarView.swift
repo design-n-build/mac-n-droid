@@ -73,20 +73,11 @@ struct MenuBarView: View {
                                   : "Notifications appear as regular banners. Click to show them in the notch.")
                 }
 
-                HStack(spacing: 8) {
-                    Button {
-                        state.showMirrorWindow()
-                    } label: {
-                        Label("Mirror Screen", systemImage: "rectangle.on.rectangle")
-                            .frame(maxWidth: .infinity)
-                    }
-                    Button {
-                        state.sendBrowserTab()
-                    } label: {
-                        Label("Send Tab", systemImage: "safari")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .help("Open the page you're looking at in your browser on \(state.phone?.name ?? "your phone")")
+                Button {
+                    state.showMirrorWindow()
+                } label: {
+                    Label("Mirror Screen", systemImage: "rectangle.on.rectangle")
+                        .frame(maxWidth: .infinity)
                 }
                 .controlSize(.large)
 

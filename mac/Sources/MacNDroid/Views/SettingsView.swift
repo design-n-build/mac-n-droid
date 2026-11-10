@@ -65,6 +65,8 @@ private struct SyncSettings: View {
     @AppStorage(Prefs.callPanel) private var callPanel = true
     @AppStorage(Prefs.leftBehind) private var leftBehind = true
     @AppStorage(Prefs.dropOnNotch) private var dropOnNotch = true
+    @AppStorage(Prefs.browserExtensionSeen) private var browserSeen = false
+    @State private var showBrowserSheet = false
 
     private var hasNotch: Bool { NSScreen.screens.contains { $0.safeAreaInsets.top > 0 } }
 
@@ -111,14 +113,13 @@ private struct SyncSettings: View {
             }
             Section {
                 LabeledContent {
-                    Button("Show Extension in Finder") { BrowserExtension.reveal() }
+                    Button("Add to Browser…") { showBrowserSheet = true }
                 } label: {
                     Text("Browser extension")
-                    Text("Pause, play and skip browser music and videos from your phone, and send pages to it. Works in Helium, Chrome, Edge, Brave and Arc.")
+                    Text(browserSeen
+                         ? "Installed. Pause, play and skip browser music and videos from your phone, and open pages and links on it."
+                         : "Pause, play and skip browser music and videos from your phone, and open pages and links on it. Works in Chrome, Edge, Firefox, Brave, Arc and other Chrome-based browsers.")
                 }
-                Text("To install: open your browser's Extensions page (for example chrome://extensions), turn on Developer mode, click Load unpacked, and choose the Browser Extension folder.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             } header: {
                 Text("Browser")
             }
@@ -132,6 +133,7 @@ private struct SyncSettings: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $showBrowserSheet) { BrowserExtensionSheet() }
     }
 }
 

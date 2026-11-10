@@ -49,6 +49,8 @@ struct OverviewView: View {
                     .padding(.vertical, 4)
                 }
 
+                BrowserExtensionTip()
+
                 if !state.players.isEmpty {
                     Section("Now Playing") {
                         ForEach(state.players) { np in

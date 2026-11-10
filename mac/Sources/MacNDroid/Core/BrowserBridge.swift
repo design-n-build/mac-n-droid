@@ -1,7 +1,7 @@
 import Foundation
 import Network
 
-/// Connection to the Mac n Droid browser extension (Helium, Chrome, Edge, Brave, Arc…) and to the
+/// Connection to the Mac n Droid browser extension (Chrome, Edge, Brave, Arc and other Chrome-based browsers) and to the
 /// "Send to Phone" Share extension (Share menus in Finder, Photos, Safari…).
 ///
 /// The extension reports music and videos playing in browser tabs and asks to send pages to the
@@ -49,6 +49,10 @@ final class BrowserBridge {
             let origin = headers.first { $0.name.lowercased() == "origin" }?.value ?? ""
             let ok = ["chrome-extension://", "moz-extension://", "safari-web-extension://", "macndroid-share://"]
                 .contains { origin.hasPrefix($0) }
+            if ok, !origin.hasPrefix("macndroid-share://") {
+                // A browser extension: remember it's installed, so the app stops suggesting it.
+                DispatchQueue.main.async { UserDefaults.standard.set(true, forKey: Prefs.browserExtensionSeen) }
+            }
             return NWProtocolWebSocket.Response(status: ok ? .accept : .reject, subprotocol: nil)
         }
         let params = NWParameters.tcp

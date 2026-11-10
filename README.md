@@ -11,46 +11,51 @@ Free, private continuity between an Android phone and a Mac, with no account and
 ## Features
 What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
-### Notifications
-- **Phone notifications on your Mac:** native banners, or Dynamic Island–style drops from the MacBook notch (top of the screen on Macs without a notch). App names and logos (Gmail, WhatsApp…), and the app's own buttons: Reply, Mark as read, Answer/Decline for calls. Dismiss on the Mac and it's dismissed on the phone.
-- **Reply right from the notch:** the text box is ready to type into as soon as you click Reply. Buttons that only open the phone are labelled "Reply on Phone".
-- **No notification storms:** a burst of notifications (like WhatsApp re-posting every unread chat) plays one sound and shows only the first few.
-- **Verification codes:** codes get a **Copy 482913** button, and can be copied automatically.
-- **Live activities:** timers, ongoing calls, rides and deliveries stay live on the Mac while they run.
-
-### Messages
-- **Read and reply to texts from your Mac** (Messages page). Start new conversations with contact search. Google Messages chat (RCS) messages that arrive while connected also show up, and replies go back through the chat.
-
 ### Clipboard
-- **Copy on one, paste on the other:** text and images, both ways. Automatic phone → Mac copying is optional (Settings → Accessibility → Mac n Droid clipboard sync). Passwords from password managers are never sent.
-- **Clipboard history:** the last 20 copies from both devices, on both devices. Tap to copy again; clear it from either side.
-- **Screenshots** taken on the phone are ready to paste on the Mac.
+- **Copy on one, paste on the other:** text and images, both ways. Automatic copying from the phone is optional (Settings → Accessibility → Mac n Droid clipboard sync). Passwords from password managers are never sent.
+- **Clipboard history:** the last 20 copies from both devices, on both devices. Tap to copy again, or clear it from either side.
 
-### Files and links
-- **Share → Send to Phone on the Mac:** in Finder, Photos, Safari, Preview and any app with a Share button. Files and photos are sent, links open on the phone, text goes to its clipboard.
-- **Files both ways:** drag onto the Mac window, Dock icon or the **notch**; on the phone use **Share → Send to Mac**, the **Send files** button, or the **Send files to Mac** Quick Settings tile. Several files at once give one sound and one notification.
-- **Link handoff:** share a link on the phone to open it in the Mac's browser. Send the current browser tab from the Mac with **⌃⌥P** (any browser) and it opens on the phone, right after you unlock it if it's locked.
-- **Share sheet:** two actions in the top row, labelled with your Mac's name. **Open on Mac** opens a link in the Mac's browser; **Send to Mac** sends files to Downloads and text or links to the Mac's clipboard. Their icon is a laptop, so it's clear where it's going.
+### Files
+- **Phone → Mac:** **Share → Send to Mac**, the **Send files** button, or the **Send files to Mac** Quick Settings tile. Files land in Downloads.
+- **Mac → phone:** drag files onto the Mac window, the Dock icon or the **notch**, or use **Share → Send to Phone** in Finder, Photos, Preview and any app with a Share button.
+
+### Links
+- **Open on Mac:** share a link on the phone with **Open on Mac** and it opens in the Mac's browser.
+- **Open on your phone:** press **⌃⌥P** on the Mac, or use **Share → Send to Phone**, to open the current page on the phone. If the phone is locked, it opens when you unlock it.
+
+### Screenshots
+- Screenshots taken on the phone appear on the Mac straight away, ready to paste.
+
+### Browser extension (Chrome, Edge, Firefox, Brave, Arc and other Chrome-based browsers)
+- Control music and videos playing in the browser from your phone.
+- Open the page you're reading, or any link, on your phone from the toolbar button or the right-click menu.
+- Talks only to the Mac n Droid app on your own Mac; websites can't connect to it.
 
 ### Music and media
+- **Mac music on the phone:** play, pause and skip Music, Spotify and, with the browser extension, YouTube and other sites, from the phone's media controls.
 - **Phone music on the Mac:** see and control what's playing on the phone.
-- **Mac music on the phone:** play, pause and skip Music, Spotify and (with the browser extension) YouTube, YouTube Music, Spotify Web, SoundCloud and other sites, from the phone's media controls.
+
+### Notifications
+- **Phone notifications on your Mac**, as native banners or drops from the MacBook notch, with the app's own actions: Reply, Mark as read, Answer and Decline for calls. Dismiss on the Mac and it's dismissed on the phone.
+- **Verification codes** can be copied with one click, or automatically.
+- **Live activities:** timers, calls, rides and deliveries stay live next to the notch.
 
 ### Phone
-- **Mirror and control your phone** in a Mac window (control needs the optional Mac n Droid phone control setting).
-- **Phone as webcam** over USB (Android 14+).
-- **Ring my phone** at full volume, even on silent. **Phone battery** in the menu bar.
-- **Left-behind alerts:** a chime if you walk away from your Mac while it's awake.
+- **Phone battery** in the menu bar.
+- **Ring my phone** at full volume, even on silent.
+- **Left-behind alerts** if you walk away from your Mac or phone.
 
-### Browser extension (Helium, Chrome, Edge, Brave, Arc…)
-- Control music and videos playing in the browser from your phone.
-- Click the toolbar icon for **Open on Your Phone**, or right-click a link or page for **Open Link on Your Phone** / **Open Page on Your Phone**.
-- Talks only to the Mac n Droid app on your own Mac (127.0.0.1); websites can't connect to it.
+### Messages
+- **Read and reply to texts from your Mac,** and start new conversations with contact search.
+
+### Mirroring and webcam
+- **Mirror and control your phone** in a Mac window (control needs the optional phone control setting).
+- **Phone as webcam** over USB (Android 14+).
 
 ### Everything else
-- **Automatic updates** for the Mac app (Sparkle), once the repo is public.
+- **Automatic updates** for the Mac app.
 - Native look on both sides: macOS design on the Mac, Material 3 with your wallpaper colours on Android.
-- Auto-reconnect after Wi-Fi changes, sleep or reboot. No account, no cloud.
+- Reconnects by itself after Wi-Fi changes, sleep or restart. No account, no cloud.
 
 ## Install
 
@@ -67,9 +72,11 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
    - On Xiaomi/Samsung/Oppo/OnePlus also set battery to **Unrestricted** and enable autostart (see dontkillmyapp.com).
 
 ### Browser extension (optional)
-1. On the Mac, open **Mac n Droid → Settings → Sync → Browser → Show Extension in Finder**.
-2. In your browser, open `chrome://extensions` (Helium: `helium://extensions`), turn on **Developer mode**, click **Load unpacked** and choose the **Browser Extension** folder.
-3. Pin it from the puzzle-piece menu. After a Mac app update, click ↻ on the extension to load the new version.
+Works in Chrome, Edge, Firefox, Brave, Arc and other Chrome-based browsers.
+1. On the Mac, click **Browser Extension** in Mac n Droid's sidebar (or **Settings → Sync → Browser → Add to Browser…**).
+2. Click **Add to Chrome-Based Browser** (Chrome Web Store) or **Add to Firefox-Based Browser** (Firefox Add-ons). The store opens in the browser you're using; click **Add** there.
+
+Developers can load it from source instead: open the browser's Extensions page (`chrome://extensions`), turn on **Developer mode**, click **Load unpacked** and choose the `browser-extension` folder.
 
 ## Build from source
 
@@ -81,6 +88,9 @@ cd mac && ./scripts/build-app.sh 0.11.1
 cd android
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 ./gradlew assembleRelease
+
+# Android App Bundle for Google Play → android/app/build/outputs/bundle/release/app-release.aab
+./gradlew bundleRelease
 
 # Protocol test: acts like a phone against the running Mac app
 java tools/FakePhone.java            # handshake only (nothing appears on the Mac)

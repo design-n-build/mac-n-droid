@@ -5,7 +5,10 @@ Local-network only. The Mac is the **server**, the phone is the **client**.
 ## Discovery & pairing
 - Mac listens on TCP **47800** (falls back to a random port) and advertises Bonjour `_macndroid._tcp` with TXT `id=<macId>`.
 - Mac shows a QR code:
-  `macndroid://pair?v=1&id=<macId>&k=<pairingKey base64url>&p=<port>&h=<ip1,ip2>&n=<Mac name>`
+  `https://play.google.com/store/apps/details?id=app.macndroid#macndroid://pair?v=1&id=<macId>&k=<pairingKey base64url>&p=<port>&h=<ip1,ip2>&n=<Mac name>`
+- A phone without the app opens the Google Play page. The pairing part after `#` is a URL fragment, which
+  is never included in web requests. The app reads the `macndroid://pair?…` part after `#`
+  (and still accepts it on its own, from **Copy Pairing Link**).
 - `k` is a random 32-byte secret generated on the Mac. Whoever holds it is trusted. "Reset pairing" on the Mac rotates it.
 - Phone reconnects by trying the last known IPs, then Bonjour (matching TXT `id`).
 

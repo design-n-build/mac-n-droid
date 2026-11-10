@@ -32,6 +32,7 @@ struct MainView: View {
     @EnvironmentObject private var state: AppState
     @State private var selection: Pane? = .overview
     @State private var dropTargeted = false
+    @State private var showBrowserSheet = false
 
     var body: some View {
         NavigationSplitView {
@@ -45,10 +46,18 @@ struct MainView: View {
                 }
                 Section("Setup") {
                     Label(Pane.pair.title, systemImage: Pane.pair.symbol).tag(Pane.pair)
+                    Button {
+                        showBrowserSheet = true
+                    } label: {
+                        Label("Browser Extension", systemImage: "puzzlepiece.extension")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Control browser music and videos from your phone, and open pages on it")
                 }
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 210)
             .safeAreaInset(edge: .bottom) { ConnectionFooter().padding(12) }
+            .sheet(isPresented: $showBrowserSheet) { BrowserExtensionSheet() }
         } detail: {
             Group {
                 switch selection ?? .overview {

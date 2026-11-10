@@ -17,9 +17,14 @@ data class Pairing(
     val macName: String,
 ) {
     companion object {
-        /** Parses `macndroid://pair?v=1&id=…&k=…&p=…&h=…&n=…` from the Mac's QR code. */
+        /**
+         * Parses `macndroid://pair?v=1&id=…&k=…&p=…&h=…&n=…` from the Mac's QR code. The code wraps it in a
+         * Google Play link (`https://play.google.com/store/apps/details?id=app.macndroid#macndroid://pair?…`)
+         * so phones without the app open its store page; the pairing part is after the "#".
+         */
         fun parse(raw: String): Pairing? = runCatching {
-            val uri = Uri.parse(raw.trim())
+            val text = raw.trim().let { if (it.startsWith("https://") && '#' in it) it.substringAfter('#') else it }
+            val uri = Uri.parse(text)
             if (uri.scheme != "macndroid" || uri.host != "pair") return null
             val key = Base64.decode(uri.getQueryParameter("k")!!, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
             require(key.size == 32)

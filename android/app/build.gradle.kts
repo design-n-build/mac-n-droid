@@ -13,12 +13,12 @@ val keystoreProps = Properties().apply {
 
 android {
     namespace = "app.macndroid"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "app.macndroid"
         minSdk = 29          // Android 10
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 28
         versionName = "0.11.1"
     }

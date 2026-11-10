@@ -118,6 +118,10 @@ enum Prefs {
     static let keepOnTop = "keepOnTop"
     static let leftBehind = "leftBehind"
     static let dropOnNotch = "dropOnNotch"
+    /// A browser extension has connected at least once.
+    static let browserExtensionSeen = "browserExtensionSeen"
+    /// The Overview's "Add to your browser" suggestion was closed.
+    static let browserTipDismissed = "browserTipDismissed"
 
     static func registerDefaults() {
         // 0.6 and earlier had an on/off switch; keep "off" for people who turned it off.

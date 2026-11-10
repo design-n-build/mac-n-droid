@@ -9,7 +9,7 @@ import Carbon
 enum Handoff {
     private static let safariFamily: Set<String> = ["com.apple.Safari", "com.apple.SafariTechnologyPreview", "com.kagi.kagimacOS"]
 
-    /// Every app that can open web pages (Safari, Chrome, Helium, Arc, Edge, Brave, Firefox…).
+    /// Every app that can open web pages (Safari, Chrome, Arc, Edge, Brave, Firefox…).
     static var browsers: Set<String> {
         guard let probe = URL(string: "https://example.com") else { return [] }
         return Set(NSWorkspace.shared.urlsForApplications(toOpen: probe).compactMap { Bundle(url: $0)?.bundleIdentifier })
@@ -43,7 +43,7 @@ enum Handoff {
         let name = runningApps.first { $0.bundleIdentifier == bundle }?.localizedName ?? "your browser"
         let chromium = "tell application id \"\(bundle)\" to return URL of active tab of front window"
         let safari = "tell application id \"\(bundle)\" to return URL of front document"
-        // Chromium browsers (Chrome, Helium, Arc, Edge, Brave…) use one wording, Safari another.
+        // Chromium browsers (Chrome, Arc, Edge, Brave…) use one wording, Safari another.
         let scripts = safariFamily.contains(bundle) ? [safari] : [chromium, safari]
         func attempt(_ i: Int) {
             AppleScriptRunner.run(scripts[i]) { result in

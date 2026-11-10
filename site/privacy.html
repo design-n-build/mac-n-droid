@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy · Mac n Droid</title>
+<meta name="description" content="Mac n Droid collects no personal data. Your phone and your Mac talk directly over your own Wi-Fi, encrypted, with no servers, accounts, ads or analytics.">
+<link rel="icon" href="assets/icon.png">
+<style>
+:root{
+  --bg:#f5f5f7; --card:#ffffff; --fg:#1d1d1f; --muted:#6e6e73; --line:rgba(0,0,0,.1);
+  --brand:#0DA457; --brand-ink:#08843f; --tint:rgba(13,164,87,.10);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#000; --card:#151517; --fg:#f5f5f7; --muted:#a1a1a6; --line:rgba(255,255,255,.12);
+    --brand-ink:#3fe08d; --tint:rgba(13,164,87,.16);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#000; --card:#151517; --fg:#f5f5f7; --muted:#a1a1a6; --line:rgba(255,255,255,.12);
+  --brand-ink:#3fe08d; --tint:rgba(13,164,87,.16);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:17px/1.6 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Inter,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--brand-ink)}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+header{padding:48px 0 8px}
+.home{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:var(--fg);font-weight:600}
+.home img{width:32px;height:32px;border-radius:8px}
+h1{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",Inter,sans-serif;letter-spacing:-.025em;
+  font-size:clamp(34px,6vw,48px);line-height:1.08;margin:28px 0 8px}
+.meta{color:var(--muted);font-size:15px;margin:0 0 28px}
+.summary{background:var(--tint);border-radius:20px;padding:22px 24px;margin:0 0 40px}
+.summary h2{margin:0 0 8px;font-size:19px}
+.summary ul{margin:0;padding-left:20px}
+.summary li{margin:4px 0}
+h2{font-size:24px;line-height:1.2;margin:44px 0 10px;letter-spacing:-.01em}
+h3{font-size:18px;margin:26px 0 6px}
+p,li{color:var(--fg)}
+.muted{color:var(--muted)}
+ul{padding-left:22px}
+li{margin:6px 0}
+.table{overflow-x:auto;margin:14px 0;border-radius:14px;box-shadow:inset 0 0 0 1px var(--line);background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:15px;min-width:520px}
+th,td{text-align:left;padding:11px 14px;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font-weight:600}
+tr:last-child td{border-bottom:0}
+code{font:14px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--tint);padding:1px 5px;border-radius:5px}
+footer{color:var(--muted);font-size:14px;padding:48px 0 56px;border-top:1px solid var(--line);margin-top:56px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <a class="home" href="index.html"><img src="assets/icon.png" alt="">Mac n Droid</a>
+</header>
+
+<main>
+<h1>Privacy Policy</h1>
+<p class="meta">Effective 10 November 2026 · Applies to the Mac n Droid Android app, Mac app and browser extension.</p>
+
+<section class="summary" aria-label="Summary">
+  <h2>The short version</h2>
+  <ul>
+    <li><b>We collect nothing.</b> Mac n Droid has no servers, no accounts, no analytics, no ads and no crash reporting.</li>
+    <li>Your phone and your Mac talk <b>directly to each other</b> over your own Wi-Fi, encrypted with a key only those two devices know.</li>
+    <li>Your messages, notifications, files and clipboard <b>stay on your own devices</b>. We never see them, store them or sell them.</li>
+    <li>The browser extension talks <b>only to Mac n Droid on the same Mac</b>. It doesn't track what you browse.</li>
+    <li>Mac n Droid is free and open source, so anyone can check that all of this is true.</li>
+  </ul>
+</section>
+
+<h2>Who we are</h2>
+<p>Mac n Droid is a free, open-source project that connects an Android phone to a Mac. "We" in this policy means the developer of Mac n Droid. The source code is published under the GNU General Public License v3.0.</p>
+
+<h2>What we collect</h2>
+<p><b>Nothing.</b> We don't run any servers, so there is nowhere for your information to be sent to us. Mac n Droid doesn't use accounts or sign-ins, and doesn't include advertising, analytics, tracking or crash-reporting code. We don't sell, rent, share or trade any information about you, because we never have it.</p>
+
+<h2>How Mac n Droid works</h2>
+<p>When you pair your phone with your Mac by scanning a QR code, the two devices create a shared secret key. From then on they find each other on your local network and connect directly. Everything they send is encrypted with AES-256-GCM using that key, so other devices on the network can't read it. Nothing goes through the internet or through us.</p>
+<p>What travels between your phone and your Mac depends on the features you turn on:</p>
+<div class="table">
+<table>
+  <thead><tr><th>Feature</th><th>What moves between your devices</th><th>Where it's kept</th></tr></thead>
+  <tbody>
+    <tr><td>Notifications</td><td>The notifications on your phone (app name, title, text, icon), and your replies or dismissals from the Mac.</td><td>Shown on the Mac; the recent list is kept on the Mac until you clear it or unpair.</td></tr>
+    <tr><td>Messages</td><td>Your text messages and the names and numbers of your contacts, so you can read, reply and start conversations from the Mac.</td><td>Read from the phone when you open Messages on the Mac. They aren't stored anywhere new.</td></tr>
+    <tr><td>Calls</td><td>Who's calling, so you can answer or decline from the Mac.</td><td>Shown only while the call is ringing.</td></tr>
+    <tr><td>Clipboard</td><td>Text and images you copy. Passwords copied from password managers are never sent.</td><td>The last 20 copies are kept on both devices. You can clear them at any time.</td></tr>
+    <tr><td>Files and screenshots</td><td>Files, photos and links you choose to send, and new screenshots if you turn that on.</td><td>Saved to the Downloads folder on the receiving device.</td></tr>
+    <tr><td>Music and media</td><td>What's playing (title, artist, artwork) and play, pause and skip commands.</td><td>Not stored.</td></tr>
+    <tr><td>Phone status</td><td>Battery level and the phone's name and model.</td><td>Not stored, apart from the phone's name.</td></tr>
+    <tr><td>Screen mirroring and phone control</td><td>Your phone's screen as live video, and the clicks and typing you do on the Mac.</td><td>Never recorded or saved.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Android permissions and why they're needed</h2>
+<p>Android asks you before Mac n Droid can use any of these, and each feature works on its own: you can say no to any of them and still use the rest.</p>
+<div class="table">
+<table>
+  <thead><tr><th>Permission</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td>Nearby network, Wi-Fi state</td><td>To find your Mac on your local network and connect to it directly.</td></tr>
+    <tr><td>Notification access</td><td>To show your phone's notifications on your Mac and let you reply or dismiss them there.</td></tr>
+    <tr><td>SMS and contacts</td><td>To read and send text messages from your Mac, and to show your contacts' names and search them when starting a conversation.</td></tr>
+    <tr><td>Photos and media</td><td>To send new screenshots to your Mac when you turn that on.</td></tr>
+    <tr><td>Notifications</td><td>To show that Mac n Droid is connected, and to tell you when files arrive.</td></tr>
+    <tr><td>Run in background, start at boot, battery exemption</td><td>To stay connected to your Mac so notifications and calls arrive straight away.</td></tr>
+    <tr><td>Screen capture</td><td>Only when you start screen mirroring from your Mac, so it can show your phone's screen. Android asks you each time.</td></tr>
+    <tr><td>Accessibility: clipboard sync (optional)</td><td>Android only lets apps read the clipboard while they're open. This service notices when you tap Copy so the copied text or image can be sent to your Mac. It doesn't read the contents of your screen and can't tap or type.</td></tr>
+    <tr><td>Accessibility: phone control (optional)</td><td>Lets you use your phone from the mirroring window on your Mac: your clicks become taps, and you can scroll, type and go back. It acts only on what you do in that window.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Mac permissions</h2>
+<ul>
+  <li><b>Local Network</b>, to find and connect to your phone.</li>
+  <li><b>Notifications</b>, to show your phone's notifications.</li>
+  <li><b>Automation</b> (asked the first time you use it), to read the address of the page open in your browser when you send it to your phone, and to play, pause and skip Music or Spotify from your phone.</li>
+</ul>
+
+<h2>Browser extension</h2>
+<p>The Mac n Droid browser extension lets you control music and videos playing in your browser from your phone, and open pages and links on your phone. To do that it:</p>
+<ul>
+  <li>Reads the title, artist and artwork of media playing in a tab, and whether it's playing, so they appear in your phone's media controls.</li>
+  <li>Reads the address of the current page or a link, only when you click the toolbar button or choose <b>Open on Your Phone</b> from the right-click menu.</li>
+  <li>Sends this only to the Mac n Droid app on the same computer (<code>127.0.0.1</code>), which passes it to your phone over your encrypted connection.</li>
+</ul>
+<p>It doesn't read your browsing history, the contents of the pages you visit, passwords, forms or cookies, and it never sends anything to us or to anyone else. It needs access to all websites only so it can find music and videos playing on any site you use.</p>
+
+<h2>The few times Mac n Droid uses the internet</h2>
+<p>Mac n Droid itself doesn't need the internet. A few things do connect to other services, and none of them include your personal information:</p>
+<ul>
+  <li><b>Mac app updates.</b> The Mac app checks GitHub for new versions. Like any website, GitHub sees your Mac's IP address. You can turn automatic checking off in Settings → General.</li>
+  <li><b>Album artwork.</b> To show artwork, the Mac app may download the cover of the song playing in Spotify from Spotify, and the browser extension may download the artwork of a playing video from the website that's already showing it.</li>
+  <li><b>QR code scanning on Android.</b> Scanning the pairing code uses Google's code scanner, part of Google Play services. It runs on your phone and Google doesn't receive the image or the code, but Google collects basic diagnostic information about it (such as device model, Android version and error codes) to keep it working. See <a href="https://developers.google.com/ml-kit/android-data-disclosure">Google's ML Kit data disclosure</a>.</li>
+  <li><b>App stores.</b> If you download Mac n Droid from Google Play, the Chrome Web Store, Microsoft Edge Add-ons or Firefox Add-ons, those stores handle the download under their own privacy policies.</li>
+</ul>
+
+<h2>Security</h2>
+<p>Pairing needs physical access to both devices, to scan the QR code. After that, every connection is encrypted and authenticated with the key created during pairing, and a device that hasn't been paired can't connect. The browser extension's link is open only to the same computer, and only to browser extensions, not to websites.</p>
+
+<h2>Your choices</h2>
+<ul>
+  <li>Turn off any feature, or deny any permission, at any time. Everything else keeps working.</li>
+  <li>Clear your clipboard history on either device.</li>
+  <li><b>Unpair</b> your phone to stop all syncing and delete the pairing key.</li>
+  <li>Uninstall the app or extension to delete everything it kept on that device.</li>
+</ul>
+<p>Since we don't hold any of your information, there's nothing for us to access, correct, export or delete on our side. Everything is on your own devices and under your control.</p>
+
+<h2>Children</h2>
+<p>Mac n Droid isn't directed at children under 13, and it doesn't knowingly collect information from anyone, including children.</p>
+
+<h2>Changes to this policy</h2>
+<p>If this policy changes, we'll update this page and the date at the top. If Mac n Droid ever needs to handle your information differently, we'll explain the change in the app's release notes before it happens.</p>
+
+<h2>Contact</h2>
+<p>Questions about privacy? Open an issue on <a href="https://github.com/santosh-mudragada-1/mac-n-droid/issues">Mac n Droid's GitHub page</a>.</p>
+</main>
+
+<footer>
+  Mac n Droid isn't affiliated with Apple or Google. Mac and macOS are trademarks of Apple Inc. Android and Chrome are trademarks of Google LLC.
+</footer>
+</div>
+</body>
+</html>

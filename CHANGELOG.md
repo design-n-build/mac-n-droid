@@ -1,5 +1,17 @@
 # What's new
 
+## Unreleased
+- **Add the browser extension from the Mac app:** click **Browser Extension** in the sidebar (or Settings →
+  Sync → Browser → **Add to Browser…**). It explains what the extension does, then opens your browser's
+  extension store: Chrome Web Store, Edge Add-ons or Firefox Add-ons. The Overview suggests it until an
+  extension is connected.
+- **Browser extension for Firefox.**
+- **Pairing code opens Google Play:** scanning the Mac's pairing code with the phone's camera opens Mac n
+  Droid on Google Play if it isn't installed. The pairing details stay on the phone.
+- The menu bar no longer has a Send Tab button. Press **⌃⌥P**, or use the browser extension, to open the
+  current page on your phone.
+- The Android app now targets Android 16.
+
 ## 0.11.1
 - Browser extension: no more "connection refused" entries on the browser's Errors page when Mac n
   Droid isn't running. It now connects only when something plays, when you open its popup or use
@@ -19,7 +31,7 @@
   the link opens when you unlock it.
 - **Send to Phone in the Mac's Share menu:** in Finder, Photos, Safari, Preview and any app with a
   Share button. Files and photos go to the phone, links open on it, and text goes to its clipboard.
-- **Browser extension** for Helium, Chrome, Edge, Brave and Arc: pause, play and skip music and
+- **Browser extension** for Chrome, Edge, Brave, Arc and other Chrome-based browsers: pause, play and skip music and
   videos playing in the browser from your phone, and open pages and links on your phone.
 - **Control your Mac's music from the phone:** Music, Spotify and browser tabs appear in the
   phone's media controls.

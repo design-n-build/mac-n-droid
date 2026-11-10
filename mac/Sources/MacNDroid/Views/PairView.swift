@@ -12,9 +12,9 @@ struct PairView: View {
                     qr
                     VStack(alignment: .leading, spacing: 14) {
                         Text("Pair your Android phone").font(.title2.weight(.semibold))
-                        Step(n: 1, text: "Install the Mac n Droid app on your phone.")
-                        Step(n: 2, text: "Open it and tap **Scan QR code**.")
-                        Step(n: 3, text: "Point your phone's camera at this code.")
+                        Step(n: 1, text: "No app yet? Scan this code with your phone's camera to get Mac n Droid from Google Play.")
+                        Step(n: 2, text: "Open Mac n Droid and tap **Scan QR code**.")
+                        Step(n: 3, text: "Point your phone at this code.")
                         Text("Both devices need to be on the same Wi-Fi network. Everything stays on your network and is end-to-end encrypted.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
@@ -60,9 +60,13 @@ struct PairView: View {
         }
     }
 
+    /// The code is a Google Play link, so a phone without the app goes to its store page. The pairing details
+    /// follow the "#" (a fragment, never included in web requests); the app reads them from there.
+    static let playLink = "https://play.google.com/store/apps/details?id=app.macndroid#"
+
     private var qr: some View {
         Group {
-            if let img = QRCode.image(for: state.pairingURI), !state.pairingURI.isEmpty {
+            if let img = QRCode.image(for: Self.playLink + state.pairingURI), !state.pairingURI.isEmpty {
                 Image(nsImage: img)
                     .interpolation(.none)
                     .resizable()
