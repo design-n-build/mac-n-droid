@@ -1,0 +1,83 @@
+# Builds Mac n Droid for Windows and Linux, and tests both against tools/FakePhone.java.
+# Paused while Windows and Linux are on hold: runs only from the Actions tab (Run workflow), on this branch.
+# The installers appear under the run's "Artifacts".
+name: Windows and Linux
+
+on:
+  workflow_dispatch:
+
+jobs:
+  protocol-test:
+    name: Protocol test (both apps, with a fake phone)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "8.0.x" }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - name: Linux app core
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq python3-gi gir1.2-glib-2.0 > /dev/null
+          export MACNDROID_CONFIG=$RUNNER_TEMP/lx MACNDROID_PORT=47900
+          python3 - <<'PY' &
+          import sys; sys.path.insert(0, "linux")
+          from gi.repository import GLib
+          from macndroid.state import AppState
+          s = AppState(); s.start()
+          GLib.timeout_add_seconds(15, lambda: loop.quit())
+          loop = GLib.MainLoop(); loop.run()
+          PY
+          sleep 2
+          java -Didentity=$MACNDROID_CONFIG/identity.json tools/FakePhone.java 127.0.0.1 47900 --full
+          java -Didentity=$MACNDROID_CONFIG/identity.json tools/FakePhone.java 127.0.0.1 47900 --wrong-key
+      - name: Windows app core
+        run: |
+          export MACNDROID_CONFIG=$RUNNER_TEMP/win MACNDROID_PORT=47901
+          dotnet build windows/CoreTest -c Release -v q
+          dotnet run --no-build -c Release --project windows/CoreTest -- 20 &
+          sleep 4
+          java -Didentity=$MACNDROID_CONFIG/identity.json tools/FakePhone.java 127.0.0.1 47901 --full
+          java -Didentity=$MACNDROID_CONFIG/identity.json tools/FakePhone.java 127.0.0.1 47901 --wrong-key
+
+  windows:
+    name: Windows (${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "8.0.x" }
+      - name: Build
+        shell: pwsh
+        run: |
+          $platform = if ("${{ matrix.arch }}" -eq "arm64") { "ARM64" } else { "x64" }
+          dotnet publish windows/App/MacNDroid.csproj -c Release -r win-${{ matrix.arch }} -p:Platform=$platform -o publish/${{ matrix.arch }}
+      - name: Installer
+        shell: pwsh
+        run: |
+          $version = ([xml](Get-Content windows/App/MacNDroid.csproj)).Project.PropertyGroup.Version | Select-Object -First 1
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe" /DVersion=$version /DArch=${{ matrix.arch }} "/DSource=..\publish\${{ matrix.arch }}" windows/installer.iss
+          Compress-Archive -Path publish/${{ matrix.arch }}/* -DestinationPath release/MacNDroid-$version-Windows-${{ matrix.arch }}-portable.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: release/*
+
+  # x86_64 only for now: GitHub's ARM Linux runners are free for public repos only. ARM computers can run
+  # the app from source (linux/install.sh).
+  linux:
+    name: Linux (x86_64 Flatpak)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: MacNDroid-Linux-x86_64.flatpak
+          manifest-path: linux/app.macndroid.Linux.yml
+          cache-key: flatpak-${{ github.sha }}

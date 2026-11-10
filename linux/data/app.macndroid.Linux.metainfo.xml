@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.macndroid.Linux</id>
+  <name>Mac n Droid</name>
+  <summary>Your Android phone and your computer, together</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer id="app.macndroid"><name>Mac n Droid</name></developer>
+  <description>
+    <p>Mac n Droid connects your Android phone to your computer over your own Wi-Fi, with no account and no cloud.
+    Everything is end-to-end encrypted.</p>
+    <ul>
+      <li>Copy on one device and paste on the other, with a shared clipboard history</li>
+      <li>Send files and photos both ways</li>
+      <li>Open links from your phone on your computer, and the other way around</li>
+      <li>See your phone's notifications and reply to them</li>
+      <li>See your phone's battery, and ring it to find it</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">app.macndroid.Linux.desktop</launchable>
+  <url type="homepage">https://github.com/santosh-mudragada-1/mac-n-droid</url>
+  <url type="bugtracker">https://github.com/santosh-mudragada-1/mac-n-droid/issues</url>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.12.0" date="2026-11-10" />
+  </releases>
+</component>

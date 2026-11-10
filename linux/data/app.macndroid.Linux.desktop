@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Mac n Droid
+GenericName=Phone Link
+Comment=Your Android phone and your computer, together
+Exec=macndroid
+Icon=app.macndroid.Linux
+Terminal=false
+Categories=Network;Utility;GTK;GNOME;
+Keywords=android;phone;notifications;clipboard;files;sms;
+StartupNotify=true
+DBusActivatable=false
+X-GNOME-UsesNotifications=true
