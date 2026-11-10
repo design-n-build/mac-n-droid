@@ -1,6 +1,6 @@
 # What's new
 
-## Unreleased
+## 0.12.0 (Mac, Android and browser extension)
 - **Add the browser extension from the Mac app:** click **Browser Extension** in the sidebar (or Settings →
   Sync → Browser → **Add to Browser…**). It explains what the extension does, then opens your browser's
   extension store: Chrome Web Store, Edge Add-ons or Firefox Add-ons. The Overview suggests it until an
