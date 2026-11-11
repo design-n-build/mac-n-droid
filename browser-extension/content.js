@@ -68,6 +68,11 @@
     document.addEventListener(ev, () => setTimeout(() => report(true), 50), true);
   }
   setInterval(() => report(false), 2000);
+
+  // The toolbar icon is white; tell the extension when the browser is in light mode so it can use a dark one.
+  const scheme = matchMedia("(prefers-color-scheme: dark)");
+  safeSend({ t: "theme", dark: scheme.matches });
+  scheme.addEventListener("change", () => safeSend({ t: "theme", dark: scheme.matches }));
   addEventListener("pagehide", () => { if (last) safeSend({ t: "media_end" }); });
 
   chrome.runtime.onMessage.addListener((m) => {

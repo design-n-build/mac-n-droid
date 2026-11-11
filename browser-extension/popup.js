@@ -1,3 +1,4 @@
+chrome.runtime.sendMessage({ t: "theme", dark: matchMedia("(prefers-color-scheme: dark)").matches }).catch?.(() => {});
 const $ = (id) => document.getElementById(id);
 
 chrome.runtime.sendMessage({ t: "status" }, (s) => {

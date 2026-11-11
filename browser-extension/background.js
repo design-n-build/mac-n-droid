@@ -121,6 +121,8 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
       reply({ ...status, media: playing ? { title: playing.title, site: playing.site, playing: playing.playing } : null });
     });
     return true;
+  } else if (m.t === "theme") {
+    setThemeIcon(!!m.dark);
   } else if (m.t === "send_url") {
     sendUrl(m.url).then(reply);
     return true;
@@ -162,3 +164,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   chrome.action.setTitle({ title: r.ok ? "Mac n Droid" : r.error });
   setTimeout(() => { chrome.action.setBadgeText({ text: "" }); chrome.action.setTitle({ title: "Mac n Droid" }); }, 3000);
 });
+
+// White logo on dark toolbars, dark-grey logo on light ones (the page reports the browser's theme).
+let iconDark = null;
+function setThemeIcon(dark) {
+  if (dark === iconDark) return;
+  iconDark = dark;
+  const v = dark ? "" : "-dark";
+  chrome.action.setIcon({ path: { 16: `icons/icon${v}-16.png`, 32: `icons/icon${v}-32.png` } }).catch(() => {});
+}

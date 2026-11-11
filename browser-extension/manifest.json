@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mac n Droid",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "Control music and videos playing in your browser from your Android phone, and open pages and links on it. Needs the Mac n Droid app.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -11,6 +11,10 @@
   },
   "action": {
     "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    },
     "default_title": "Mac n Droid"
   },
   "background": {

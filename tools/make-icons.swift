@@ -109,21 +109,19 @@ for (dir, px) in [("mdpi", 24), ("hdpi", 36), ("xhdpi", 48), ("xxhdpi", 72), ("x
     save(rep, "android/app/src/main/res/drawable-\(dir)/ic_stat_logo.png")
 }
 
-// MARK: Browser extension — the green logo on transparent, as large as the slot allows, so it stands
-// out in the toolbar next to other extensions.
-let greenLogo = tinted(load("logo_nobg_green.png"), green)
-let greenGlyph = glyphBounds(greenLogo)
-for px in [16, 32, 48, 128] {
-    let rep = bitmap(px, px) { size in
-        let s = size.width
-        let margin = px >= 48 ? s * 0.04 : 0
-        let box = NSRect(x: 0, y: 0, width: s, height: s).insetBy(dx: margin, dy: margin)
-        let aspect = greenGlyph.width / greenGlyph.height
-        let h = min(box.height, box.width / aspect), w = h * aspect
-        greenLogo.draw(in: NSRect(x: box.midX - w / 2, y: box.midY - h / 2, width: w, height: h),
-                       from: greenGlyph, operation: .sourceOver, fraction: 1)
+// MARK: Browser extension — the white logo on transparent (icon-*.png), used for the right-click menu,
+// the extensions page and the store. A dark-grey copy (icon-dark-*.png) replaces it in the toolbar while
+// the browser is in light mode, where white would vanish (background.js, "theme").
+let darkGrey = tinted(load("logo_nobg_white.png"), NSColor(srgbRed: 0x3C / 255, green: 0x40 / 255, blue: 0x43 / 255, alpha: 1))
+for (logo, suffix) in [(white, ""), (darkGrey, "-dark")] {
+    for px in [16, 32, 48, 128] {
+        let rep = bitmap(px, px) { size in
+            let s = size.width
+            let margin = px >= 48 ? s * 0.04 : 0
+            drawGlyph(logo, in: NSRect(x: 0, y: 0, width: s, height: s).insetBy(dx: margin, dy: margin))
+        }
+        save(rep, "browser-extension/icons/icon\(suffix)-\(px).png")
     }
-    save(rep, "browser-extension/icons/icon-\(px).png")
 }
 
 // MARK: Share extension ("Send to Phone" in Share menus) — macOS icon grid, brand green, an off-white phone.
