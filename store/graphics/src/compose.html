@@ -1,0 +1,379 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Store graphics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&display=swap" rel="stylesheet">
+<!--
+  Store graphics for Google Play, the Chrome Web Store, Edge Add-ons and Firefox Add-ons.
+  Every screen inside the devices is a real render of the app (see store/graphics/README.md).
+  Open compose.html#<name> in a browser to preview one; render.mjs exports them all.
+-->
+<style>
+  :root {
+    --ink: #0f2018; --ink-2: #4b5d53; --green: #0da457; --green-deep: #08703c;
+    --bg-1: #f4f9f5; --bg-2: #e2f0e6;
+    font-family: -apple-system, "SF Pro Display", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body { background: var(--bg-1); color: var(--ink); }
+  img { display: block; }
+
+  .canvas { position: relative; width: 100vw; height: 100vh; overflow: hidden;
+            background: radial-gradient(120% 70% at 50% 0%, #ffffff 0%, var(--bg-1) 45%, var(--bg-2) 100%); }
+  .canvas.dark { background: radial-gradient(120% 70% at 50% 0%, #1d3326 0%, #0f1a14 55%, #0a120d 100%); color: #eef5f0; }
+  .canvas.green { background: radial-gradient(110% 120% at 20% 10%, #19c46c 0%, var(--green) 40%, var(--green-deep) 100%); color: #fff; }
+  /* Matches the Play Store screenshots: warm cream or deep green-black, tight grotesk headlines. */
+  .canvas.cream { background: #f5f1ec; color: #222a25; font-family: "Inter Tight", system-ui, sans-serif; }
+  .canvas.ink { background: #252c28; color: #f5f1ec; font-family: "Inter Tight", system-ui, sans-serif; }
+  .display-h { font-weight: 600; letter-spacing: -0.035em; line-height: 1.02; }
+  .sub { font-weight: 500; letter-spacing: -0.01em; line-height: 1.35; }
+  .cream .sub { color: #5b625d; } .ink .sub { color: #b9bfba; }
+  .brand { display: flex; align-items: center; font-weight: 600; letter-spacing: -0.02em; }
+  .spiro { position: absolute; pointer-events: none; }
+  .glow { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .55; pointer-events: none; }
+
+  .head { position: absolute; left: 0; right: 0; text-align: center; padding: 0 70px; }
+  .head h1 { font-weight: 700; letter-spacing: -0.025em; line-height: 1.04; }
+  .head p { margin-top: .5em; color: var(--ink-2); font-weight: 450; letter-spacing: -0.01em; line-height: 1.3; }
+  .dark .head p { color: #a9bcb0; }
+  .green .head p { color: rgba(255,255,255,.86); }
+  .abs { position: absolute; }
+
+  /* Phone: a generic frame, no brand. Native size 436 × 948. */
+  .phone { position: relative; width: 436px; height: 948px; border-radius: 60px; padding: 12px;
+           background: linear-gradient(145deg, #2b2d30, #0c0d0e 60%, #1d1f21);
+           box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.12), 0 1px 0 1px rgba(0,0,0,.35); }
+  .phone .screen { position: relative; width: 412px; height: 924px; border-radius: 48px; overflow: hidden; background: #000; }
+  .phone .cam { position: absolute; top: 11px; left: 50%; width: 13px; height: 13px; margin-left: -6.5px; border-radius: 50%;
+                background: radial-gradient(circle at 40% 35%, #3a3f48, #050608 70%); z-index: 3; }
+  .sbar { height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 26px 0 30px;
+          font: 500 14px/1 "Roboto", system-ui, sans-serif; letter-spacing: .01em; }
+  .sbar .icons { display: flex; gap: 6px; align-items: center; }
+  .shadow-device { filter: drop-shadow(0 40px 60px rgba(20, 60, 35, .22)) drop-shadow(0 10px 18px rgba(20, 60, 35, .14)); }
+  .dark .shadow-device { filter: drop-shadow(0 40px 70px rgba(0,0,0,.55)) drop-shadow(0 10px 20px rgba(0,0,0,.4)); }
+
+  /* Laptop: generic, native size 1800 × 1066 (screen 1512 × 982). */
+  .laptop { position: relative; width: 1800px; height: 1066px; }
+  .laptop .lid { position: absolute; left: 126px; top: 0; width: 1548px; height: 1024px; border-radius: 30px 30px 8px 8px;
+                 padding: 18px 18px 24px; background: #0b0c0d;
+                 box-shadow: inset 0 0 0 2px #3a3c40, inset 0 0 0 4px #121314; }
+  .laptop .display { position: relative; width: 1512px; height: 982px; border-radius: 12px 12px 2px 2px; overflow: hidden; }
+  .laptop .base { position: absolute; left: 0; top: 1022px; width: 1800px; height: 44px; border-radius: 4px 4px 40px 40px / 4px 4px 34px 34px;
+                  background: linear-gradient(#e9eaec 0, #d4d6d9 30%, #a9acb1 100%);
+                  box-shadow: inset 0 2px 0 rgba(255,255,255,.8), inset 0 -2px 3px rgba(0,0,0,.18); }
+  .laptop .base::after { content: ""; position: absolute; left: 50%; top: 0; width: 280px; height: 14px; margin-left: -140px;
+                         border-radius: 0 0 16px 16px; background: linear-gradient(#b6b9be, #cfd1d4); }
+  .notch { position: absolute; top: 0; left: 50%; width: 196px; height: 34px; margin-left: -98px; background: #000;
+           border-radius: 0 0 14px 14px; z-index: 20; }
+
+  .wallpaper { position: absolute; inset: 0;
+    background:
+      radial-gradient(60% 70% at 15% 20%, #b9f0cf 0%, transparent 60%),
+      radial-gradient(55% 60% at 85% 15%, #bfe3ff 0%, transparent 60%),
+      radial-gradient(70% 80% at 70% 90%, #7fd8a8 0%, transparent 60%),
+      linear-gradient(160deg, #e8f7ee, #cdeedd 50%, #9fd9c0); }
+  .wallpaper.teal { background:
+      radial-gradient(80% 90% at 18% 110%, #0f6f68 0%, transparent 60%),
+      radial-gradient(70% 80% at 100% 0%, #0b5f5a 0%, transparent 55%),
+      radial-gradient(60% 60% at 45% 35%, #e9f4f2 0%, transparent 70%),
+      linear-gradient(140deg, #cfe9e6, #7cc3bc 55%, #1f8a83); }
+  .wallpaper.dark { background:
+      radial-gradient(60% 70% at 15% 20%, #1f5a3b 0%, transparent 60%),
+      radial-gradient(55% 60% at 85% 15%, #17405c 0%, transparent 60%),
+      radial-gradient(70% 80% at 70% 90%, #0f4a33 0%, transparent 60%),
+      linear-gradient(160deg, #0d1d15, #0b2a1d 50%, #08261e); }
+  .menubar { position: absolute; top: 0; left: 0; right: 0; height: 34px; display: flex; align-items: center; justify-content: space-between;
+             padding: 0 18px 0 22px; font-size: 14px; color: #111; background: rgba(255,255,255,.38);
+             backdrop-filter: blur(20px); z-index: 10; }
+  .menubar .l, .menubar .r { display: flex; align-items: center; gap: 22px; }
+  .menubar .l b { font-weight: 700; }
+  .menubar .r { gap: 16px; }
+  .win { position: absolute; border-radius: 16px; overflow: hidden;
+         box-shadow: 0 0 0 .6px rgba(0,0,0,.28), 0 24px 70px rgba(0,0,0,.28), 0 6px 18px rgba(0,0,0,.12); }
+  .popover { position: absolute; border-radius: 14px; overflow: hidden; background: #fff;
+             box-shadow: 0 0 0 .6px rgba(0,0,0,.25), 0 20px 50px rgba(0,0,0,.25); }
+
+  /* Browser window: generic, no brand. */
+  .browser { position: absolute; border-radius: 14px; overflow: hidden; background: #fff;
+             box-shadow: 0 0 0 .6px rgba(0,0,0,.28), 0 24px 70px rgba(0,0,0,.25), 0 6px 18px rgba(0,0,0,.1); }
+  .browser .tabs { height: 44px; background: #e3e7ec; display: flex; align-items: flex-end; padding: 0 12px; gap: 8px; }
+  .browser .lights { display: flex; gap: 8px; padding: 0 14px 16px 6px; }
+  .browser .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .browser .tab { height: 34px; width: 250px; background: #fff; border-radius: 10px 10px 0 0; display: flex; align-items: center;
+                  gap: 8px; padding: 0 12px; font-size: 12.5px; color: #222; white-space: nowrap; overflow: hidden; }
+  .browser .tab .fav { width: 16px; height: 16px; border-radius: 4px; flex: none; }
+  .browser .bar { height: 44px; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-bottom: 1px solid #e6e8eb; color: #5f6368; }
+  .browser .url { flex: 1; height: 30px; border-radius: 15px; background: #f0f2f4; display: flex; align-items: center; padding: 0 14px;
+                  font-size: 13px; color: #333; gap: 8px; }
+  .browser .exticon { width: 22px; height: 22px; border-radius: 6px; }
+  .menu { position: absolute; width: 290px; padding: 5px; border-radius: 10px; background: rgba(246,246,246,.96);
+          backdrop-filter: blur(30px); font-size: 13.5px; color: #1d1d1f;
+          box-shadow: 0 0 0 .6px rgba(0,0,0,.22), 0 14px 40px rgba(0,0,0,.22); }
+  .menu div { height: 26px; padding: 0 10px; border-radius: 5px; display: flex; align-items: center; gap: 8px; }
+  .menu hr { border: 0; height: 1px; background: rgba(0,0,0,.1); margin: 5px 10px; }
+  .menu .on { background: #0a7cff; color: #fff; }
+  .cursor { position: absolute; width: 22px; height: 32px; z-index: 30; }
+
+  .tag { display: inline-flex; align-items: center; gap: 10px; padding: 10px 18px 10px 12px; border-radius: 999px;
+         background: rgba(255,255,255,.75); box-shadow: 0 0 0 1px rgba(13,164,87,.18), 0 8px 24px rgba(13,90,50,.12);
+         font-weight: 600; color: var(--ink); backdrop-filter: blur(20px); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const S = "shots/";
+const ICON = "../../../public/";
+const EXT = "../../../browser-extension/icons/";
+
+// Fit native-size markup into a target width.
+function fit(html, w, h, target, extra = "") {
+  const s = target / w;
+  return `<div style="width:${target}px;height:${h * s}px;position:relative;${extra}">
+    <div style="width:${w}px;height:${h}px;transform:scale(${s});transform-origin:0 0;position:absolute;left:0;top:0">${html}</div></div>`;
+}
+
+const statusIcons = (c) => `
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="${c}"><path d="M12 21.5 1.2 8.6A16.6 16.6 0 0 1 12 4.7c4.1 0 7.9 1.5 10.8 3.9z"/></svg>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="${c}"><path d="M2 22h20V2z"/></svg>
+  <svg width="11" height="18" viewBox="0 0 11 18"><rect x="3" y="0" width="5" height="2" rx="1" fill="${c}"/><rect x="0" y="2" width="11" height="16" rx="2.5" fill="${c}"/></svg>`;
+
+// A phone showing a real app render (412 × 892 dp at 3×) under a status bar.
+function phone(img, { dark = false, target = 600, screenHTML = null } = {}) {
+  const top = dark ? "#1b211d" : "#eaefe8", fg = dark ? "#e6ece7" : "#1a1f1b";
+  const screen = screenHTML ?? `
+    <div class="sbar" style="background:${top};color:${fg}"><span>10:30</span><span class="icons">${statusIcons(fg)}</span></div>
+    <img src="${S}${img}" style="width:412px;height:892px">`;
+  return fit(`<div class="phone"><div class="screen"><div class="cam"></div>${screen}</div></div>`, 436, 948, target);
+}
+
+function macMenubar({ dark = false } = {}) {
+  const c = dark ? "#f2f2f2" : "#111";
+  return `<div class="menubar" style="color:${c};${dark ? "background:rgba(20,30,25,.35)" : ""}">
+    <div class="l"><b>Mac n Droid</b><span>File</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span></div>
+    <div class="r">
+      <img src="${S}MenuBarIcon@2x.png" style="width:19px;height:19px;${dark ? "filter:invert(1)" : ""}">
+      <svg width="19" height="15" viewBox="0 0 24 18" fill="${c}"><path d="M12 17.5 8.8 14a4.6 4.6 0 0 1 6.4 0zM5.5 10.6A9.3 9.3 0 0 1 12 8a9.3 9.3 0 0 1 6.5 2.6l-1.9 2A6.6 6.6 0 0 0 12 10.8a6.6 6.6 0 0 0-4.6 1.8zM2.2 7.3A13.9 13.9 0 0 1 12 3.3c3.8 0 7.2 1.5 9.8 4l-1.9 2A11.2 11.2 0 0 0 12 6a11.2 11.2 0 0 0-7.9 3.2z"/></svg>
+      <svg width="27" height="13" viewBox="0 0 27 13"><rect x=".5" y=".5" width="23" height="12" rx="3.5" fill="none" stroke="${c}" opacity=".5"/><rect x="2" y="2" width="17" height="9" rx="2" fill="${c}"/><rect x="24.5" y="4.5" width="1.6" height="4" rx=".8" fill="${c}" opacity=".5"/></svg>
+      <span>Tue 10 Nov&nbsp;&nbsp;10:30</span>
+    </div></div>`;
+}
+
+// A laptop showing a desktop. `inner` is placed on the 1512 × 982 display.
+function laptop(inner, { dark = false, target = 1000, wall = "" } = {}) {
+  return fit(`<div class="laptop"><div class="lid"><div class="display">
+      <div class="wallpaper ${wall || (dark ? "dark" : "")}"></div>${macMenubar({ dark })}${inner}<div class="notch"></div>
+    </div></div><div class="base"></div></div>`, 1800, 1066, target);
+}
+
+const notch = (style = "large", dark = false) => {
+  const w = style === "large" ? 540 : 440;
+  return `<img src="${S}mac-notch-${style}${dark ? "-dark" : ""}.png" style="position:absolute;top:0;left:50%;width:${w}px;margin-left:-${w / 2}px;z-index:21">`;
+};
+const macWindow = (img, x, y, w = 1000) => `<div class="win" style="left:${x}px;top:${y}px;width:${w}px"><img src="${S}${img}" style="width:${w}px"></div>`;
+
+const art = `linear-gradient(200deg, #ff9e45 0%, #ee4a6e 45%, #5c339e 100%)`;
+const lights = `<div class="lights"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>`;
+const ext32 = `<img class="exticon" src="${EXT}icon-dark-32.png">`;   // light toolbar → dark logo
+const puzzle = `<svg width="18" height="18" viewBox="0 0 24 24" fill="#5f6368"><path d="M20.5 11H19V7a2 2 0 0 0-2-2h-4V3.5a2.5 2.5 0 0 0-5 0V5H4a2 2 0 0 0-2 2v3.8h1.5a2.7 2.7 0 0 1 0 5.4H2V20a2 2 0 0 0 2 2h3.8v-1.5a2.7 2.7 0 0 1 5.4 0V22H17a2 2 0 0 0 2-2v-4h1.5a2.5 2.5 0 0 0 0-5z"/></svg>`;
+const navIcons = `<span style="font-size:18px">‹</span><span style="font-size:18px;opacity:.5">›</span><span style="font-size:15px">↻</span>`;
+
+function browser(x, y, w, h, { tab, fav, url, content, popup = "" }) {
+  return `<div class="browser" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px">
+    <div class="tabs">${lights}<div class="tab"><span class="fav" style="background:${fav}"></span>${tab}</div></div>
+    <div class="bar">${navIcons}<div class="url"><svg width="12" height="12" viewBox="0 0 24 24" fill="#777"><path d="M6 10V7a6 6 0 1 1 12 0v3h1v12H5V10zm2 0h8V7a4 4 0 1 0-8 0z"/></svg>${url}</div>${puzzle}${ext32}</div>
+    <div style="position:relative;height:${h - 88}px;overflow:hidden">${content}</div>${popup}</div>`;
+}
+
+const musicPage = (big = true) => `
+  <div style="display:flex;gap:28px;padding:28px 34px">
+    <div style="flex:1">
+      <div style="position:relative;aspect-ratio:16/9;border-radius:14px;background:${art};overflow:hidden">
+        <div style="position:absolute;left:50%;top:44%;width:120px;height:120px;margin:-60px;border-radius:50%;background:rgba(255,255,255,.9)"></div>
+        <div style="position:absolute;left:0;right:0;bottom:0;height:34%;background:rgba(40,18,64,.45)"></div>
+        <div style="position:absolute;left:18px;right:18px;bottom:16px;height:4px;border-radius:2px;background:rgba(255,255,255,.35)"><div style="width:38%;height:4px;border-radius:2px;background:#fff"></div></div>
+      </div>
+      <div style="font-size:22px;font-weight:700;margin-top:18px;letter-spacing:-.01em">Golden Hour</div>
+      <div style="font-size:14px;color:#666;margin-top:4px">The Sunsets · Long Drive</div>
+    </div>
+    ${big ? `<div style="width:300px;display:flex;flex-direction:column;gap:14px">
+      ${["Ocean Air", "Slow Morning", "City Lights", "Paper Planes", "Night Swim"].map((t, i) => `
+        <div style="display:flex;gap:12px;align-items:center"><div style="width:120px;aspect-ratio:16/9;border-radius:8px;background:linear-gradient(${40 + i * 50}deg,#9ad8b5,#4f7fd6 ${60 + i * 6}%)"></div>
+        <div><div style="font-size:13.5px;font-weight:600">${t}</div><div style="font-size:12px;color:#777;margin-top:3px">The Sunsets</div></div></div>`).join("")}
+    </div>` : ""}
+  </div>`;
+
+const articlePage = `
+  <div style="max-width:760px;margin:0 auto;padding:40px 30px;font-size:17px;line-height:1.65;color:#2a2a2a">
+    <div style="font-size:13px;font-weight:600;color:#0a7a45;letter-spacing:.06em;text-transform:uppercase">Travel</div>
+    <div style="font-size:36px;font-weight:750;letter-spacing:-.02em;line-height:1.12;margin:10px 0 16px">A slow weekend at the lake</div>
+    <div style="height:190px;border-radius:14px;background:linear-gradient(170deg,#bfe3ff,#9fd9c0 55%,#3d8f6a);margin-bottom:22px"></div>
+    <p>The cabin sits at the end of a gravel road, ten minutes from the nearest town. We packed light: books, a kettle and
+    <span id="lnk" style="color:#0a62d6;text-decoration:underline;background:rgba(10,98,214,.1);border-radius:3px">the trail map for the north shore</span>,
+    which turned out to be the best thing we brought.</p>
+  </div>`;
+
+// Phone screens that aren't the app: what the extension does on the phone.
+function lockScreen() {
+  return `<div style="position:absolute;inset:0;background:radial-gradient(90% 60% at 30% 10%,#2c6b4c,transparent 70%),radial-gradient(80% 60% at 90% 90%,#21456b,transparent 70%),#0d1713"></div>
+    <div class="sbar" style="position:relative;color:#fff"><span>10:30</span><span class="icons">${statusIcons("#fff")}</span></div>
+    <div style="position:relative;text-align:center;color:#fff;margin-top:70px;font:300 96px/1 'Google Sans',system-ui">10:30</div>
+    <div style="position:relative;text-align:center;color:rgba(255,255,255,.85);margin-top:12px;font:500 17px system-ui">Tuesday, 10 November</div>
+    <div style="position:absolute;left:16px;right:16px;top:430px;height:220px;border-radius:30px;overflow:hidden;color:#fff">
+      <div style="position:absolute;inset:-20px;background:${art};filter:blur(16px) brightness(.62)"></div>
+      <div style="position:relative;padding:22px 22px 0;display:flex;gap:14px;align-items:center">
+        <div style="width:56px;height:56px;border-radius:12px;background:${art};box-shadow:0 4px 12px rgba(0,0,0,.3)"></div>
+        <div style="flex:1"><div style="font:600 19px system-ui">Golden Hour</div><div style="font:400 15px system-ui;opacity:.85;margin-top:3px">The Sunsets · in your browser</div></div>
+        <div style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center"><img src="${EXT}icon-32.png" style="width:20px;height:20px;border-radius:5px"></div>
+      </div>
+      <div style="position:relative;margin:26px 22px 0;height:6px">
+        <svg width="100%" height="10" viewBox="0 0 330 10" preserveAspectRatio="none" style="position:absolute;top:-2px"><path d="M0 5 Q 6 0 12 5 T 24 5 T 36 5 T 48 5 T 60 5 T 72 5 T 84 5 T 96 5 T 108 5 T 120 5" stroke="#fff" stroke-width="3" fill="none"/><line x1="122" y1="5" x2="330" y2="5" stroke="rgba(255,255,255,.4)" stroke-width="3"/><circle cx="122" cy="5" r="5" fill="#fff"/></svg>
+      </div>
+      <div style="position:relative;display:flex;justify-content:center;align-items:center;gap:46px;margin-top:30px">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="#fff"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+        <div style="width:64px;height:64px;border-radius:22px;background:#fff;display:grid;place-items:center"><svg width="30" height="30" viewBox="0 0 24 24" fill="#3a1d5e"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg></div>
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="#fff"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z"/></svg>
+      </div>
+    </div>
+`;
+}
+function phoneBrowser() {
+  return `<div style="position:absolute;inset:0;background:#fff"></div><div class="sbar" style="position:relative;background:#fff;color:#1a1a1a"><span>10:30</span><span class="icons">${statusIcons("#1a1a1a")}</span></div>
+    <div style="position:relative;background:#fff;padding:8px 14px 12px"><div style="height:44px;border-radius:22px;background:#eef1f4;display:flex;align-items:center;gap:10px;padding:0 16px;font:400 15px system-ui;color:#333">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="#777"><path d="M6 10V7a6 6 0 1 1 12 0v3h1v12H5V10zm2 0h8V7a4 4 0 1 0-8 0z"/></svg>maps.example.com/north-shore</div></div>
+    <div style="position:relative;height:420px;background:linear-gradient(160deg,#d8efe1,#b7e0c9);overflow:hidden">
+      <svg width="412" height="420" viewBox="0 0 412 420" style="position:absolute;inset:0"><path d="M-20 300 C 80 240 120 330 220 260 S 360 180 440 220" stroke="#fff" stroke-width="16" fill="none"/><path d="M60 -10 C 90 120 40 200 130 300 S 200 420 180 440" stroke="#fff" stroke-width="10" fill="none"/>
+      <path d="M150 140 C 190 110 260 120 300 160 C 330 200 300 250 250 250 C 190 250 120 190 150 140z" fill="#8fc9e8"/>
+      <path d="M140 300 L 200 255 L 255 205 L 300 170" stroke="#0da457" stroke-width="5" stroke-dasharray="2 10" stroke-linecap="round" fill="none"/>
+      <circle cx="300" cy="170" r="13" fill="#0da457" stroke="#fff" stroke-width="4"/></svg></div>
+    <div style="position:relative;background:#fff;padding:22px 22px 0;font-family:system-ui">
+      <div style="font:700 24px system-ui;letter-spacing:-.01em">North shore trail</div>
+      <div style="font:400 15px system-ui;color:#555;margin-top:6px">6.2 km loop · 2 h · easy</div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <div style="padding:10px 18px;border-radius:20px;background:#0b6b3a;color:#fff;font:600 14px system-ui">Directions</div>
+        <div style="padding:10px 18px;border-radius:20px;background:#e6efe9;color:#0b3b22;font:600 14px system-ui">Save</div></div>
+      <div style="margin-top:22px;font:400 15px/1.6 system-ui;color:#333">A gentle loop around the north shore with two lookouts and a picnic spot halfway.</div>
+    </div>`;
+}
+
+// The wireframe ring from the Play Store screenshots.
+function spiro(cx, cy, r, color, n = 60, width = 1.1) {
+  const rings = Array.from({ length: n }, (_, i) =>
+    `<ellipse cx="0" cy="0" rx="${r}" ry="${r * 0.42}" transform="rotate(${(180 / n) * i}) translate(${r * 0.18} 0)" />`).join("");
+  return `<svg class="spiro" style="left:${cx - r * 1.25}px;top:${cy - r * 1.25}px" width="${r * 2.5}" height="${r * 2.5}"
+    viewBox="${-r * 1.25} ${-r * 1.25} ${r * 2.5} ${r * 2.5}"><g fill="none" stroke="${color}" stroke-width="${width}">${rings}</g></svg>`;
+}
+// On cream: the app icon (green tile). On dark: the extension's white logo.
+const brand = (size, icon, gap = 12, appIcon = false) =>
+  `<div class="brand" style="font-size:${size}px;gap:${gap}px"><img src="${appIcon ? ICON + "logo_droid_greenbg.svg" : EXT + "icon-128.png"}"
+    style="width:${icon}px;height:${icon}px;${appIcon ? `border-radius:${icon * 0.24}px` : ""}">Mac n Droid</div>`;
+const softShadow = "filter:drop-shadow(0 30px 40px rgba(40,30,20,.18)) drop-shadow(0 8px 14px rgba(40,30,20,.12))";
+const darkShadow = "filter:drop-shadow(0 30px 50px rgba(0,0,0,.45)) drop-shadow(0 8px 16px rgba(0,0,0,.3))";
+
+const head = (top, h1, p, size = 76, psize = 34, width = "") =>
+  `<div class="head" style="top:${top}px;${width}"><h1 style="font-size:${size}px">${h1}</h1>${p ? `<p style="font-size:${psize}px">${p}</p>` : ""}</div>`;
+const glow = (x, y, r, c) => `<div class="glow" style="left:${x - r}px;top:${y - r}px;width:${2 * r}px;height:${2 * r}px;background:${c}"></div>`;
+
+const scenes = {
+  // ——— Google Play (1080 × 1920) ———
+  "play-1-notifications": () => `
+    ${glow(540, 1200, 520, "#bfeccf")}
+    ${head(130, "Your phone's notifications,<br>on your Mac", "Read and reply without picking up your phone.")}
+    <div class="abs shadow-device" style="left:-80px;top:470px">${laptop(notch("large") + macWindow("mac-notifications.png", 256, 150), { target: 1240 })}</div>
+    <div class="abs shadow-device" style="left:630px;top:1090px">${phone("android-home.png", { target: 400 })}</div>`,
+  "play-2-clipboard": () => `
+    ${glow(540, 1300, 520, "#bfeccf")}
+    ${head(130, "Copy on one,<br>paste on the other", "Your clipboard follows you between phone and Mac.")}
+    <div class="abs shadow-device" style="left:200px;top:420px">${phone("android-clipboard.png", { target: 680 })}</div>`,
+  "play-3-files": () => `
+    ${glow(540, 1300, 520, "#bfeccf")}
+    ${head(130, "Send files<br>both ways", "Photos, PDFs and folders, straight over your Wi-Fi.")}
+    <div class="abs shadow-device" style="left:200px;top:420px">${phone("android-files.png", { target: 680 })}</div>`,
+  "play-4-apps": () => `
+    ${glow(540, 1300, 520, "#bfeccf")}
+    ${head(130, "You choose what<br>reaches your Mac", "Turn apps on or off. They still notify you on the phone.")}
+    <div class="abs shadow-device" style="left:200px;top:420px">${phone("android-notifications.png", { target: 680 })}</div>`,
+  "play-5-menubar": () => `
+    ${glow(540, 1100, 560, "#bfeccf")}
+    ${head(130, "Your phone,<br>one click away", "Battery, music and notifications in your Mac's menu bar.")}
+    <div class="abs shadow-device" style="left:70px;top:450px;width:940px;height:1080px;border-radius:44px;overflow:hidden">
+      <div class="wallpaper"></div>
+      <div style="position:absolute;left:0;top:0;width:${940 / 1.5}px;height:${1080 / 1.5}px;transform:scale(1.5);transform-origin:0 0">
+        ${macMenubar().replace('class="menubar"', 'class="menubar" style="justify-content:flex-end"').replace(/<div class="l">[\s\S]*?<\/div>/, "")}
+        <div class="popover" style="right:54px;top:44px;width:340px"><img src="${S}mac-menubar.png" style="width:340px"></div>
+      </div>
+    </div>
+    <div class="abs shadow-device" style="left:40px;top:1180px">${phone("android-home.png", { target: 320 })}</div>`,
+  "play-6-dark": () => `
+    ${glow(540, 1200, 520, "#1f5a3b")}
+    ${head(130, "Made for Android,<br>light or dark", "Material You colours that follow your phone's theme.")}
+    <div class="abs shadow-device" style="left:70px;top:470px">${phone("android-home-dark.png", { dark: true, target: 470 })}</div>
+    <div class="abs shadow-device" style="left:540px;top:600px">${phone("android-clipboard-dark.png", { dark: true, target: 470 })}</div>`,
+  "play-feature-graphic": () => `
+    ${spiro(790, 270, 215, "#d3ccc4")}
+    <div class="abs" style="left:64px;top:96px;width:430px">
+      ${brand(22, 40, 12, true)}
+      <div class="display-h" style="font-size:58px;margin-top:26px">Connect your<br>Mac and Android</div>
+      <div class="sub" style="font-size:20px;margin-top:20px">Notifications, texts, files and clipboard.<br>Free, with no account.</div>
+    </div>
+    <div class="abs" style="left:470px;top:78px;${softShadow}">${laptop(macWindow("mac-overview.png", 256, 110), { target: 500, wall: "teal" })}</div>
+    <div class="abs" style="left:846px;top:132px;${softShadow}">${phone("android-home.png", { target: 150 })}</div>`,
+  "play-icon": () => `<img src="${ICON}logo_droid_greenbg.svg" style="width:512px;height:512px">`,
+
+  // ——— Chrome Web Store, Edge Add-ons, Firefox Add-ons (1280 × 800) ———
+  "ext-1-music": () => `
+    ${glow(640, 600, 460, "#bfeccf")}
+    ${head(52, "Control browser music and videos from your phone", "", 46)}
+    <div class="abs shadow-device" style="left:120px;top:160px">${laptop(browser(110, 70, 1290, 860, { tab: "Golden Hour · The Sunsets", fav: art, url: "music.example.com/golden-hour", content: musicPage() }), { target: 860 })}</div>
+    <div class="abs shadow-device" style="left:900px;top:250px">${phone(null, { target: 250, screenHTML: lockScreen() })}</div>`,
+  "ext-2-links": () => `
+    ${glow(640, 600, 460, "#bfeccf")}
+    ${head(52, "Open any page or link on your phone", "", 46)}
+    <div class="abs shadow-device" style="left:120px;top:160px">${laptop(browser(110, 70, 1290, 860, { tab: "A slow weekend at the lake", fav: "linear-gradient(#9fd9c0,#3d8f6a)", url: "journal.example.com/lake-weekend", content: articlePage })
+      + `<div class="menu" style="left:780px;top:640px;z-index:25"><div>Open Link in New Tab</div><div>Open Link in New Window</div><hr><div>Copy Link Address</div><hr>
+         <div class="on"><img src="${EXT}icon-16.png" style="width:16px;height:16px;border-radius:3px">Open Link on Your Phone</div><hr><div>Inspect</div></div>`, { target: 860 })}</div>
+    <div class="abs shadow-device" style="left:900px;top:250px">${phone(null, { target: 250, screenHTML: phoneBrowser() })}</div>`,
+  "ext-3-popup": () => `
+    ${glow(640, 620, 460, "#bfeccf")}
+    <div class="abs" style="left:80px;top:250px;width:420px">
+      <div style="font-size:50px;font-weight:700;letter-spacing:-.025em;line-height:1.06">See what your phone can control</div>
+      <div style="font-size:22px;color:var(--ink-2);margin-top:18px;line-height:1.35">Click the toolbar button to check what's playing, or open the page on your phone.</div>
+    </div>
+    <div class="abs" style="left:560px;top:100px;width:660px;height:600px;border-radius:22px;overflow:hidden;box-shadow:0 30px 70px rgba(20,60,35,.25)">
+      <div class="wallpaper"></div>
+      ${browser(28, 28, 604, 620, { tab: "Golden Hour · The Sunsets", fav: art, url: "music.example.com/golden-hour", content: musicPage(false) })}
+      <div class="abs" style="left:262px;top:118px;width:${288 * 1.25}px;border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 0 0 .6px rgba(0,0,0,.2),0 24px 50px rgba(0,0,0,.28)">
+        <img src="${S}ext-popup.png" style="width:100%"></div>
+    </div>`,
+  "ext-4-setup": () => `
+    ${glow(640, 620, 460, "#bfeccf")}
+    ${head(52, "Add it from the Mac n Droid app", "", 46)}
+    <div class="abs shadow-device" style="left:120px;top:150px">${laptop(macWindow("mac-overview.png", 256, 120)
+      + `<div style="position:absolute;inset:0;background:rgba(0,0,0,.12)"></div>`
+      + `<div class="win" style="left:476px;top:230px;width:560px;border-radius:22px;background:#fff"><img src="${S}mac-extension-sheet.png" style="width:560px"></div>`, { target: 1040 })}</div>`,
+  "ext-promo-small": () => `
+    ${spiro(380, 250, 150, "rgba(245,241,236,.13)")}
+    <div class="abs" style="left:32px;top:34px">${brand(19, 34, 10)}</div>
+    <div class="abs display-h" style="left:32px;top:106px;width:380px;font-size:36px">Browser music,<br>on your phone</div>
+    <div class="abs sub" style="left:32px;top:200px;width:380px;font-size:16px">Play, pause and skip from your Android phone.</div>`,
+  "ext-promo-marquee": () => `
+    ${spiro(1060, 300, 260, "rgba(245,241,236,.12)")}
+    <div class="abs" style="left:84px;top:132px;width:600px">
+      ${brand(26, 46, 14)}
+      <div class="display-h" style="font-size:58px;margin-top:34px">Your browser's music,<br>on your phone</div>
+      <div class="sub" style="font-size:23px;margin-top:24px">Play, pause and skip from your Android phone.<br>Open any page on it in one click.</div>
+    </div>
+    <div class="abs" style="left:660px;top:92px;${darkShadow}">${laptop(browser(110, 70, 1290, 860, { tab: "Golden Hour · The Sunsets", fav: art, url: "music.example.com/golden-hour", content: musicPage() }), { target: 620, wall: "teal" })}</div>
+    <div class="abs" style="left:1150px;top:140px;${darkShadow}">${phone(null, { target: 180, screenHTML: lockScreen() })}</div>`,
+};
+
+const name = location.hash.slice(1) || "play-1-notifications";
+const cls = name === "play-6-dark" ? "dark" : name === "play-feature-graphic" ? "cream" : /promo/.test(name) ? "ink" : "";
+document.getElementById("root").innerHTML = `<div class="canvas ${cls}">${scenes[name]()}</div>`;
+</script>
+</body>
+</html>
