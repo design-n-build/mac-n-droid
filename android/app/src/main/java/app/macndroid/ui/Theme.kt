@@ -32,7 +32,7 @@ private val DarkFallback = darkColorScheme(
 fun MacNDroidTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val ctx = LocalContext.current
-    val base = when {
+    val base = previewColors?.invoke(dark) ?: when {
         Build.VERSION.SDK_INT >= 31 -> if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
         dark -> DarkFallback
         else -> LightFallback
@@ -42,6 +42,10 @@ fun MacNDroidTheme(content: @Composable () -> Unit) {
     val scheme = base.copy(background = base.surfaceContainer, surface = base.surfaceContainer)
     MaterialTheme(colorScheme = scheme, content = content)
 }
+
+/** Lets the store-screenshot test (src/test) choose a wallpaper palette. Always null in the app. */
+@androidx.annotation.VisibleForTesting
+internal var previewColors: ((dark: Boolean) -> androidx.compose.material3.ColorScheme)? = null
 
 /** Settings rows and list cards, like Gboard's: a step brighter than the page in both light and dark. */
 val tileColor: Color

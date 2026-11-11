@@ -30,9 +30,11 @@ enum Pane: String, CaseIterable, Identifiable {
 
 struct MainView: View {
     @EnvironmentObject private var state: AppState
-    @State private var selection: Pane? = .overview
+    @State private var selection: Pane?
     @State private var dropTargeted = false
     @State private var showBrowserSheet = false
+
+    init(initialPane: Pane = .overview) { _selection = State(initialValue: initialPane) }
 
     var body: some View {
         NavigationSplitView {

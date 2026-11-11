@@ -173,11 +173,11 @@ object LeftBehind {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(c, MacNDroidApp.CH_LEFT_BEHIND)
             .setSmallIcon(R.drawable.ic_stat_logo)
-            .setContentTitle("You left $mac behind")
-            .setContentText("Your phone lost touch with it as you walked away.")
+            .setContentTitle("Did you leave $mac behind?")
+            .setContentText("You've left the Wi-Fi network it's on.")
             .setStyle(NotificationCompat.BigTextStyle().bigText(
-                "Your phone lost touch with $mac as you walked away. It was awake and still connected a moment ago. " +
-                    "You can turn these alerts off in Mac n Droid → Sync."))
+                "Your phone left the Wi-Fi network that $mac is on and can't reach it any more. $mac was awake " +
+                    "and connected a moment ago. You can turn these alerts off in Mac n Droid → Sync."))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(open)

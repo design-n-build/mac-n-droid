@@ -79,6 +79,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var keyObserver: Any?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        StoreShots.runIfRequested()
+        #endif
         keyObserver = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { _ in
             WindowPin.apply()
         }

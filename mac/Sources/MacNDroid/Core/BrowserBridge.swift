@@ -31,8 +31,23 @@ final class BrowserBridge {
     var onSendText: ((String) -> Void)?
 
     /// A file arriving from the Share extension, in pieces.
-    private struct Upload { var current: (url: URL, handle: FileHandle)?; var done: [URL] = [] }
+    private struct Upload { var current: (url: URL, handle: FileHandle, folder: Bool)?; var done: [URL] = [] }
     private var uploads: [ObjectIdentifier: Upload] = [:]
+    private static func unzip(_ zip: URL) -> URL? {
+        let fm = FileManager.default
+        let out = zip.deletingLastPathComponent().appendingPathComponent("unpacked", isDirectory: true)
+        defer { try? fm.removeItem(at: zip) }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        p.arguments = ["-x", "-k", zip.path, out.path]
+        guard (try? p.run()) != nil else { return nil }
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else { return nil }
+        let items = ((try? fm.contentsOfDirectory(at: out, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.lastPathComponent != "__MACOSX" }
+        return items.count == 1 ? items[0] : out
+    }
+
     private static let inbox = FileManager.default.temporaryDirectory.appendingPathComponent("Send to Phone", isDirectory: true)
     private var status: [String: Any] = ["t": "status", "connected": false, "phone": ""]
 
@@ -153,13 +168,15 @@ final class BrowserBridge {
             let url = dir.appendingPathComponent(name.isEmpty || name.hasPrefix(".") ? "File" : name)
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             FileManager.default.createFile(atPath: url.path, contents: nil)
-            u.current = (try? FileHandle(forWritingTo: url)).map { (url, $0) }
+            u.current = (try? FileHandle(forWritingTo: url)).map { (url, $0, m["folder"] as? Bool == true) }
             uploads[id] = u
         case "file_end":
             let id = ObjectIdentifier(c)
             if let cur = uploads[id]?.current {
                 try? cur.handle.close()
-                uploads[id]?.done.append(cur.url)
+                // A folder from the Share menu arrives zipped: unpack it next to the zip.
+                let url = cur.folder ? Self.unzip(cur.url) : cur.url
+                if let url { uploads[id]?.done.append(url) }
                 uploads[id]?.current = nil
             }
         case "files_done":

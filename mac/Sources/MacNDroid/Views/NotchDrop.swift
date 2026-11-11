@@ -111,15 +111,13 @@ final class NotchDropController {
 
     private func dropped(_ urls: [URL], _ link: URL?) {
         guard let state else { return }
-        let files = urls.filter { !$0.hasDirectoryPath }
+        let files = urls.filter(\.isFileURL)
         withAnimation(.smooth(duration: 0.25)) {
             model.sending = true
             model.sentText = if !files.isEmpty {
-                files.count == 1 ? "Sending \(files[0].lastPathComponent)" : "Sending \(files.count) files"
-            } else if link != nil {
-                "Opening on \(model.phoneName)"
+                files.count == 1 ? "Sending \(files[0].lastPathComponent)" : "Sending \(files.count) items"
             } else {
-                "Folders can't be sent yet"
+                "Opening on \(model.phoneName)"
             }
         }
         if !files.isEmpty { state.sendFiles(files) } else if let link { state.sendLink(link) }

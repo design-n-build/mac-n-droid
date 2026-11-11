@@ -42,7 +42,7 @@ class MacNDroidApp : Application() {
                     setSound(null, null)
                 },
                 NotificationChannel(CH_LEFT_BEHIND, "Left-behind alerts", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Tells you when you walk away from your Mac while it's awake"
+                    description = "Tells you when you leave the Wi-Fi network your Mac is on while it's awake"
                     setSound(raw(R.raw.mnd_left_behind), soft)
                     enableVibration(true)
                     vibrationPattern = longArrayOf(0, 250, 150, 250)

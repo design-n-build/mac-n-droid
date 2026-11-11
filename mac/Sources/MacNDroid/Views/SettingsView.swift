@@ -2,12 +2,16 @@ import ServiceManagement
 import SwiftUI
 
 struct SettingsView: View {
+    @State private var tab: Int
+
+    init(initialTab: Int = 0) { _tab = State(initialValue: initialTab) }
+
     var body: some View {
-        TabView {
-            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
-            SyncSettings().tabItem { Label("Sync", systemImage: "arrow.triangle.2.circlepath") }
-            AppFilterSettings().tabItem { Label("Apps", systemImage: "square.grid.2x2") }
-            AboutSettings().tabItem { Label("About", systemImage: "info.circle") }
+        TabView(selection: $tab) {
+            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }.tag(0)
+            SyncSettings().tabItem { Label("Sync", systemImage: "arrow.triangle.2.circlepath") }.tag(1)
+            AppFilterSettings().tabItem { Label("Apps", systemImage: "square.grid.2x2") }.tag(2)
+            AboutSettings().tabItem { Label("About", systemImage: "info.circle") }.tag(3)
         }
         .frame(width: 520, height: 460)
     }
@@ -99,7 +103,7 @@ private struct SyncSettings: View {
             } header: {
                 Text("Left Behind")
             } footer: {
-                Text("Plays a chime if this Mac moves to a different network without your phone, usually right after you open it somewhere else. Your phone gives the same alert if you walk away from this Mac while it's awake.")
+                Text("Plays a chime if this Mac joins a different network and your phone isn't on it, usually right after you open it somewhere else. Your phone plays one if it leaves the Wi-Fi network this Mac is on while the Mac is awake. It works from Wi-Fi, not distance, so the alert comes once you're out of Wi-Fi range.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {

@@ -37,7 +37,7 @@ CLIPBOARD
 Copy on one device, paste on the other. The last 20 things you copied are kept on both, so you can copy them again. Passwords from password managers are never sent.
 
 FILES, PHOTOS AND LINKS
-Send files and photos to your Mac from the share sheet or a Quick Settings tile. On the Mac, drag files onto the notch or use the Share menu to send them to your phone. Share a link with "Open on Mac" to open it in your Mac's browser, and send the page you're reading on the Mac to your phone.
+Send files, photos and whole folders to your Mac from the app, the share sheet or a Quick Settings tile. On the Mac, drag files or folders onto the notch or use the Share menu to send them to your phone. Share a link with "Open on Mac" to open it in your Mac's browser, and send the page you're reading on the Mac to your phone.
 
 SCREENSHOTS
 Screenshots you take on your phone can appear on your Mac straight away.
@@ -52,7 +52,7 @@ AND MORE
 • Phone battery on your Mac
 • Ring your phone from the Mac to find it
 • Live activities for timers, rides, deliveries and downloads next to the notch
-• An alert if you walk away and leave your Mac or phone behind
+• An alert when you leave Wi-Fi range of your Mac, so you don't leave it behind
 
 PRIVATE BY DESIGN
 • No account and no sign-in

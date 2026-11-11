@@ -103,6 +103,7 @@ class SyncService : Service() {
                 }.distinct()
                 files.send(uris)
             }
+            ACTION_SEND_FOLDER -> intent.data?.let(files::sendFolder)
             ACTION_STOP_RING -> ringer.stop(notifyMac = true)
             ACTION_TEST_RING -> {
                 ringer.start()
@@ -259,6 +260,7 @@ class SyncService : Service() {
     companion object {
         const val NOTIF_ID = 1
         const val ACTION_SEND_URIS = "app.macndroid.SEND_URIS"
+        const val ACTION_SEND_FOLDER = "app.macndroid.SEND_FOLDER"
         const val ACTION_STOP_RING = "app.macndroid.STOP_RING"
         const val ACTION_RECONNECT = "app.macndroid.RECONNECT"
         const val ACTION_TEST_RING = "app.macndroid.TEST_RING"
@@ -283,6 +285,13 @@ class SyncService : Service() {
             val cd = ClipData.newRawUri("files", uris.first())
             uris.drop(1).forEach { cd.addItem(ClipData.Item(it)) }
             i.clipData = cd
+            ContextCompat.startForegroundService(ctx, i)
+        }
+
+        /** A folder from the system folder picker (a document tree). */
+        fun sendFolder(ctx: Context, tree: Uri) {
+            val i = Intent(ctx, SyncService::class.java).setAction(ACTION_SEND_FOLDER).setData(tree)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             ContextCompat.startForegroundService(ctx, i)
         }
     }

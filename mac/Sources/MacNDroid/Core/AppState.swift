@@ -83,7 +83,8 @@ final class AppState: ObservableObject {
     private let notifier = Notifier()
     private let leftBehind = LeftBehindMonitor()
     private let clipboard = ClipboardMonitor()
-    private var incoming: [String: (handle: FileHandle, url: URL, isClip: Bool)] = [:]
+    /// `folder`: the name of a folder that arrives zipped and is unpacked when complete.
+    private var incoming: [String: (handle: FileHandle, url: URL, isClip: Bool, folder: String?)] = [:]
     private let fileQueue = DispatchQueue(label: "app.macndroid.files")
     private var pingTimer: Timer?
     private var started = false
@@ -832,35 +833,100 @@ final class AppState: ObservableObject {
         NSApp.activate(ignoringOtherApps: true)
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         panel.prompt = "Send"
-        panel.message = "Choose files to send to \(phone?.name ?? "your phone")"
+        panel.message = "Choose files or folders to send to \(phone?.name ?? "your phone")"
         if panel.runModal() == .OK { sendFiles(panel.urls) }
     }
 
     func sendFiles(_ urls: [URL]) {
         guard let conn = active else { return }
-        for url in urls where !url.hasDirectoryPath {
-            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+        for url in urls {
             let id = UUID().uuidString
+            let peer = phone?.name ?? "phone"
+            if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                sendFolder(url, id: id, peer: peer, over: conn)
+                continue
+            }
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
             transfers.insert(Transfer(id: id, name: url.lastPathComponent, size: size, direction: .toPhone,
-                                      localURL: url, peer: phone?.name ?? "phone"), at: 0)
+                                      localURL: url, peer: peer), at: 0)
             fileQueue.async { self.stream(url, id: id, size: size, over: conn) }
         }
     }
 
+    /// A folder travels as one zip (`folder: true`); the phone unpacks it into a folder again.
+    /// An older phone app just saves the zip.
+    private func sendFolder(_ folder: URL, id: String, peer: String, over conn: PhoneConnection) {
+        let name = folder.lastPathComponent
+        transfers.insert(Transfer(id: id, name: name, size: 0, direction: .toPhone, localURL: folder, peer: peer), at: 0)
+        // Zip off the file queue so incoming messages keep flowing meanwhile.
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let zip = Self.zipFolder(folder) else {
+                DispatchQueue.main.async {
+                    self.updateTransfer(id) { $0.state = .failed }
+                    Feedback.play(.failed)
+                }
+                return
+            }
+            let size = (try? zip.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+            DispatchQueue.main.async { self.updateTransfer(id) { $0.size = size } }
+            self.fileQueue.async {
+                self.stream(zip, id: id, size: size, over: conn, sendName: name + ".zip", folder: true, label: name)
+                try? FileManager.default.removeItem(at: zip)
+            }
+        }
+    }
+
+    /// Zips a folder (top-level folder included) into a temporary file.
+    private static func zipFolder(_ folder: URL) -> URL? {
+        var result: URL?
+        var error: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: folder, options: .forUploading, error: &error) { zip in
+            let dest = FileManager.default.temporaryDirectory.appendingPathComponent("macndroid-\(UUID().uuidString).zip")
+            if (try? FileManager.default.copyItem(at: zip, to: dest)) != nil { result = dest }
+        }
+        return result
+    }
+
+    /// Unpacks a folder received as a zip into Downloads. Returns the new folder.
+    private func unpackFolder(_ zip: URL, name: String) -> URL? {
+        let fm = FileManager.default
+        let downloads = fm.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+        let tmp = downloads.appendingPathComponent(".macndroid-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: tmp); try? fm.removeItem(at: zip) }
+        guard (try? fm.createDirectory(at: tmp, withIntermediateDirectories: true)) != nil else { return nil }
+        // ditto drops "../" parts, so nothing lands outside the temporary folder.
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        p.arguments = ["-x", "-k", zip.path, tmp.path]
+        guard (try? p.run()) != nil else { return nil }
+        p.waitUntilExit()
+        guard p.terminationStatus == 0 else { return nil }
+        let items = ((try? fm.contentsOfDirectory(at: tmp, includingPropertiesForKeys: [.isDirectoryKey])) ?? [])
+            .filter { $0.lastPathComponent != "__MACOSX" }
+        // Usually the zip holds one top-level folder; otherwise the temporary folder becomes it.
+        let isDir = items.count == 1 && (try? items[0].resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+        let source = isDir ? items[0] : tmp
+        let dest = uniqueURL(in: downloads, name: name)
+        guard (try? fm.moveItem(at: source, to: dest)) != nil else { return nil }
+        return dest
+    }
+
     /// Streams a file in 256 KiB chunks, waiting for each to be sent (simple flow control).
-    private func stream(_ url: URL, id: String, size: Int64, over conn: PhoneConnection, clip: Bool = false) {
+    private func stream(_ url: URL, id: String, size: Int64, over conn: PhoneConnection, clip: Bool = false,
+                        sendName: String? = nil, folder: Bool = false, label: String? = nil) {
         guard let handle = try? FileHandle(forReadingFrom: url) else {
             DispatchQueue.main.async { self.updateTransfer(id) { $0.state = .failed } }
             return
         }
         defer { try? handle.close() }
-        let mime = url.mimeType
+        let mime = folder ? "application/zip" : url.mimeType
         let sema = DispatchSemaphore(value: 0)
         var ok = true
-        var start: Message = ["t": "file_start", "id": id, "name": url.lastPathComponent, "size": size, "mime": mime]
+        var start: Message = ["t": "file_start", "id": id, "name": sendName ?? url.lastPathComponent, "size": size, "mime": mime]
         if clip { start["clip"] = true }
+        if folder { start["folder"] = true }
         conn.send(start) { ok = $0; sema.signal() }
         sema.wait()
         var sent: Int64 = 0
@@ -880,7 +946,7 @@ final class AppState: ObservableObject {
         DispatchQueue.main.async {
             self.updateTransfer(id) { $0.bytes = final; $0.state = ok ? .done : .failed }
             guard !clip else { return }
-            self.sentBatch.append((url.lastPathComponent, ok))
+            self.sentBatch.append((label ?? url.lastPathComponent, ok))
             // One sound and one message for a batch, once the last file is through.
             guard !self.transfers.contains(where: { $0.direction == .toPhone && $0.state == .active }) else { return }
             let batch = self.sentBatch
@@ -915,17 +981,19 @@ final class AppState: ObservableObject {
         let name = (rawName as NSString).lastPathComponent.replacingOccurrences(of: ":", with: "-")
         let size = (msg["size"] as? NSNumber)?.int64Value ?? 0
         let isClip = msg["clip"] as? Bool == true
-        let dir = isClip ? FileManager.default.temporaryDirectory
+        let folder: String? = msg["folder"] as? Bool == true
+            ? { let n = (name as NSString).deletingPathExtension; return n.isEmpty ? "Folder" : n }() : nil
+        let dir = isClip || folder != nil ? FileManager.default.temporaryDirectory
             : FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-        let url = uniqueURL(in: dir, name: isClip ? "macndroid-clip-\(id).png" : name)
+        let url = uniqueURL(in: dir, name: isClip ? "macndroid-clip-\(id).png" : folder != nil ? "macndroid-folder-\(id).zip" : name)
         FileManager.default.createFile(atPath: url.path, contents: nil)
         guard let handle = try? FileHandle(forWritingTo: url) else { return }
-        incoming[id] = (handle, url, isClip)
+        incoming[id] = (handle, url, isClip, folder)
         guard !isClip else { return }
         let peer = phone?.name ?? "phone"
         DispatchQueue.main.async {
-            self.transfers.insert(Transfer(id: id, name: url.lastPathComponent, size: size, direction: .fromPhone,
-                                           localURL: url, peer: peer), at: 0)
+            self.transfers.insert(Transfer(id: id, name: folder ?? url.lastPathComponent, size: size, direction: .fromPhone,
+                                           localURL: folder == nil ? url : nil, peer: peer), at: 0)
         }
     }
 
@@ -953,6 +1021,24 @@ final class AppState: ObservableObject {
                 self.recordClip { $0.addImage(data, fromPhone: true) }
                 if NotchStyle.isOn {
                     NotchController.shared.flash(symbol: "photo.on.rectangle", text: "Image copied from \(self.phone?.name ?? "phone")")
+                }
+            }
+            return
+        }
+        if let folder = file.folder {
+            let result = unpackFolder(file.url, name: folder)
+            DispatchQueue.main.async {
+                self.updateTransfer(id) {
+                    $0.state = result == nil ? .failed : .done
+                    $0.bytes = max($0.bytes, $0.size)
+                    $0.localURL = result
+                    if let result { $0.name = result.lastPathComponent }
+                }
+                if let result {
+                    self.receivedBatch.append(result)
+                    self.scheduleReceivedSummary()
+                } else {
+                    Feedback.play(.failed)
                 }
             }
             return
@@ -1024,3 +1110,121 @@ extension URL {
         UTType(filenameExtension: pathExtension)?.preferredMIMEType ?? "application/octet-stream"
     }
 }
+
+#if DEBUG
+// MARK: Sample data for store screenshots (debug builds only, see Debug/StoreShots.swift)
+
+extension AppState {
+    func loadStoreDemo() {
+        let now = Date()
+        func ago(_ m: Double) -> Date { now.addingTimeInterval(-m * 60) }
+        status = .connected
+        phone = PhoneInfo(name: "Phone", model: "Android phone", os: "Android 16")
+        lastPhoneName = "Phone"
+        battery = 82
+        charging = false
+        func notif(_ id: String, _ pkg: String, _ app: String, _ title: String, _ text: String, _ m: Double,
+                   _ cat: AppCategory, reply: Bool = false, otp: String? = nil) -> PhoneNotification {
+            var n = PhoneNotification(id: id, pkg: pkg, app: app, title: title, text: text, time: ago(m), isCall: false,
+                                      actions: reply ? [NotifAction(id: 0, title: "Reply", isReply: true)] : [], otp: otp)
+            n.category = cat
+            return n
+        }
+        notifications = [
+            notif("1", "demo.messages", "Messages", "Maya", "Landing at 6:40. Can you pick me up from Terminal 2?", 2, .messages, reply: true),
+            notif("2", "demo.bank", "Bank", "Your sign-in code", "Use 482913 to sign in. Don't share this code with anyone.", 6, .finance, otp: "482913"),
+            notif("3", "demo.mail", "Mail", "Design review moved to 4 PM", "Hi team, the review is now at 4 PM in Room 3. Agenda attached.", 18, .email),
+            notif("4", "demo.food", "Food delivery", "Your order is on its way", "Arriving in about 12 minutes.", 25, .shopping),
+            notif("5", "demo.calendar", "Calendar", "Yoga class", "Tomorrow, 7:00 to 8:00 AM", 41, .work),
+            notif("6", "demo.chat", "Chat", "Weekend trip 🏕️", "Jake: I booked the cabin for Saturday!", 55, .social, reply: true),
+        ]
+        knownApps = Dictionary(uniqueKeysWithValues: notifications.map { ($0.pkg, KnownApp(pkg: $0.pkg, name: $0.app, category: $0.category)) })
+        clipHistory = [
+            ClipItem(id: "c1", kind: .text, text: "https://maps.example.com/terminal-2-pickup", fromPhone: true, time: ago(1)),
+            ClipItem(id: "c2", kind: .text, text: "482913", fromPhone: true, time: ago(6)),
+            ClipItem(id: "c3", kind: .text, text: "Booking ref: KX7-29Q · Cabin by the lake, Sat–Sun", fromPhone: false, time: ago(22)),
+            ClipItem(id: "c4", kind: .text, text: "Let's keep the header simple: logo, one line, one button.", fromPhone: false, time: ago(48)),
+            ClipItem(id: "c5", kind: .text, text: "221B Lake View Road, Apartment 4", fromPhone: true, time: ago(95)),
+        ]
+        transfers = [
+            Transfer(id: "t1", name: "Screenshot 2026-11-10 at 9.41.png", size: 1_840_000, direction: .fromPhone, bytes: 1_840_000, state: .done, date: ago(1)),
+            Transfer(id: "t2", name: "Trip photos.zip", size: 248_000_000, direction: .toPhone, bytes: 151_000_000, state: .active, date: ago(0)),
+            Transfer(id: "t3", name: "Boarding pass.pdf", size: 320_000, direction: .toPhone, bytes: 320_000, state: .done, date: ago(30)),
+            Transfer(id: "t4", name: "IMG_2041.jpg", size: 4_200_000, direction: .fromPhone, bytes: 4_200_000, state: .done, date: ago(64)),
+            Transfer(id: "t5", name: "Invoice November.pdf", size: 210_000, direction: .toPhone, bytes: 210_000, state: .done, date: ago(130)),
+        ]
+        func ms(_ d: Date) -> Double { d.timeIntervalSince1970 * 1000 }
+        players = [NowPlaying(["active": true, "pkg": "demo.music", "id": "p1", "app": "Music", "title": "Golden Hour",
+                               "artist": "The Sunsets", "album": "Long Drive", "duration": 214_000.0, "playing": true,
+                               "position": 81_000.0, "since": ms(ago(3)), "canPrev": true, "canNext": true, "canSeek": true])].compactMap { $0 }
+        smsState = .ready
+        smsThreads = [
+            ["id": "s1", "address": "+1 555 0142", "name": "Maya", "snippet": "Landing at 6:40. Can you pick me up from Terminal 2?", "date": ms(ago(2)), "unread": 1],
+            ["id": "s2", "address": "+1 555 0178", "name": "Jake", "snippet": "See you Saturday!", "date": ms(ago(35)), "out": true],
+            ["id": "s3", "address": "+1 555 0109", "name": "Mom", "snippet": "Call me when you're free ❤️", "date": ms(ago(180))],
+            ["id": "s4", "address": "+1 555 0163", "name": "Emma", "snippet": "Sent you the slides", "date": ms(ago(60 * 26))],
+            ["id": "s5", "address": "+1 555 0120", "name": "Daniel", "snippet": "Haha that's perfect", "date": ms(ago(60 * 50)), "out": true],
+        ].compactMap { SmsThread($0) }
+        smsMessages["s1"] = [
+            SmsMessage(id: "m1", body: "Are you still okay to pick me up tonight?", date: ago(40), outgoing: false),
+            SmsMessage(id: "m2", body: "Of course! Send me your flight details.", date: ago(38), outgoing: true),
+            SmsMessage(id: "m3", body: "Flight 284, should be on time 🤞", date: ago(20), outgoing: false),
+            SmsMessage(id: "m4", body: "Landing at 6:40. Can you pick me up from Terminal 2?", date: ago(2), outgoing: false),
+        ]
+        smsSelectAddress = "+1 555 0142"
+        Net.demoComputerName = "MacBook Air"
+        addresses = ["192.168.1.24"]
+        port = 47800
+        pairingURI = "macndroid://pair?v=1&id=3f2a9c4e-demo&k=" + Data.random(32).base64URL + "&p=47800&h=192.168.1.24&n=MacBook%20Air"
+        let palette: [(String, String, NSColor, NSColor)] = [
+            ("demo.messages", "message.fill", .systemBlue, .systemTeal), ("demo.bank", "building.columns.fill", .systemIndigo, .systemPurple),
+            ("demo.mail", "envelope.fill", .systemRed, .systemOrange), ("demo.food", "takeoutbag.and.cup.and.straw.fill", .systemOrange, .systemYellow),
+            ("demo.calendar", "calendar", .systemPink, .systemRed), ("demo.chat", "bubble.left.and.bubble.right.fill", .systemGreen, .systemMint),
+            ("demo.music", "music.note", .systemPink, .systemPurple),
+        ]
+        for (pkg, symbol, a, b) in palette { icons[pkg] = Self.demoIcon(symbol, a, b) }
+        playerArt["p1"] = Self.demoArt()
+    }
+
+    /// Re-lists conversations so the Messages page opens the first one (it selects on change).
+    func storeDemoReselectThread() {
+        let t = smsThreads
+        smsSelectAddress = nil
+        smsThreads = []
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            self.smsSelectAddress = t.first?.address
+            self.smsThreads = t
+        }
+    }
+
+    /// Puts a sent file first, so the Files page switches to its Sent tab.
+    func storeDemoShowSent() {
+        let sent = transfers.filter { $0.direction == .toPhone }
+        transfers = sent + transfers.filter { $0.direction == .fromPhone }
+    }
+
+    private static func demoIcon(_ symbol: String, _ a: NSColor, _ b: NSColor) -> NSImage {
+        NSImage(size: NSSize(width: 96, height: 96), flipped: false) { r in
+            NSGradient(starting: a, ending: b)?.draw(in: NSBezierPath(ovalIn: r), angle: -60)
+            let cfg = NSImage.SymbolConfiguration(pointSize: 44, weight: .semibold).applying(.init(paletteColors: [.white]))
+            if let img = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?.withSymbolConfiguration(cfg) {
+                let s = img.size
+                img.draw(in: NSRect(x: (r.width - s.width) / 2, y: (r.height - s.height) / 2, width: s.width, height: s.height))
+            }
+            return true
+        }
+    }
+
+    private static func demoArt() -> NSImage {
+        NSImage(size: NSSize(width: 400, height: 400), flipped: false) { r in
+            NSGradient(colors: [NSColor(red: 1, green: 0.62, blue: 0.27, alpha: 1), NSColor(red: 0.93, green: 0.29, blue: 0.43, alpha: 1),
+                                NSColor(red: 0.36, green: 0.2, blue: 0.62, alpha: 1)])?.draw(in: r, angle: -70)
+            NSColor(white: 1, alpha: 0.9).setFill()
+            NSBezierPath(ovalIn: NSRect(x: 130, y: 150, width: 140, height: 140)).fill()
+            NSColor(red: 0.25, green: 0.12, blue: 0.4, alpha: 0.55).setFill()
+            NSBezierPath(rect: NSRect(x: 0, y: 0, width: 400, height: 150)).fill()
+            return true
+        }
+    }
+}
+#endif

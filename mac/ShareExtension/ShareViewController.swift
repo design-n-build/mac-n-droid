@@ -100,7 +100,15 @@ final class ShareViewController: NSViewController {
                     try await send(ws, ["t": "send_text", "text": text])
                 case .file(let url, let name):
                     files += 1
-                    try await stream(url, name: name, over: ws)
+                    if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                        // A folder goes over as a zip, and the app unpacks it again.
+                        detail.stringValue = name
+                        guard let zip = zipFolder(url) else { throw CocoaError(.fileReadUnknown) }
+                        defer { try? FileManager.default.removeItem(at: zip) }
+                        try await stream(zip, name: name + ".zip", folder: true, over: ws)
+                    } else {
+                        try await stream(url, name: name, over: ws)
+                    }
                 }
             }
             if files > 0 { try await send(ws, ["t": "files_done"]) }
@@ -113,10 +121,22 @@ final class ShareViewController: NSViewController {
         }
     }
 
-    private func stream(_ url: URL, name: String, over ws: URLSessionWebSocketTask) async throws {
+    private func zipFolder(_ folder: URL) -> URL? {
+        var result: URL?
+        var error: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: folder, options: .forUploading, error: &error) { zip in
+            let dest = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).zip")
+            if (try? FileManager.default.copyItem(at: zip, to: dest)) != nil { result = dest }
+        }
+        return result
+    }
+
+    private func stream(_ url: URL, name: String, folder: Bool = false, over ws: URLSessionWebSocketTask) async throws {
         let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-        detail.stringValue = name
-        try await send(ws, ["t": "file_begin", "name": name, "size": size])
+        if !folder { detail.stringValue = name }
+        var begin: [String: Any] = ["t": "file_begin", "name": name, "size": size]
+        if folder { begin["folder"] = true }
+        try await send(ws, begin)
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var sent = 0

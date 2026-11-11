@@ -77,8 +77,15 @@ enum Net {
     }
 
     static var computerName: String {
-        Host.current().localizedName ?? "Mac"
+        #if DEBUG
+        if let demoComputerName { return demoComputerName }
+        #endif
+        return Host.current().localizedName ?? "Mac"
     }
+    #if DEBUG
+    /// Store screenshots show a sample name instead of this Mac's.
+    static var demoComputerName: String?
+    #endif
 }
 
 enum QRCode {

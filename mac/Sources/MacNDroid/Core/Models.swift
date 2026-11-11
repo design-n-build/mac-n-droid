@@ -88,8 +88,8 @@ struct Transfer: Identifiable, Equatable {
     enum Direction { case toPhone, fromPhone }
     enum State: Equatable { case active, done, failed }
     let id: String
-    let name: String
-    let size: Int64
+    var name: String
+    var size: Int64
     let direction: Direction
     var bytes: Int64 = 0
     var state: State = .active

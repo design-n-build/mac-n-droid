@@ -1,5 +1,10 @@
 # What's new
 
+## Unreleased
+- **Send folders**, both ways. On the Mac, drag a folder onto Mac n Droid or the notch, pick one with
+  **Choose Files…**, or use Share → Send to Phone in Finder. On the phone, tap **Send files** →
+  **Folder**. The folder arrives with its subfolders, in Downloads (on the phone, Downloads › Mac n Droid).
+
 ## 0.12.0 (Mac, Android and browser extension)
 - **Add the browser extension from the Mac app:** click **Browser Extension** in the sidebar (or Settings →
   Sync → Browser → **Add to Browser…**). It explains what the extension does, then opens your browser's

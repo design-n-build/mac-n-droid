@@ -281,6 +281,10 @@ private fun HomeScreen() {
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) SyncService.sendUris(ctx, uris)
     }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) SyncService.sendFolder(ctx, tree)
+    }
+    var sendMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
@@ -309,12 +313,16 @@ private fun HomeScreen() {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     StatusCard(status, pairing?.macName ?: "Mac")
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        FilledTonalButton(
-                            onClick = { pickFiles.launch(arrayOf("*/*")) },
-                            enabled = status == Link.Status.Connected,
-                            modifier = Modifier.weight(1f).height(56.dp),
-                        ) {
-                            Icon(Icons.Outlined.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Send files", maxLines = 1)
+                        Box(Modifier.weight(1f)) {
+                            FilledTonalButton(
+                                onClick = { sendMenu = true },
+                                enabled = status == Link.Status.Connected,
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                            ) {
+                                Icon(Icons.Outlined.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Send files", maxLines = 1)
+                            }
+                            SendMenu(sendMenu, onDismiss = { sendMenu = false },
+                                onFiles = { pickFiles.launch(arrayOf("*/*")) }, onFolder = { pickFolder.launch(null) })
                         }
                         FilledTonalButton(
                             onClick = { ctx.startActivity(Intent(ctx, SendClipboardActivity::class.java)) },
@@ -378,7 +386,7 @@ private fun HomeScreen() {
                         if (control) "Tap and type here from the Phone Screen window" else "Mirroring is watch-only without it. Needs one setting.",
                         control) { explainControl = true }
                     SwitchRow(Icons.Outlined.NotificationsActive, "Left-behind alerts",
-                        "A chime if you walk away from ${pairing?.macName ?: "your Mac"} while it's awake",
+                        "A chime if you leave the Wi-Fi network ${pairing?.macName ?: "your Mac"} is on while it's awake",
                         leftBehind) { Prefs.setLeftBehind(it) }
                     SwitchRow(Icons.Outlined.Vibration, "Haptic feedback",
                         "A light tap when things sync",

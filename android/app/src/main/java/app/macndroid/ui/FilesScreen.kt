@@ -53,6 +53,10 @@ fun FilesScreen() {
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) SyncService.sendUris(ctx, uris)
     }
+    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree != null) SyncService.sendFolder(ctx, tree)
+    }
+    var sendMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
@@ -80,11 +84,15 @@ fun FilesScreen() {
         },
         floatingActionButton = {
             if (status == Link.Status.Connected) {
-                ExtendedFloatingActionButton(
-                    onClick = { pick.launch(arrayOf("*/*")) },
-                    icon = { Icon(Icons.Outlined.UploadFile, null) },
-                    text = { Text("Send to $mac") },
-                )
+                Box {
+                    ExtendedFloatingActionButton(
+                        onClick = { sendMenu = true },
+                        icon = { Icon(Icons.Outlined.UploadFile, null) },
+                        text = { Text("Send to $mac") },
+                    )
+                    SendMenu(sendMenu, onDismiss = { sendMenu = false },
+                        onFiles = { pick.launch(arrayOf("*/*")) }, onFolder = { pickFolder.launch(null) })
+                }
             }
         },
     ) { pad ->
@@ -99,7 +107,7 @@ fun FilesScreen() {
                 Text(if (tab == 0) "Nothing received yet" else "Nothing sent yet", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    if (tab == 0) "Drag files onto Mac n Droid on your Mac to send them here. They're saved in Downloads › Mac n Droid."
+                    if (tab == 0) "Drag files or folders onto Mac n Droid on your Mac to send them here. They're saved in Downloads › Mac n Droid."
                     else "Tap Send to $mac, or use Share → Send to Mac in any app.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -119,8 +127,13 @@ fun FilesScreen() {
 @Composable
 private fun FileCard(t: TransferItem, mac: String) {
     val ctx = LocalContext.current
-    val canOpen = t.state == TransferItem.State.Done && t.uri != null
+    // A received folder opens Downloads; a sent one has nothing to open.
+    val canOpen = t.state == TransferItem.State.Done && (t.uri != null || (t.isFolder && !t.outgoing))
     fun open() {
+        if (t.isFolder) {
+            runCatching { ctx.startActivity(Intent(android.app.DownloadManager.ACTION_VIEW_DOWNLOADS)) }
+            return
+        }
         val uri = t.uri ?: return
         runCatching {
             ctx.startActivity(
@@ -192,7 +205,19 @@ private fun Thumbnail(uri: Uri?, mime: String, ready: Boolean) {
     }
 }
 
+/** Choose files or a whole folder to send. */
+@Composable
+fun SendMenu(expanded: Boolean, onDismiss: () -> Unit, onFiles: () -> Unit, onFolder: () -> Unit) {
+    DropdownMenu(expanded, onDismiss) {
+        DropdownMenuItem(text = { Text("Files") }, onClick = { onDismiss(); onFiles() },
+            leadingIcon = { Icon(Icons.Outlined.InsertDriveFile, null) })
+        DropdownMenuItem(text = { Text("Folder") }, onClick = { onDismiss(); onFolder() },
+            leadingIcon = { Icon(Icons.Outlined.Folder, null) })
+    }
+}
+
 private fun iconFor(mime: String): ImageVector = when {
+    mime == app.macndroid.service.FOLDER_MIME -> Icons.Outlined.Folder
     mime.startsWith("image/") -> Icons.Outlined.Image
     mime.startsWith("video/") -> Icons.Outlined.VideoFile
     mime.startsWith("audio/") -> Icons.Outlined.AudioFile

@@ -16,8 +16,8 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 - **Clipboard history:** the last 20 copies from both devices, on both devices. Tap to copy again, or clear it from either side.
 
 ### Files
-- **Phone → Mac:** **Share → Send to Mac**, the **Send files** button, or the **Send files to Mac** Quick Settings tile. Files land in Downloads.
-- **Mac → phone:** drag files onto the Mac window, the Dock icon or the **notch**, or use **Share → Send to Phone** in Finder, Photos, Preview and any app with a Share button.
+- **Phone → Mac:** **Share → Send to Mac**, the **Send files** button (files or a whole folder), or the **Send files to Mac** Quick Settings tile. Files land in Downloads.
+- **Mac → phone:** drag files or folders onto the Mac window, the Dock icon or the **notch**, or use **Share → Send to Phone** in Finder, Photos, Preview and any app with a Share button.
 
 ### Links
 - **Open on Mac:** share a link on the phone with **Open on Mac** and it opens in the Mac's browser.
@@ -43,7 +43,7 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 ### Phone
 - **Phone battery** in the menu bar.
 - **Ring my phone** at full volume, even on silent.
-- **Left-behind alerts** if you walk away from your Mac or phone.
+- **Left-behind alerts** when your phone leaves the Wi-Fi network your Mac is on, or your Mac joins another network without your phone. They're based on Wi-Fi, not distance, so they come once you're out of Wi-Fi range.
 
 ### Messages
 - **Read and reply to texts from your Mac,** and start new conversations with contact search.

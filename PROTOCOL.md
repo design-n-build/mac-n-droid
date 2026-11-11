@@ -60,6 +60,11 @@ The first encrypted frame from the phone must be `device`; the Mac answers `welc
 
 Screenshots taken on the phone are sent as `file_start … file_end` with `clip: true`.
 
+A folder is sent as one zip of the folder (the folder itself at the top), named `<folder>.zip`, with
+`folder: true` on `file_start`. The receiver unpacks it into a folder in Downloads (on the phone,
+Downloads/Mac n Droid), keeping the subfolders and dropping `..`, `__MACOSX` and `.DS_Store`. A receiver
+that doesn't know the flag just saves the zip.
+
 ## v0.8 additions
 
 - `notif` gains `cat`: messages, calls, email, social, shopping, finance, media, travel, work, news, games, system, other (worked out on the phone from the package, notification category and Play category).
