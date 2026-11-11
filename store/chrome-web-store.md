@@ -49,7 +49,7 @@ YOU'LL NEED
 Mac n Droid isn't affiliated with Apple or Google.
 ```
 
-**Support email:** help.macndroid@gmail.com
+**Publisher name:** Design n Build Studio · **Support email:** help.macndroid@gmail.com
 
 **Category:** Productivity → Tools (or "Workflow & Planning") · **Language:** English
 

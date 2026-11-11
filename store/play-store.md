@@ -72,6 +72,8 @@ Mac n Droid isn't affiliated with Apple or Google. Mac is a trademark of Apple I
 
 **App category:** Tools · **Tags:** Productivity, Utilities, File transfer
 
+**Developer name:** Design n Build Studio
+
 **Contact details:** email **help.macndroid@gmail.com** (shown publicly). The website is the Mac n Droid site.
 
 **Graphics**
