@@ -72,8 +72,7 @@ Mac n Droid isn't affiliated with Apple or Google. Mac is a trademark of Apple I
 
 **App category:** Tools · **Tags:** Productivity, Utilities, File transfer
 
-**Contact details:** an email address is required and is shown publicly. Use a project address, not a
-personal one. The website is the Mac n Droid site.
+**Contact details:** email **help.macndroid@gmail.com** (shown publicly). The website is the Mac n Droid site.
 
 **Graphics**
 - App icon: 512 × 512 PNG, no transparency (`android/` launcher icon at 512 px).

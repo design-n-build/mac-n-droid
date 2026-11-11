@@ -1,9 +1,13 @@
 # What's new
 
-## Unreleased
+## 0.12.1 (Mac, Android and browser extension)
 - **Send folders**, both ways. On the Mac, drag a folder onto Mac n Droid or the notch, pick one with
   **Choose Files…**, or use Share → Send to Phone in Finder. On the phone, tap **Send files** →
   **Folder**. The folder arrives with its subfolders, in Downloads (on the phone, Downloads › Mac n Droid).
+- **Left-behind alerts explain how they work:** they come when your phone leaves the Wi-Fi network your
+  Mac is on (or your Mac joins another network without your phone), not at a set distance.
+- **New browser extension icon:** the white Mac n Droid logo. In light mode the toolbar shows a dark one.
+- Support email: help.macndroid@gmail.com.
 
 ## 0.12.0 (Mac, Android and browser extension)
 - **Add the browser extension from the Mac app:** click **Browser Extension** in the sidebar (or Settings →

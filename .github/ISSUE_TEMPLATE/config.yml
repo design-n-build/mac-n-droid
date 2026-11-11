@@ -3,3 +3,6 @@ contact_links:
   - name: Security problem
     url: https://github.com/santosh-mudragada-1/mac-n-droid/security/advisories/new
     about: Please report security issues privately here, not as a public issue.
+  - name: Email
+    url: mailto:help.macndroid@gmail.com
+    about: For questions you'd rather not ask in public.
