@@ -107,6 +107,8 @@ enum Prefs {
     static let autoCopyOTP = "autoCopyOTP"
     static let notchNotifications = "notchNotifications"
     static let transferSounds = "transferSounds"
+    /// Master switch: off silences every Mac n Droid sound (notifications, files, left-behind chime).
+    static let sounds = "sounds"
     static let lastPhoneName = "lastPhoneName"
     static let showInDock = "showInDock"
     static let callPanel = "callPanel"
@@ -138,6 +140,7 @@ enum Prefs {
             autoCopyOTP: false,
             notchNotifications: true,
             transferSounds: true,
+            sounds: true,
             showInDock: true,
             callPanel: true,
             leftBehind: true,
@@ -218,6 +221,7 @@ enum Feedback {
 
     /// The soft tap for a phone notification shown in the notch.
     static func notify() {
+        guard Prefs.bool(Prefs.sounds) else { return }
         guard let url = Bundle.main.url(forResource: "mnd_tap", withExtension: "wav"),
               let sound = NSSound(contentsOf: url, byReference: true) else { return }
         sound.volume = 0.7
@@ -225,7 +229,7 @@ enum Feedback {
     }
 
     static func play(_ kind: Kind) {
-        guard Prefs.bool(Prefs.transferSounds) else { return }
+        guard Prefs.bool(Prefs.sounds), Prefs.bool(Prefs.transferSounds) else { return }
         // Mac n Droid's own sounds (tools/make-sounds.py), not system alerts.
         let file: String = switch kind {
         case .sent: "mnd_sent"

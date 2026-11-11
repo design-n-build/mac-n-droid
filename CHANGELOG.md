@@ -1,5 +1,9 @@
 # What's new
 
+## 0.12.2 (Mac, Android and browser extension)
+- **Turn off sounds:** on the Mac, Settings → General → **Play sounds**; on the phone, **Sounds** on the
+  Home screen. Notifications and alerts still appear, just silently. Find My Phone still rings.
+
 ## 0.12.1 (Mac, Android and browser extension)
 - **Send folders**, both ways. On the Mac, drag a folder onto Mac n Droid or the notch, pick one with
   **Choose Files…**, or use Share → Send to Phone in Finder. On the phone, tap **Send files** →

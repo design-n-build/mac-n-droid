@@ -252,6 +252,7 @@ class FileTransfers(private val ctx: Context) {
         }
         val mac = app.macndroid.core.Prefs.pairing.value?.macName ?: "Mac"
         val n = NotificationCompat.Builder(ctx, MacNDroidApp.CH_FILES)
+            .setSilent(!app.macndroid.core.Prefs.sounds.value)
             .setSmallIcon(R.drawable.ic_stat_logo)
             .setContentTitle(if (batch.size == 1) "Received from $mac" else "${batch.size} items from $mac")
             .setContentText(if (batch.size == 1) f.name else batch.joinToString(", ") { it.name })
@@ -395,6 +396,7 @@ class FileTransfers(private val ctx: Context) {
         val ok = failed == 0
         val name = names.joinToString(", ")
         val n = NotificationCompat.Builder(ctx, MacNDroidApp.CH_SENT)
+            .setSilent(!app.macndroid.core.Prefs.sounds.value)
             .setSmallIcon(R.drawable.ic_stat_logo)
             .setContentTitle(when {
                 !ok && names.size > 1 -> "Couldn't send $failed of ${names.size} items to $mac"

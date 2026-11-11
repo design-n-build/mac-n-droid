@@ -71,7 +71,8 @@ final class LeftBehindMonitor {
         AppState.shared.postLeftBehindAlert(
             title: "Did you leave \(name) behind?",
             body: "This Mac is on a different network now and can't reach \(name).")
-        if let url = Bundle.main.url(forResource: "mnd_left_behind", withExtension: "wav"),
+        if Prefs.bool(Prefs.sounds),
+           let url = Bundle.main.url(forResource: "mnd_left_behind", withExtension: "wav"),
            let sound = NSSound(contentsOf: url, byReference: true) {
             sound.volume = 0.9
             sound.play()

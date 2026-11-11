@@ -172,6 +172,7 @@ object LeftBehind {
         val open = PendingIntent.getActivity(c, NOTIF, Intent(c, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(c, MacNDroidApp.CH_LEFT_BEHIND)
+            .setSilent(!Prefs.sounds.value)
             .setSmallIcon(R.drawable.ic_stat_logo)
             .setContentTitle("Did you leave $mac behind?")
             .setContentText("You've left the Wi-Fi network it's on.")

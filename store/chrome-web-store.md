@@ -10,7 +10,7 @@ The same text and zip work for Microsoft Edge Add-ons (Partner Center) and Firef
 Zip the **contents** of `browser-extension/` (with `manifest.json` at the top level of the zip):
 
 ```
-cd browser-extension && zip -r ../release/MacNDroid-extension-0.12.1.zip . -x ".*"
+cd browser-extension && zip -r ../release/MacNDroid-extension-0.12.2.zip . -x ".*"
 ```
 
 ---

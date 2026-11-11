@@ -21,6 +21,7 @@ private struct GeneralSettings: View {
     @EnvironmentObject private var state: AppState
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @AppStorage(Prefs.showInDock) private var showInDock = true
+    @AppStorage(Prefs.sounds) private var sounds = true
     @ObservedObject private var updater = Updater.shared
 
     var body: some View {
@@ -32,6 +33,12 @@ private struct GeneralSettings: View {
                     .onChange(of: showInDock) { _, _ in DockVisibility.apply() }
             } footer: {
                 Text("When off, Mac n Droid lives only in the menu bar and keeps running in the background. Closing its window never quits it.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Play sounds", isOn: $sounds)
+            } footer: {
+                Text("When off, Mac n Droid makes no sounds: no notification, file or left-behind sounds. Phone notifications still appear.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
@@ -69,6 +76,7 @@ private struct SyncSettings: View {
     @AppStorage(Prefs.callPanel) private var callPanel = true
     @AppStorage(Prefs.leftBehind) private var leftBehind = true
     @AppStorage(Prefs.dropOnNotch) private var dropOnNotch = true
+    @AppStorage(Prefs.sounds) private var sounds = true
     @AppStorage(Prefs.browserExtensionSeen) private var browserSeen = false
     @State private var showBrowserSheet = false
 
@@ -86,7 +94,7 @@ private struct SyncSettings: View {
                 Toggle("Show Answer and Decline buttons for calls", isOn: $callPanel)
                     .disabled(!mirrorNotifications)
                     .help("Incoming calls drop down from the top of the screen with Answer and Decline buttons, even when notch notifications are off.")
-                Toggle("Play sound", isOn: $notificationSound).disabled(!mirrorNotifications)
+                Toggle("Play sound", isOn: $notificationSound).disabled(!mirrorNotifications || !sounds)
                 Toggle("Copy verification codes automatically", isOn: $autoCopyOTP)
             }
             Section {
@@ -108,7 +116,7 @@ private struct SyncSettings: View {
             }
             Section {
                 Toggle("Drop files on the notch to send them", isOn: $dropOnNotch)
-                Toggle("Play a sound when files are sent or received", isOn: $transferSounds)
+                Toggle("Play a sound when files are sent or received", isOn: $transferSounds).disabled(!sounds)
             } header: {
                 Text("Files")
             } footer: {

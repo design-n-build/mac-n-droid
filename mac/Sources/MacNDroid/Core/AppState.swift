@@ -440,7 +440,7 @@ final class AppState: ObservableObject {
         burstCount = inBurst ? burstCount + 1 : 1
         let quiet = inBurst && !n.isCall
         if quiet && burstCount > 3 { return }
-        let sound = Prefs.bool(Prefs.notificationSound) && !isUpdate && !quiet
+        let sound = Prefs.bool(Prefs.sounds) && Prefs.bool(Prefs.notificationSound) && !isUpdate && !quiet
         if NotchStyle.isOn || callPanel {
             // Notch only: macOS shows its own banner for any posted notification while another app is
             // in front, so posting as well would show everything twice. History stays in this app.

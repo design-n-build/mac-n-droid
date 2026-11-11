@@ -62,6 +62,9 @@ object Prefs {
     val smsOnMac: StateFlow<Boolean> = _smsOnMac
     private val _haptics = MutableStateFlow(true)
     val haptics: StateFlow<Boolean> = _haptics
+    /** Off silences the app's own sounds (files sent and received, left-behind alert). */
+    private val _sounds = MutableStateFlow(true)
+    val sounds: StateFlow<Boolean> = _sounds
     private val _screenshotsToMac = MutableStateFlow(true)
     val screenshotsToMac: StateFlow<Boolean> = _screenshotsToMac
 
@@ -72,6 +75,7 @@ object Prefs {
         _receiveClipboard.value = sp.getBoolean("receiveClipboard", true)
         _screenshotsToMac.value = sp.getBoolean("screenshotsToMac", true)
         _haptics.value = sp.getBoolean("haptics", true)
+        _sounds.value = sp.getBoolean("sounds", true)
         _leftBehind.value = sp.getBoolean("leftBehind", true)
         _macMusic.value = sp.getBoolean("macMusic", true)
         _smsOnMac.value = sp.getBoolean("smsOnMac", false)
@@ -128,6 +132,8 @@ object Prefs {
     fun setMacMusic(on: Boolean) { sp.edit().putBoolean("macMusic", on).apply(); _macMusic.value = on }
 
     fun setSmsOnMac(on: Boolean) { sp.edit().putBoolean("smsOnMac", on).apply(); _smsOnMac.value = on }
+
+    fun setSounds(on: Boolean) { sp.edit().putBoolean("sounds", on).apply(); _sounds.value = on }
 
     fun setHaptics(on: Boolean) {
         sp.edit().putBoolean("haptics", on).apply(); _haptics.value = on

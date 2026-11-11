@@ -237,6 +237,7 @@ private fun HomeScreen() {
     val clip by Prefs.receiveClipboard.collectAsState()
     val shots by Prefs.screenshotsToMac.collectAsState()
     val haptics by Prefs.haptics.collectAsState()
+    val sounds by Prefs.sounds.collectAsState()
     val leftBehind by Prefs.leftBehind.collectAsState()
     val macMusic by Prefs.macMusic.collectAsState()
     val smsOn by Prefs.smsOnMac.collectAsState()
@@ -388,6 +389,9 @@ private fun HomeScreen() {
                     SwitchRow(Icons.Outlined.NotificationsActive, "Left-behind alerts",
                         "A chime if you leave the Wi-Fi network ${pairing?.macName ?: "your Mac"} is on while it's awake",
                         leftBehind) { Prefs.setLeftBehind(it) }
+                    SwitchRow(Icons.Outlined.VolumeUp, "Sounds",
+                        "Sounds when files arrive or send, and for left-behind alerts",
+                        sounds) { Prefs.setSounds(it) }
                     SwitchRow(Icons.Outlined.Vibration, "Haptic feedback",
                         "A light tap when things sync",
                         haptics) { Prefs.setHaptics(it) }
