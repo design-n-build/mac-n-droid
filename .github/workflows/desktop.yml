@@ -64,6 +64,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: "8.0.x" }
+      - uses: microsoft/setup-msbuild@v2
       - name: Build
         shell: pwsh
         run: |
@@ -71,7 +72,11 @@ jobs:
           $sdk = (dotnet --list-sdks | Select-String '^8\.' | Select-Object -Last 1).ToString().Split(' ')[0]
           dotnet new globaljson --sdk-version $sdk --force
           $platform = if ("${{ matrix.arch }}" -eq "arm64") { "ARM64" } else { "x64" }
-          dotnet publish windows/App/MacNDroid.csproj -c Release -r win-${{ matrix.arch }} -p:Platform=$platform -o publish/${{ matrix.arch }}
+          # Visual Studio's MSBuild has the resource (PRI) packaging tasks that the dotnet CLI lacks.
+          msbuild windows/App/MacNDroid.csproj /restore /t:Publish /v:minimal /p:Configuration=Release `
+            /p:Platform=$platform /p:RuntimeIdentifier=win-${{ matrix.arch }} `
+            "/p:PublishDir=$((Resolve-Path .).Path)\publish\${{ matrix.arch }}\"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Installer
         shell: pwsh
         run: |
