@@ -19,6 +19,7 @@ var platform = new ConsolePlatform();
 var state = new AppState(platform, queue.Add, "windows");
 var sink = new CountingSink();
 state.MirrorSink = sink;
+state.Server.SessionClosed += (_, reason) => Console.WriteLine($"session closed: {reason ?? "(no reason)"}");
 var checks = new List<(string name, bool ok)>();
 void Check(string name, bool ok) => checks.Add((name, ok));
 

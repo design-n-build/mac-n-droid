@@ -5,6 +5,10 @@ name: Windows and Linux
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Add the installers to this existing release (e.g. v0.13.0). Leave empty to only build."
+        required: false
   push:
     tags: ["v*"]
 
@@ -53,6 +57,7 @@ jobs:
     needs: protocol-test
     runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x64, arm64]
     steps:
@@ -62,6 +67,9 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
+          # Windows App SDK 1.6's packaging tasks ship with the .NET 8 SDK, not the newer one on the runner.
+          $sdk = (dotnet --list-sdks | Select-String '^8\.' | Select-Object -Last 1).ToString().Split(' ')[0]
+          dotnet new globaljson --sdk-version $sdk --force
           $platform = if ("${{ matrix.arch }}" -eq "arm64") { "ARM64" } else { "x64" }
           dotnet publish windows/App/MacNDroid.csproj -c Release -r win-${{ matrix.arch }} -p:Platform=$platform -o publish/${{ matrix.arch }}
       - name: Installer
@@ -77,17 +85,13 @@ jobs:
         with:
           name: windows-${{ matrix.arch }}
           path: release/*
-      - name: Add to the release
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        env: { GH_TOKEN: "${{ github.token }}" }
-        run: gh release upload "${{ github.ref_name }}" (Get-ChildItem release/*).FullName --clobber
 
   linux:
     name: Linux (${{ matrix.arch }} Flatpak)
     needs: protocol-test
     runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - { arch: x86_64, runner: ubuntu-latest }
@@ -103,13 +107,10 @@ jobs:
           manifest-path: linux/app.macndroid.Linux.yml
           arch: ${{ matrix.arch }}
           cache-key: flatpak-${{ matrix.arch }}-${{ github.sha }}
-      - name: Add to the release
-        if: startsWith(github.ref, 'refs/tags/')
-        env: { GH_TOKEN: "${{ github.token }}" }
-        run: |
-          dnf install -y -q gh > /dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq gh > /dev/null)
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          gh release upload "${{ github.ref_name }}" MacNDroid-Linux-${{ matrix.arch }}.flatpak --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: MacNDroid-Linux-${{ matrix.arch }}.flatpak
 
   extension:
     name: Browser extension (Chrome, Edge, Firefox)
@@ -125,7 +126,20 @@ jobs:
         with:
           name: browser-extension
           path: release/*.zip
-      - name: Add to the release
-        if: startsWith(github.ref, 'refs/tags/')
-        env: { GH_TOKEN: "${{ github.token }}" }
-        run: gh release upload "${{ github.ref_name }}" release/*.zip --clobber
+
+  # Every installer, added to the GitHub release in one place (on a tag, or with the "tag" input).
+  publish:
+    name: Add to the release
+    needs: [windows, linux, extension]
+    if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - name: Upload
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          TAG: "${{ inputs.tag || github.ref_name }}"
+        run: |
+          ls -la out
+          gh release upload "$TAG" out/* --clobber --repo "${{ github.repository }}"
