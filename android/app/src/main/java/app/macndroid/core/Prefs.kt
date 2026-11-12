@@ -15,6 +15,8 @@ data class Pairing(
     val hosts: List<String>,
     val port: Int,
     val macName: String,
+    /** "mac", "windows" or "linux": from the QR code (`o`) and the computer's hello. */
+    val os: String = "mac",
 ) {
     companion object {
         /**
@@ -34,6 +36,7 @@ data class Pairing(
                 hosts = uri.getQueryParameter("h").orEmpty().split(",").filter { it.isNotBlank() },
                 port = uri.getQueryParameter("p")?.toIntOrNull() ?: 47800,
                 macName = uri.getQueryParameter("n") ?: "Mac",
+                os = uri.getQueryParameter("o")?.takeIf { it in Computer.KNOWN } ?: "mac",
             )
         }.getOrNull()
     }
@@ -67,6 +70,12 @@ object Prefs {
     val sounds: StateFlow<Boolean> = _sounds
     private val _screenshotsToMac = MutableStateFlow(true)
     val screenshotsToMac: StateFlow<Boolean> = _screenshotsToMac
+    private val _galleryOnMac = MutableStateFlow(true)
+    /** The computer's Photos page may show this phone's photos and videos. */
+    val galleryOnMac: StateFlow<Boolean> = _galleryOnMac
+    private val _onboarded = MutableStateFlow(false)
+    /** The welcome and "Make it yours" steps have been seen (shown before the first pairing). */
+    val onboarded: StateFlow<Boolean> = _onboarded
 
     fun init(ctx: Context) {
         sp = ctx.getSharedPreferences("macndroid", Context.MODE_PRIVATE)
@@ -79,6 +88,8 @@ object Prefs {
         _leftBehind.value = sp.getBoolean("leftBehind", true)
         _macMusic.value = sp.getBoolean("macMusic", true)
         _smsOnMac.value = sp.getBoolean("smsOnMac", false)
+        _galleryOnMac.value = sp.getBoolean("galleryOnMac", true)
+        _onboarded.value = sp.getBoolean("onboarded", false) || _pairing.value != null
         _blockedApps.value = sp.getStringSet("blockedApps", emptySet()).orEmpty().toSet()
     }
 
@@ -94,6 +105,7 @@ object Prefs {
             .putString("hosts", p.hosts.joinToString(","))
             .putInt("port", p.port)
             .putString("macName", p.macName)
+            .putString("computerOs", p.os)
             .apply()
         _pairing.value = p
     }
@@ -105,13 +117,19 @@ object Prefs {
         savePairing(p.copy(hosts = hosts, port = port))
     }
 
+    fun updateComputerOs(os: String) {
+        val p = _pairing.value ?: return
+        val v = os.lowercase().takeIf { it in Computer.KNOWN } ?: "mac"
+        if (p.os != v) savePairing(p.copy(os = v))
+    }
+
     fun updateMacName(name: String) {
         val p = _pairing.value ?: return
         if (p.macName != name) savePairing(p.copy(macName = name))
     }
 
     fun clearPairing() {
-        sp.edit().remove("macId").remove("key").remove("hosts").remove("port").remove("macName").apply()
+        sp.edit().remove("macId").remove("key").remove("hosts").remove("port").remove("macName").remove("computerOs").apply()
         _pairing.value = null
     }
 
@@ -126,6 +144,10 @@ object Prefs {
     fun setBlockedApps(apps: Set<String>) {
         sp.edit().putStringSet("blockedApps", apps).apply(); _blockedApps.value = apps
     }
+
+    fun setGalleryOnMac(on: Boolean) { sp.edit().putBoolean("galleryOnMac", on).apply(); _galleryOnMac.value = on }
+
+    fun setOnboarded(on: Boolean) { sp.edit().putBoolean("onboarded", on).apply(); _onboarded.value = on }
 
     fun setLeftBehind(on: Boolean) { sp.edit().putBoolean("leftBehind", on).apply(); _leftBehind.value = on }
 
@@ -152,6 +174,16 @@ object Prefs {
             hosts = sp.getString("hosts", "").orEmpty().split(",").filter { it.isNotBlank() },
             port = sp.getInt("port", 47800),
             macName = sp.getString("macName", "Mac") ?: "Mac",
+            os = sp.getString("computerOs", "mac") ?: "mac",
         )
     }
+}
+
+/** What to call the paired computer in sentences: "Mac", or "PC" for Windows and Linux. */
+object Computer {
+    val KNOWN = setOf("mac", "windows", "linux")
+    private val os get() = Prefs.pairing.value?.os ?: "mac"
+    val isMac get() = os == "mac"
+    val word get() = if (isMac) "Mac" else "PC"
+    val your get() = "your $word"
 }

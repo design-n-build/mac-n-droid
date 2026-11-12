@@ -24,3 +24,13 @@ android/app/build/
 release/
 *.apk
 *.dmg
+
+# Windows and Linux build output
+windows/**/bin/
+windows/**/obj/
+publish/
+__pycache__/
+*.pyc
+.flatpak-builder/
+build-dir/
+*.flatpak

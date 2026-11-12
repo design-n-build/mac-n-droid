@@ -46,7 +46,7 @@ MUSIC
 Control music playing on your Mac from your phone's media controls, including Music, Spotify and, with the free browser extension, YouTube and other sites.
 
 SCREEN MIRRORING
-See your phone's screen in a window on your Mac. With the optional phone control setting, click, scroll and type to use your phone from the Mac.
+See your phone's screen in a window on your Mac. With the optional clipboard and controls setting, click, scroll and type to use your phone from the Mac.
 
 AND MORE
 • Phone battery on your Mac
@@ -188,29 +188,50 @@ Mac n Droid shows the user's text messages on their own paired Mac and lets them
 - **Video:** turn on Messages → permission prompt → message appears on the Mac → reply from the Mac → reply
   arrives on the other phone.
 
-### Accessibility services
+### Accessibility service
 
-Mac n Droid has two optional services. Neither is an accessibility tool, so declare
-`isAccessibilityTool = false` for both. Both are explained in a dialog in the app before Android's
-settings open.
+Mac n Droid has **one** optional service, **Mac n Droid clipboard and controls**. It isn't an accessibility
+tool, so declare `isAccessibilityTool = false` (also set in `res/xml/copy_watcher.xml`).
 
-**Mac n Droid clipboard sync**
+- **Core functionality to select:** Remote control of the device (from the user's own paired computer). Also
+  mention automatic clipboard sync, opening links from the computer and notification/live-activity handling in
+  the description below.
+- **Prominent disclosure:** the in-app dialog "Clipboard and controls" (onboarding step 2 and the Home tab)
+  shows before Android's settings open, says what the service looks at and where data goes, and has
+  **Agree and continue** / **Not now** buttons. Without agreement, Android's settings never open.
+
+**Description (paste into the declaration form):**
 
 ```
-Since Android 10, apps can read the clipboard only while they're in the foreground. This optional service detects when the user taps Copy in any app, then sends what they copied to their own paired Mac, so copying on the phone and pasting on the Mac works. It reacts only to copy events and the name of the open app; it doesn't read screen content and can't perform any action (no gestures, taps or typing). Copied text is sent only to the user's Mac, end-to-end encrypted, and never to the developer or any server. Passwords copied from password managers are never sent. Before Android's settings open, the app shows a dialog explaining exactly what the service does.
+Mac n Droid connects an Android phone to the user's own computer (Mac, Windows or Linux) over their local Wi-Fi, end-to-end encrypted. The optional "Mac n Droid clipboard and controls" accessibility service lets the user:
+
+1. Control their phone from their computer: while they mirror the phone's screen to their own paired computer, their clicks and typing in that window become taps, swipes and typing on the phone, plus Back, Home and Recents. The service performs gestures and types only in response to the user's own input in that window, never on its own.
+2. Copy on the phone and paste on the computer: since Android 10, only the foreground app can read the clipboard, so the service notices when the user taps a Copy button and sends what they copied to their own computer. Passwords marked as sensitive by password managers are never sent.
+3. Open links the user sends from their computer right away, start music on the phone from the computer, and keep a timer or map showing on the computer while that app is open on the phone. These need the app to know which app is in the foreground and to act from the background on the user's request.
+
+The service reads only the label of the view the user taps (to tell whether it's Copy), the package name of the foreground app, and the text field the user types into from the computer. It doesn't collect, store or log screen content. Data goes only to the user's own paired computer, encrypted, never to the developer or any server. The feature is optional: pairing and all other features work without it. Before Android's settings open, the app shows a disclosure explaining all of this and asks the user to agree.
 ```
 
-**Mac n Droid phone control**
+**Video (one recording, about 90 seconds; record on a phone, show the computer by switching to it or with a
+second camera):**
 
-```
-Lets the user operate their own phone from a screen-mirroring window on their paired Mac: clicks on the Mac become taps, and the user can scroll, type and use Back, Home and Recents. The service performs gestures only in response to the user's own input in that window on their Mac, while mirroring is active. It doesn't read or collect screen content; the mirrored screen is shown live on the Mac and never recorded. Before Android's settings open, the app shows a dialog explaining what the service does and that it can be turned off at any time.
-```
+1. Fresh install → welcome screen → **Get started** → **Make it yours**.
+2. Tap **Enable** on *Clipboard and controls* → the disclosure dialog appears; scroll through it slowly →
+   **Agree and continue**.
+3. Android's Accessibility settings → Installed apps → *Mac n Droid clipboard and controls* → turn it on →
+   accept Android's prompt → back to the app; the card says **Enabled**.
+4. **Continue to pairing** → scan the QR code on the computer → connected.
+5. Remote control: on the computer, open Phone Screen → click an app icon, scroll, type in a search box → it
+   happens on the phone.
+6. Clipboard: copy some text in a phone app (e.g. Chrome) → paste it on the computer.
+7. Links: on the computer, send a link to the phone → it opens on the phone.
+8. Turning it off: Home tab → *Setup checklist* or the switch → dialog → settings → off.
 
-- **Videos:** for each one, the in-app dialog → Android settings → turning it on → the feature working.
-
-> **Risk:** Google often rejects accessibility services that aren't for people with disabilities. Phone
-> control (remote control from a computer) is an accepted kind of use. Clipboard sync is the most likely to
-> be rejected. If it is, publish the Play version without it.
+> **Risk:** Google sometimes rejects accessibility use that isn't for people with disabilities. Remote
+> control from the user's own computer is an accepted kind of use and is the main purpose declared here;
+> comparable apps that combine remote control and clipboard in one disclosed service have been approved. If
+> Google objects to the clipboard part, the fallback is to drop automatic copying from the Play build (the
+> Send clipboard button and tile keep working) and keep the rest.
 
 ### Foreground service types
 

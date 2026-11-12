@@ -1,5 +1,7 @@
 package app.macndroid.ui
 
+import app.macndroid.core.Computer
+
 import android.app.StatusBarManager
 import android.content.ComponentName
 import android.content.Intent
@@ -28,11 +30,11 @@ import app.macndroid.service.FilesTileService
 import app.macndroid.service.SyncService
 
 enum class Tip(val title: String, val summary: String, val icon: ImageVector) {
-    Share("Share anything to your Mac", "Files, photos and links from any app", Icons.Outlined.Share),
+    Share("Share anything to ${Computer.your}", "Files, photos and links from any app", Icons.Outlined.Share),
     Tile("Quick Settings tile", "Send photos and files in one tap", Icons.Outlined.Dashboard),
-    Ring("Find your phone", "Ring it from your Mac, even on silent", Icons.Outlined.NotificationsActive),
-    Mirror("Use your phone from your Mac", "See and control this screen in a Mac window", Icons.Outlined.ScreenShare),
-    Webcam("Phone as webcam", "Use this camera in FaceTime, Zoom or Meet", Icons.Outlined.Videocam),
+    Ring("Find your phone", "Ring it from ${Computer.your}, even on silent", Icons.Outlined.NotificationsActive),
+    Mirror("Use your phone from ${Computer.your}", "See and control this screen in a ${Computer.word} window", Icons.Outlined.ScreenShare),
+    Webcam("Phone as webcam", "Use this camera in video calls", Icons.Outlined.Videocam),
 }
 
 /** Bottom sheet with a small visual preview of the feature, the steps, and a way to try it. */
@@ -100,7 +102,7 @@ private fun steps(tip: Tip, mac: String) = when (tip) {
     )
     Tip.Tile -> listOf(
         "Add the tile below, then swipe down from the top of the screen.",
-        "Tap Send files to Mac and pick photos or files.",
+        "Tap Send files to ${Computer.word} and pick photos or files.",
         "They land in Downloads on $mac.",
     )
     Tip.Ring -> listOf(
@@ -111,12 +113,12 @@ private fun steps(tip: Tip, mac: String) = when (tip) {
     Tip.Mirror -> listOf(
         "On $mac, click Mirror Screen in the menu bar or the Overview page.",
         "On your phone, tap Start. Android asks every time, for your privacy.",
-        "Click, scroll and type in the Mac window to use your phone. Controls need \"Control from Mac\" turned on.",
+        "Click, scroll and type in the ${Computer.word} window to use your phone. Controls need \"Control from ${Computer.word}\" turned on.",
     )
     Tip.Webcam -> listOf(
         "Connect your phone to $mac with a USB cable.",
         "On your phone, tap the \"Charging this device via USB\" notification and choose Webcam.",
-        "In FaceTime, Zoom, Meet or Photo Booth on $mac, pick your phone as the camera. Needs Android 14 or later.",
+        "${if (Computer.isMac) "In FaceTime, Zoom, Meet or Photo Booth" else "In Zoom, Teams, Meet or the Camera app"} on $mac, pick your phone as the camera. Needs Android 14 or later.",
     )
 }
 

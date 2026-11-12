@@ -40,6 +40,8 @@ final class AppState: ObservableObject {
     /// Every media app on the phone: playing ones first (most recently started on top), then paused.
     @Published private(set) var players: [NowPlaying] = []
     @Published private(set) var playerArt: [String: NSImage] = [:]
+    /// The phone's media volume, 0…100 (nil until the phone reports it; older phones don't).
+    @Published private(set) var phoneVolume: Int?
     var nowPlaying: NowPlaying? { players.first }
     var mediaArt: NSImage? { nowPlaying.flatMap { playerArt[$0.id] } }
 
@@ -60,6 +62,10 @@ final class AppState: ObservableObject {
     /// The conversation open in Messages, refreshed when texts arrive.
     var openSmsThread: String?
 
+    /// The phone's photos and videos (Photos pane).
+    let gallery = GalleryModel()
+    /// File transfers that are photos opened from the Photos pane: transfer id → gallery id.
+    private var galleryIncoming: [String: String] = [:]
     private let macMedia = MacMediaMonitor()
     let browserBridge = BrowserBridge()
     private var phoneWantsMacMedia = false
@@ -119,6 +125,7 @@ final class AppState: ObservableObject {
             self.sendBrowserTab()
         }
         macMedia.onChange = { [weak self] _ in self?.pushMacMedia(art: false) }
+        SystemVolume.shared.onChange = { [weak self] in self?.pushMacVolume() }
         macMedia.onArt = { [weak self] jpeg in
             guard let self, let id = self.macMedia.current?.id else { return }
             self.macMediaArt = (id, jpeg)
@@ -246,6 +253,8 @@ final class AppState: ObservableObject {
         LiveBarController.shared.update()
         pushClipHistory()
         if smsState != .unknown { refreshSms() }
+        gallery.send = { [weak self] in self?.active?.send($0) }
+        gallery.phoneConnected()
     }
 
     private func phoneDisconnected() {
@@ -260,14 +269,17 @@ final class AppState: ObservableObject {
         live.removeAll()
         players.removeAll()
         playerArt.removeAll()
+        phoneVolume = nil
         phoneWantsMacMedia = false
         if smsState == .loading { smsState = .ready }
+        gallery.phoneDisconnected()
         if mirror != .idle { mirror = .stopped }
         mirrorQueue.async { self.mirrorRenderer.reset() }
         LiveBarController.shared.update()
         fileQueue.async {
             let partial = self.incoming
             self.incoming.removeAll()
+            self.galleryIncoming.removeAll()
             for (_, file) in partial {
                 try? file.handle.close()
                 try? FileManager.default.removeItem(at: file.url)
@@ -349,8 +361,28 @@ final class AppState: ObservableObject {
         case "mac_media_want":
             phoneWantsMacMedia = msg["on"] as? Bool ?? false
             if phoneWantsMacMedia { pushMacMedia(art: true) }
+        case "media_limited":
+            // Android 17 mutes music started from here on a locked phone unless Mac n Droid may act in the
+            // background there (its "clipboard and controls" accessibility service).
+            if Date().timeIntervalSince(lastMediaLimitedNote) > 180 {
+                lastMediaLimitedNote = Date()
+                let name = phone?.name ?? "your phone"
+                notifier.postLocal(title: "\(name) may play this silently",
+                                   body: "Android only lets Mac n Droid start music on a locked phone while Mac n Droid clipboard and controls is on. Turn it on in the phone's Accessibility settings, or press play on the phone.")
+            }
+        case "volume":
+            if let v = (msg["vol"] as? NSNumber)?.intValue {
+                phoneVolume = min(max(v, 0), 100)
+                LiveBarController.shared.update()
+            }
+        case "mac_volume_set":
+            if let v = (msg["vol"] as? NSNumber)?.intValue, SystemVolume.shared.isAdjustable {
+                SystemVolume.shared.volume = v
+            }
         case "mac_media_cmd":
             if let cmd = msg["cmd"] as? String { macMedia.command(cmd) }
+        case "gallery", "gallery_thumb", "gallery_access":
+            gallery.handle(msg)
         case "sms_threads":
             smsThreads = (msg["threads"] as? [Message] ?? []).compactMap(SmsThread.init)
             smsState = .ready
@@ -477,8 +509,9 @@ final class AppState: ObservableObject {
             LiveBarController.shared.update()
             return
         }
-        if let art = msg["art"] as? String {
-            playerArt[np.id] = Data(base64Encoded: art).flatMap(NSImage.init(data:))
+        // A new cover replaces the old one; an empty or unreadable one never erases it.
+        if let art = msg["art"] as? String, !art.isEmpty, let img = Data(base64Encoded: art).flatMap(NSImage.init(data:)) {
+            playerArt[np.id] = img
         }
         if let b64 = msg["icon"] as? String, let img = Data(base64Encoded: b64).flatMap(NSImage.init(data:)) {
             icons[np.pkg] = img
@@ -784,11 +817,41 @@ final class AppState: ObservableObject {
 
     // MARK: Music on the Mac → phone
 
+    /// Changes the phone's media volume (the phone reports the new level back).
+    func setPhoneVolume(_ v: Int) {
+        let v = min(max(v, 0), 100)
+        phoneVolume = v
+        active?.send(["t": "volume_set", "vol": v])
+    }
+
+    private var lastMediaLimitedNote = Date.distantPast
+    private var volumeBeforeMute: Int?
+    /// The speaker icon next to the slider: mutes the phone, and the next click brings the sound back.
+    func togglePhoneMute() {
+        guard let v = phoneVolume else { return }
+        if v > 0 { volumeBeforeMute = v; setPhoneVolume(0) }
+        else { setPhoneVolume(volumeBeforeMute ?? 50); volumeBeforeMute = nil }
+    }
+
+    private var lastMacVolume: (Int, Bool)?
+    /// The Mac's own volume, for the phone's "Music on your Mac" controls.
+    private func pushMacVolume() {
+        guard phoneWantsMacMedia, let conn = active, macMedia.current != nil else { return }
+        let sv = SystemVolume.shared
+        let now = (sv.volume, sv.muted)
+        if let last = lastMacVolume, last == now { return }
+        lastMacVolume = now
+        conn.send(["t": "mac_volume", "vol": now.0, "muted": now.1, "fixed": !sv.isAdjustable])
+    }
+
     private func pushMacMedia(art: Bool) {
         guard phoneWantsMacMedia, let conn = active else { return }
         guard let t = macMedia.current else { conn.send(["t": "mac_media_end"]); return }
+        let sv = SystemVolume.shared
+        lastMacVolume = (sv.volume, sv.muted)
         var m: Message = ["t": "mac_media", "app": t.app, "title": t.title, "artist": t.artist, "album": t.album,
-                          "playing": t.playing, "dur": t.duration, "pos": t.position]
+                          "playing": t.playing, "dur": t.duration, "pos": t.position,
+                          "vol": sv.volume, "muted": sv.muted, "fixed": !sv.isAdjustable]
         if art, let a = macMediaArt, a.track == t.id { m["art"] = a.jpeg.base64EncodedString() }
         conn.send(m)
     }
@@ -981,6 +1044,15 @@ final class AppState: ObservableObject {
         let name = (rawName as NSString).lastPathComponent.replacingOccurrences(of: ":", with: "-")
         let size = (msg["size"] as? NSNumber)?.int64Value ?? 0
         let isClip = msg["clip"] as? Bool == true
+        // A photo or video opened from the Photos pane: into the cache, quietly, then Quick Look.
+        if let gid = msg["gallery"] as? String, msg["view"] as? Bool == true {
+            let url = GalleryModel.cacheDir.appendingPathComponent(gallery.cacheFileName(gid, name) + ".part")
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+            guard let handle = try? FileHandle(forWritingTo: url) else { return }
+            incoming[id] = (handle, url, false, nil)
+            galleryIncoming[id] = gid
+            return
+        }
         let folder: String? = msg["folder"] as? Bool == true
             ? { let n = (name as NSString).deletingPathExtension; return n.isEmpty ? "Folder" : n }() : nil
         let dir = isClip || folder != nil ? FileManager.default.temporaryDirectory
@@ -1012,6 +1084,13 @@ final class AppState: ObservableObject {
     private func finishIncomingFile(_ id: String) {
         guard let file = incoming.removeValue(forKey: id) else { return }
         try? file.handle.close()
+        if let gid = galleryIncoming.removeValue(forKey: id) {
+            let final = file.url.deletingPathExtension()
+            try? FileManager.default.removeItem(at: final)
+            try? FileManager.default.moveItem(at: file.url, to: final)
+            DispatchQueue.main.async { self.gallery.arrived(gid, url: final) }
+            return
+        }
         if file.isClip {
             let data = try? Data(contentsOf: file.url)
             try? FileManager.default.removeItem(at: file.url)
@@ -1116,6 +1195,14 @@ extension URL {
 
 extension AppState {
     func loadStoreDemo() {
+        phoneVolume = 70
+        if CommandLine.arguments.contains("--live") {
+            let now = Date().timeIntervalSince1970 * 1000
+            live = [LiveActivity(["key": "t", "pkg": "com.google.android.deskclock", "app": "Clock", "kind": "timer",
+                                  "title": "Timer", "text": "Pasta", "when": now + 263_000])!,
+                    LiveActivity(["key": "r", "pkg": "demo.food", "app": "Food delivery", "kind": "status",
+                                  "title": "Order on the way", "text": "Arriving in 12 min", "short": "12 min"])!]
+        }
         let now = Date()
         func ago(_ m: Double) -> Date { now.addingTimeInterval(-m * 60) }
         status = .connected

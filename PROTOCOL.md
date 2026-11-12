@@ -9,6 +9,8 @@ Local-network only. The Mac is the **server**, the phone is the **client**.
 - A phone without the app opens the Google Play page. The pairing part after `#` is a URL fragment, which
   is never included in web requests. The app reads the `macndroid://pair?…` part after `#`
   (and still accepts it on its own, from **Copy Pairing Link**).
+- The Windows and Linux apps add `o=windows` / `o=linux` (and `"os"` in their hello), so the phone says "PC"
+  instead of "Mac". A hello without `os` is a Mac.
 - `k` is a random 32-byte secret generated on the Mac. Whoever holds it is trusted. "Reset pairing" on the Mac rotates it.
 - Phone reconnects by trying the last known IPs, then Bonjour (matching TXT `id`).
 
@@ -75,10 +77,11 @@ that doesn't know the flag just saves the zip.
 | Message | Direction | Fields | Meaning |
 |---|---|---|---|
 | `bye` | Mac → phone | `reason`: `sleep` \| `quit` | The Mac is about to sleep or quit. The coming disconnect is expected, so the phone won't raise a left-behind alert. |
-| `input` | Mac → phone | `key`: `volume_up` \| `volume_down` | Changes the phone's volume. Works without the phone-control accessibility service. |
+| `input` | Mac → phone | `key`: `volume_up` \| `volume_down` | Changes the phone's volume. Works without the accessibility service. |
 
 `input_unavailable` (phone → Mac) now also makes the phone show a one-time notification that opens the
-accessibility settings for **Mac n Droid phone control**, which is now separate from **clipboard sync**.
+accessibility settings for **Mac n Droid clipboard and controls** (since 0.13 one service covers automatic
+copying, phone control, links that open by themselves and music started from the computer).
 
 ## v0.10 additions
 | Message | Direction | Fields | Meaning |
@@ -103,8 +106,8 @@ accessibility settings for **Mac n Droid phone control**, which is now separate 
 | `contacts` | phone → Mac | `q`, `results`: [{`name`, `number`, `label`}], `permission` | Search results (`permission` false when contacts access is off). |
 | `clip_clear` | phone → Mac | | Clear the clipboard history on both devices (the Mac sends back an empty `clip_history`). |
 
-### Browser extension link (Mac only, v0.10)
-The extension connects to the Mac app over a WebSocket at `ws://127.0.0.1:47809`. It listens on
+### Browser extension link (v0.10; Windows and Linux since v0.13)
+The extension connects to the Mac n Droid app (Mac, Windows or Linux) over a WebSocket at `ws://127.0.0.1:47809`. It listens on
 127.0.0.1 only and accepts only browser-extension origins (`chrome-extension://`, `moz-extension://`,
 `safari-web-extension://`), so web pages can't connect. Messages are JSON with a `t` field:
 
@@ -116,3 +119,27 @@ The extension connects to the Mac app over a WebSocket at `ws://127.0.0.1:47809`
 | `cmd` | app → extension | `tab`, `cmd`: play \| pause \| toggle \| next \| prev | From the phone's media controls. |
 | `send_url` | extension → app | `url` (http/https) | Open this page on the phone (`open_url`). |
 | `ping` | extension → app | | Keep-alive. |
+
+## v0.13 additions
+| Message | Direction | Fields | Meaning |
+|---|---|---|---|
+| `volume` | phone → Mac | `vol` 0–100 | The phone's media volume, on connect and when it changes. The Mac shows a slider with the phone's music. |
+| `volume_set` | Mac → phone | `vol` 0–100 | Set the phone's media volume (no accessibility service needed). |
+| `mac_media` | Mac → phone | + `vol` 0–100, `muted`, `fixed` | The Mac's output volume with what's playing. `fixed`: this output can't be changed (some HDMI/USB). |
+| `mac_volume` | Mac → phone | `vol`, `muted`, `fixed` | The Mac's volume changed. The phone shows it as a remote (Cast-style) volume for "Music on your Mac". |
+| `mac_volume_set` | phone → Mac | `vol` 0–100 | Set the Mac's output volume. |
+| `media_limited` | phone → Mac | `id`, `reason`: `background` | The phone was asked to start a player but Android 17+ will mute it (an app that starts playing in the background is muted unless the asking app may act in the background, e.g. through an enabled accessibility service). The Mac explains this. |
+
+## v0.13 additions: Photos
+
+The Mac's Photos pane browses the phone's photos and videos. Nothing is sent unless the Mac asks.
+
+| Message | Direction | Fields | Meaning |
+|---|---|---|---|
+| `gallery_list` | Mac → phone | `offset`, `limit` (≤ 300), `kind`: `all` \| `photos` \| `videos`, `album` (optional bucket id) | Ask for one page, newest first. |
+| `gallery` | phone → Mac | `offset`, `kind`, `album`, `access`: `full` \| `photos` \| `partial` \| `none` \| `off` (turned off on the phone; the Mac clears what it showed), `total`, `items` [{`id` (`i…` photo, `v…` video), `v`, `name`, `date` ms, `size`, `w`, `h`, `dur` ms, `mime`}], `albums` [{`id`, `name`, `count`}] (first page only) | One page. |
+| `gallery_thumbs` | Mac → phone | `ids` (≤ 60), `size` px | Ask for thumbnails. |
+| `gallery_thumb` | phone → Mac | `id`, `d` (base64 JPEG) or `missing` | One thumbnail. |
+| `gallery_get` | Mac → phone | `id`, `mode`: `view` \| `save` | Send the original through the normal file transfer; its `file_start` carries `gallery` (the id) and `view`. `view` files go to the Mac's cache and open in Quick Look; `save` files go to Downloads. |
+| `gallery_ask` | Mac → phone | — | The phone shows a notification that asks for photo and video access. |
+| `gallery_access` | phone → Mac | `access` | Access changed; the Mac loads the library again. |

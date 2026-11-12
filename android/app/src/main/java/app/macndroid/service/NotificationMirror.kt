@@ -26,23 +26,43 @@ class NotificationMirror : NotificationListenerService() {
     private val lastSent = ConcurrentHashMap<String, Int>()
     private val labels = ConcurrentHashMap<String, String>()
     private val liveSent = ConcurrentHashMap<String, String>()
+    /** Live activities whose app hid its notification while you're in it (key → package). */
     private val heldLive = ConcurrentHashMap<String, String>()
+    private val heldSince = ConcurrentHashMap<String, Long>()
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val checkHeld = object : Runnable {
+        override fun run() {
+            if (heldLive.isEmpty()) return
+            val pm = getSystemService(android.os.PowerManager::class.java)
+            val km = getSystemService(android.app.KeyguardManager::class.java)
+            // Locking the phone means you left the app: it would have posted the notification again by now.
+            val away = pm?.isInteractive != true || km?.isKeyguardLocked == true
+            val now = System.currentTimeMillis()
+            for ((key, pkg) in heldLive) {
+                val left = CopyWatcher.foregroundPackage != pkg
+                if (away || left || now - (heldSince[key] ?: now) > 10 * 60_000) release(key)
+            }
+            if (heldLive.isNotEmpty()) main.postDelayed(this, 2_000)
+        }
+    }
 
-    /** Left an app whose live notification we were holding: end it unless it reappeared. */
-    fun onForegroundChanged(previous: String?, current: String) {
-        val held = heldLive.filterValues { it != current }
+    private fun release(key: String) {
+        heldLive.remove(key)
+        heldSince.remove(key)
+        if (liveSent.remove(key) != null) Link.post(JSONObject().put("t", "live_end").put("key", key))
+    }
+
+    /** Left the app whose live notification we were holding: end it unless it comes back. */
+    fun onForegroundChanged(current: String) {
+        val held = heldLive.filterValues { it != current }.keys
         if (held.isEmpty()) return
         main.postDelayed({
             val active = runCatching { activeNotifications }.getOrNull()?.map { it.key }?.toSet() ?: emptySet()
-            for (key in held.keys) {
+            for (key in held) {
                 if (heldLive[key] == CopyWatcher.foregroundPackage) continue   // back in the app
-                heldLive.remove(key)
-                if (key !in active && liveSent.remove(key) != null) {
-                    Link.post(JSONObject().put("t", "live_end").put("key", key))
-                }
+                if (key !in active) release(key) else { heldLive.remove(key); heldSince.remove(key) }
             }
-        }, 2500)
+        }, 1500)
     }
 
     override fun onListenerConnected() {
@@ -71,18 +91,29 @@ class NotificationMirror : NotificationListenerService() {
         forward(sbn, silent = stale)
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+    override fun onNotificationRemoved(sbn: StatusBarNotification) = removed(sbn, REASON_APP_CANCEL)
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification, rankingMap: RankingMap?, reason: Int) = removed(sbn, reason)
+
+    private fun removed(sbn: StatusBarNotification, reason: Int) {
         ChatNotifications.onRemoved(sbn)
         if (liveSent.containsKey(sbn.key)) {
-            // Clock (and others) hide their live notification while the app itself is open. Keep it on
-            // the Mac until the app is left; then it either comes back or really ended.
-            // Never for calls (a removed call notification means the call ended), and never while the
-            // phone is locked (the "app on screen" is then stale, so it would stick until unlock).
+            // Clock, Maps and others hide their live notification while the app itself is open, and post it
+            // again when you leave. Keep it on the computer meanwhile, but only while that app is really on
+            // screen (known from the clipboard and controls accessibility service; without it, it just ends), only when
+            // the app removed it itself (not you swiping it away), never for calls (a removed call notification
+            // means the call ended), and only while the phone is unlocked. It ends as soon as you leave the
+            // app, lock the phone, or after 10 minutes.
             val isCall = sbn.notification.category == Notification.CATEGORY_CALL
             val unlocked = getSystemService(android.os.PowerManager::class.java)?.isInteractive == true &&
                 getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != true
-            if (!isCall && unlocked && CopyWatcher.foregroundPackage == sbn.packageName) {
+            val byApp = reason == REASON_APP_CANCEL || reason == REASON_CLICK
+            val inThatApp = CopyWatcher.instance != null && CopyWatcher.foregroundPackage == sbn.packageName
+            if (!isCall && unlocked && byApp && inThatApp) {
                 heldLive[sbn.key] = sbn.packageName
+                heldSince[sbn.key] = System.currentTimeMillis()
+                main.removeCallbacks(checkHeld)
+                main.postDelayed(checkHeld, 2_000)
             } else {
                 liveSent.remove(sbn.key)
                 Link.post(JSONObject().put("t", "live_end").put("key", sbn.key))
@@ -106,6 +137,7 @@ class NotificationMirror : NotificationListenerService() {
         lastSent.clear()
         liveSent.clear()
         heldLive.clear()
+        heldSince.clear()
     }
 
     // MARK: Live activities (timers, stopwatches, ongoing calls, rides & deliveries, downloads)
@@ -121,6 +153,7 @@ class NotificationMirror : NotificationListenerService() {
         if (!Prefs.mirrorNotifications.value) return true
         val signature = live.toString()
         heldLive.remove(sbn.key)
+        heldSince.remove(sbn.key)
         if (liveSent[sbn.key] == signature) return true
         liveSent[sbn.key] = signature
         Log.i("NotificationMirror", "live ${live.optString("kind")} ${sbn.packageName} glance='${live.optString("short")}' when=${live.optDouble("when")} paused=${live.optDouble("paused")}")

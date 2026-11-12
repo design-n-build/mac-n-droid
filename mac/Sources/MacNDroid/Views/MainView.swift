@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum Pane: String, CaseIterable, Identifiable {
-    case overview, notifications, messages, clipboard, files, pair
+    case overview, notifications, messages, clipboard, files, photos, pair
     var id: String { rawValue }
 
     var title: String {
@@ -12,6 +12,7 @@ enum Pane: String, CaseIterable, Identifiable {
         case .messages: "Messages"
         case .clipboard: "Clipboard"
         case .files: "Files"
+        case .photos: "Photos"
         case .pair: "Pair a Phone"
         }
     }
@@ -23,6 +24,7 @@ enum Pane: String, CaseIterable, Identifiable {
         case .messages: "message"
         case .clipboard: "doc.on.clipboard"
         case .files: "folder"
+        case .photos: "photo.on.rectangle.angled"
         case .pair: "qrcode"
         }
     }
@@ -40,7 +42,7 @@ struct MainView: View {
         NavigationSplitView {
             List(selection: $selection) {
                 Section(state.phone?.name ?? "Phone") {
-                    ForEach([Pane.overview, .notifications, .messages, .clipboard, .files]) { pane in
+                    ForEach([Pane.overview, .notifications, .messages, .clipboard, .files, .photos]) { pane in
                         Label(pane.title, systemImage: pane.symbol)
                             .badge(pane == .notifications ? state.notifications.count : 0)
                             .tag(pane)
@@ -58,7 +60,13 @@ struct MainView: View {
                 }
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 210)
-            .safeAreaInset(edge: .bottom) { ConnectionFooter().padding(12) }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 10) {
+                    SidebarLive()
+                    ConnectionFooter()
+                }
+                .padding(12)
+            }
             .sheet(isPresented: $showBrowserSheet) { BrowserExtensionSheet() }
         } detail: {
             Group {
@@ -68,6 +76,7 @@ struct MainView: View {
                 case .messages: MessagesView()
                 case .clipboard: ClipboardView()
                 case .files: FilesView()
+                case .photos: PhotosView(gallery: state.gallery)
                 case .pair: PairView()
                 }
             }
@@ -89,6 +98,90 @@ struct MainView: View {
         .onChange(of: state.requestedPane) { _, p in
             if let p { selection = p; state.requestedPane = nil }
         }
+    }
+}
+
+/// What's live on the phone, always in view at the bottom of the sidebar: music with its controls and the
+/// phone's volume, then timers, stopwatches, calls, rides and deliveries.
+struct SidebarLive: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        if state.isConnected, !state.players.isEmpty || !state.live.isEmpty {
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                VStack(spacing: 8) {
+                    ForEach(state.players.prefix(2)) { np in player(np, now: ctx.date) }
+                    ForEach(state.live.sorted { $0.priority > $1.priority }) { a in activity(a, now: ctx.date) }
+                }
+            }
+            .transition(.opacity)
+        }
+    }
+
+    private func player(_ np: NowPlaying, now: Date) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Group {
+                    if let art = state.playerArt[np.id] ?? state.icons[np.pkg] {
+                        Image(nsImage: art).resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        Image(systemName: "music.note").foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity).background(.quaternary)
+                    }
+                }
+                .frame(width: 36, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(np.title).font(.callout.weight(.semibold)).lineLimit(1)
+                    Text(np.artist.isEmpty ? np.app : np.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            if np.duration > 0 {
+                ProgressView(value: min(np.position(at: now), np.duration), total: np.duration)
+                    .progressViewStyle(.linear).controlSize(.mini)
+            }
+            HStack(spacing: 0) {
+                Button { state.mediaCommand("prev", id: np.id) } label: { Image(systemName: "backward.fill").frame(maxWidth: .infinity) }
+                    .disabled(!np.canPrev)
+                Button { state.mediaCommand("toggle", id: np.id) } label: {
+                    Image(systemName: np.playing ? "pause.fill" : "play.fill").font(.title3).frame(maxWidth: .infinity)
+                }
+                Button { state.mediaCommand("next", id: np.id) } label: { Image(systemName: "forward.fill").frame(maxWidth: .infinity) }
+                    .disabled(!np.canNext)
+            }
+            .buttonStyle(.borderless)
+            if let v = state.phoneVolume {
+                PhoneVolumeSlider(volume: v, set: { state.setPhoneVolume($0) }, mute: { state.togglePhoneMute() })
+            }
+        }
+        .padding(10)
+        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func activity(_ a: LiveActivity, now: Date) -> some View {
+        HStack(spacing: 8) {
+            Group {
+                if let icon = state.icons[a.pkg] {
+                    Image(nsImage: icon).resizable().interpolation(.high)
+                } else {
+                    Image(systemName: a.symbol).foregroundStyle(.orange)
+                }
+            }
+            .frame(width: 22, height: 22)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(a.title.isEmpty ? a.app : a.title).font(.callout.weight(.medium)).lineLimit(1)
+                if !a.text.isEmpty { Text(a.text).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+            }
+            Spacer(minLength: 4)
+            Text(a.glance(at: now)).font(.callout.monospacedDigit().weight(.semibold))
+                .foregroundStyle(a.kind == .timer || a.kind == .stopwatch ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
+                .opacity(a.isPaused ? 0.55 : 1)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 

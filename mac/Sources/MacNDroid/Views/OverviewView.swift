@@ -51,33 +51,7 @@ struct OverviewView: View {
 
                 BrowserExtensionTip()
 
-                if !state.players.isEmpty {
-                    Section("Now Playing") {
-                        ForEach(state.players) { np in
-                            NowPlayingCard(nowPlaying: np, art: state.playerArt[np.id], compact: false)
-                        }
-                    }
-                }
-
-                if !state.live.isEmpty {
-                    Section("Live Activities") {
-                        TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                            VStack(spacing: 10) {
-                                ForEach(state.live) { a in
-                                    HStack(spacing: 12) {
-                                        AppIcon(image: state.icons[a.pkg])
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(a.title.isEmpty ? a.app : a.title).font(.headline).lineLimit(1)
-                                            Text(a.text.isEmpty ? a.app : a.text).foregroundStyle(.secondary).lineLimit(1)
-                                        }
-                                        Spacer()
-                                        Text(a.glance(at: ctx.date)).font(.title3.monospacedDigit().weight(.semibold))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                // Music and live activities are in the sidebar, always in view.
 
                 Section("Sync") {
                     Toggle("Mirror notifications", isOn: $mirrorNotifications)
@@ -196,6 +170,67 @@ struct WebcamHelp: View {
 }
 
 /// Album art, title, progress and transport controls for what's playing on the phone.
+/// The phone's media volume: a slider that follows the phone (its buttons too) and sets it while you drag.
+/// Clicking the speaker mutes, and clicking again brings the sound back.
+struct PhoneVolumeSlider: View {
+    let volume: Int
+    let set: (Int) -> Void
+    let mute: () -> Void
+    var dark = false
+    @State private var editing: Double?
+    @State private var lastSent = Date.distantPast
+
+    private var symbol: String {
+        let v = Int(editing ?? Double(volume))
+        return v == 0 ? "speaker.slash.fill" : v < 34 ? "speaker.wave.1.fill" : v < 67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: mute) {
+                Image(systemName: symbol).font(.system(size: 11)).frame(width: 18, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(volume == 0 ? "Turn the phone's sound back on" : "Mute the phone")
+            VolumeBar(value: editing ?? Double(volume), dark: dark) { v, done in
+                editing = done ? nil : v
+                // About ten updates a second while dragging; the phone shows its own volume panel.
+                if done || Date().timeIntervalSince(lastSent) > 0.1 { lastSent = Date(); set(Int(v.rounded())) }
+            }
+        }
+        .foregroundStyle(dark ? AnyShapeStyle(Color.white.opacity(0.75)) : AnyShapeStyle(.secondary))
+        .accessibilityLabel("Phone volume")
+    }
+}
+
+/// A slim volume bar that fills whatever width it's given: click or drag anywhere on it.
+struct VolumeBar: View {
+    let value: Double          // 0…100
+    var dark = false
+    let changed: (Double, Bool) -> Void   // (value, finished)
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = max(geo.size.width, 1)
+            let x = CGFloat(min(max(value, 0), 100) / 100) * w
+            ZStack(alignment: .leading) {
+                Capsule().fill(dark ? Color.white.opacity(0.2) : Color.primary.opacity(0.15)).frame(height: 4)
+                Capsule().fill(dark ? Color.white : Color.accentColor).frame(width: max(4, x), height: 4)
+                Circle().fill(.white).shadow(color: .black.opacity(0.25), radius: 1, y: 0.5)
+                    .frame(width: 11, height: 11)
+                    .offset(x: min(max(x - 5.5, 0), w - 11))
+            }
+            .frame(height: geo.size.height)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0)
+                .onChanged { changed(Double(min(max($0.location.x / w, 0), 1)) * 100, false) }
+                .onEnded { changed(Double(min(max($0.location.x / w, 0), 1)) * 100, true) })
+        }
+        .frame(height: 14)
+    }
+}
+
 struct NowPlayingCard: View {
     @EnvironmentObject private var state: AppState
     let nowPlaying: NowPlaying
@@ -206,7 +241,7 @@ struct NowPlayingCard: View {
         let np = nowPlaying
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             let pos = np.position(at: ctx.date)
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 Group {
                     if let art {
                         Image(nsImage: art).resizable().aspectRatio(contentMode: .fill)
@@ -234,17 +269,25 @@ struct NowPlayingCard: View {
                         }
                     }
                 }
-                HStack(spacing: compact ? 2 : 8) {
-                    Button { state.mediaCommand("prev", id: np.id) } label: { Image(systemName: "backward.fill") }
-                        .disabled(!np.canPrev)
-                    Button { state.mediaCommand("toggle", id: np.id) } label: {
-                        Image(systemName: np.playing ? "pause.fill" : "play.fill").frame(width: 18)
+                // Controls on top, the phone's volume under them, in one column of the same width.
+                VStack(spacing: 12) {
+                    HStack(spacing: 0) {
+                        Button { state.mediaCommand("prev", id: np.id) } label: { Image(systemName: "backward.fill").frame(maxWidth: .infinity) }
+                            .disabled(!np.canPrev)
+                        Button { state.mediaCommand("toggle", id: np.id) } label: {
+                            Image(systemName: np.playing ? "pause.fill" : "play.fill").frame(maxWidth: .infinity)
+                        }
+                        Button { state.mediaCommand("next", id: np.id) } label: { Image(systemName: "forward.fill").frame(maxWidth: .infinity) }
+                            .disabled(!np.canNext)
                     }
-                    Button { state.mediaCommand("next", id: np.id) } label: { Image(systemName: "forward.fill") }
-                        .disabled(!np.canNext)
+                    .buttonStyle(.borderless)
+                    .font(compact ? .body : .title3)
+                    if let v = state.phoneVolume, !compact {
+                        PhoneVolumeSlider(volume: v, set: { state.setPhoneVolume($0) }, mute: { state.togglePhoneMute() })
+                    }
                 }
-                .buttonStyle(.borderless)
-                .font(compact ? .body : .title3)
+                .frame(width: compact ? 84 : 140)
+                .padding(.leading, compact ? 0 : 8)
             }
             .padding(compact ? 8 : 0)
             .background(compact ? AnyShapeStyle(.quaternary.opacity(0.5)) : AnyShapeStyle(.clear),

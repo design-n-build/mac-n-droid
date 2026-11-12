@@ -1,5 +1,7 @@
 package app.macndroid.ui
 
+import app.macndroid.core.Computer
+
 import android.Manifest
 import android.content.ComponentName
 import android.content.Context
@@ -21,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Folder
@@ -65,9 +68,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             MacNDroidTheme {
                 val pairing by Prefs.pairing.collectAsState()
+                val onboarded by Prefs.onboarded.collectAsState()
                 var link by pendingLink
-                if (pairing == null) {
-                    PairScreen(initialLink = link, onPaired = { link = null })
+                if (pairing == null && !onboarded && link == null) {
+                    OnboardingScreen(onDone = { Prefs.setOnboarded(true) })
+                } else if (pairing == null) {
+                    PairScreen(initialLink = link, onPaired = { link = null }, onBack = { Prefs.setOnboarded(false) })
                 } else {
                     AppShell()
                 }
@@ -94,7 +100,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PairScreen(initialLink: String?, onPaired: () -> Unit) {
+private fun PairScreen(initialLink: String?, onPaired: () -> Unit, onBack: () -> Unit) {
     val ctx = LocalContext.current
     var error by remember { mutableStateOf<String?>(null) }
     var showManual by remember { mutableStateOf(false) }
@@ -111,8 +117,24 @@ private fun PairScreen(initialLink: String?, onPaired: () -> Unit) {
     }
 
     LaunchedEffect(initialLink) { initialLink?.let(::accept) }
+    // Asked for in onboarding step 2; if it was skipped, Android's own prompt comes up here instead.
+    val allowLan = rememberLocalNetworkRequest()
+    LaunchedEffect(Unit) { if (!LocalNetwork.allowed(ctx)) allowLan() }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Mac n Droid") }) }) { pad ->
+    androidx.activity.compose.BackHandler(onBack = onBack)
+    Scaffold(topBar = {
+        Column {
+            TopAppBar(
+                title = { Text("Mac n Droid") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back") } },
+                actions = {
+                    Text("Step 3 of 3", style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 16.dp))
+                },
+            )
+            Box(Modifier.padding(horizontal = 24.dp)) { StepProgress(3) }
+        }
+    }) { pad ->
         Column(
             Modifier.padding(pad).fillMaxSize().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -124,10 +146,10 @@ private fun PairScreen(initialLink: String?, onPaired: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(28.dp))
-            Text("Connect to your Mac", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
+            Text("Connect to ${Computer.your}", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
             Spacer(Modifier.height(12.dp))
             Text(
-                "Open Mac n Droid on your Mac and choose Pair a Phone. Then scan the QR code it shows.",
+                "Open Mac n Droid on ${Computer.your} and choose Pair a Phone. Then scan the QR code it shows.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -155,7 +177,7 @@ private fun PairScreen(initialLink: String?, onPaired: () -> Unit) {
             }
             Spacer(Modifier.height(24.dp))
             Text(
-                "Your phone and Mac must be on the same Wi-Fi network. Nothing goes through the cloud.",
+                "Your phone and ${Computer.word} must be on the same Wi-Fi network. Nothing goes through the cloud.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -170,7 +192,7 @@ private fun PairScreen(initialLink: String?, onPaired: () -> Unit) {
             title = { Text("Enter pairing link") },
             text = {
                 Column {
-                    Text("On your Mac, click Copy Pairing Link and send it to this phone, then paste it here.")
+                    Text("On ${Computer.your}, click Copy Pairing Link and send it to this phone, then paste it here.")
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(text, { text = it }, singleLine = true, placeholder = { Text("macndroid://pair?…") })
                 }
@@ -244,20 +266,18 @@ private fun HomeScreen() {
     var smsAllowed by remember { mutableStateOf(app.macndroid.service.SmsBridge.hasPermission(ctx)) }
 
     var shotsAllowed by remember { mutableStateOf(app.macndroid.service.ScreenshotWatcher.hasPermission(ctx)) }
-    var perms by remember { mutableStateOf(PermissionState.read(ctx)) }
-    var autoClip by remember { mutableStateOf(ClipboardSync.isAutoEnabled(ctx)) }
-    var control by remember { mutableStateOf(app.macndroid.service.PhoneControl.isEnabled(ctx)) }
-    var explainControl by remember { mutableStateOf(false) }
+    val features = remember { mutableStateOf(Features.read(ctx)) }
+    val controls = features.value.controls
+    var explainControls by remember { mutableStateOf(false) }
+    val featureActions = rememberFeatureActions(features) { explainControls = true }
+    val allowLocalNetwork = rememberLocalNetworkRequest { features.value = Features.read(ctx) }
     var menu by remember { mutableStateOf(false) }
     var confirmUnpair by remember { mutableStateOf(false) }
-    var explainAutoClip by remember { mutableStateOf(false) }
     var openTip by remember { mutableStateOf<Tip?>(null) }
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        perms = PermissionState.read(ctx)
-        autoClip = ClipboardSync.isAutoEnabled(ctx)
-        control = app.macndroid.service.PhoneControl.isEnabled(ctx)
+        features.value = Features.read(ctx)
         shotsAllowed = app.macndroid.service.ScreenshotWatcher.hasPermission(ctx)
         smsAllowed = app.macndroid.service.SmsBridge.hasPermission(ctx)
     }
@@ -270,15 +290,22 @@ private fun HomeScreen() {
         refreshService()
     }
 
+    val galleryOn by Prefs.galleryOnMac.collectAsState()
+    var galleryAllowed by remember { mutableStateOf(app.macndroid.service.Gallery.permissionAccess(ctx) != "none") }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        galleryAllowed = app.macndroid.service.Gallery.permissionAccess(ctx) != "none"
+    }
+    val galleryPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        galleryAllowed = app.macndroid.service.Gallery.permissionAccess(ctx) != "none"
+        if (galleryAllowed) Prefs.setGalleryOnMac(true)
+        app.macndroid.service.Gallery.reportAccess(ctx)
+    }
     val smsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         smsAllowed = app.macndroid.service.SmsBridge.hasPermission(ctx)
         if (smsAllowed) Prefs.setSmsOnMac(true)
         refreshService()
     }
 
-    val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-        perms = PermissionState.read(ctx)
-    }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) SyncService.sendUris(ctx, uris)
     }
@@ -298,7 +325,7 @@ private fun HomeScreen() {
                     DropdownMenu(menu, { menu = false }) {
                         DropdownMenuItem(text = { Text("Reconnect") }, onClick = { menu = false; Link.kick() },
                             leadingIcon = { Icon(Icons.Outlined.Refresh, null) })
-                        DropdownMenuItem(text = { Text("Unpair Mac") }, onClick = { menu = false; confirmUnpair = true },
+                        DropdownMenuItem(text = { Text("Unpair ${Computer.word}") }, onClick = { menu = false; confirmUnpair = true },
                             leadingIcon = { Icon(Icons.Outlined.LinkOff, null) })
                     }
                 },
@@ -312,7 +339,7 @@ private fun HomeScreen() {
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatusCard(status, pairing?.macName ?: "Mac")
+                    StatusCard(status, pairing?.macName ?: Computer.word)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Box(Modifier.weight(1f)) {
                             FilledTonalButton(
@@ -336,26 +363,17 @@ private fun HomeScreen() {
                 }
             }
 
-            if (!perms.allGranted) {
-                item {
-                    SetupCard(perms,
-                        onNotifPermission = {
-                            if (Build.VERSION.SDK_INT >= 33) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        },
-                        onListener = { openListenerSettings(ctx) },
-                        onBattery = { requestBatteryExemption(ctx) },
-                    )
-                }
-            }
+            if (!features.value.localNetwork) item { LocalNetworkCard(allowLocalNetwork) }
+            item { SetupChecklist(features.value, featureActions) }
 
             item {
                 SectionCard("Clipboard") {
-                    SwitchRow(Icons.Outlined.ContentCopy, "From Mac", "Copy on your Mac, paste here", clip) { Prefs.setReceiveClipboard(it) }
-                    SwitchRow(Icons.Outlined.AutoAwesome, "To Mac automatically",
-                        if (autoClip) "Copy here, paste on your Mac" else "Copy here, paste on your Mac. Needs one setting.",
-                        autoClip) { explainAutoClip = true }
+                    SwitchRow(Icons.Outlined.ContentCopy, "From ${Computer.word}", "Copy on ${Computer.your}, paste here", clip) { Prefs.setReceiveClipboard(it) }
+                    SwitchRow(Icons.Outlined.AutoAwesome, "To ${Computer.word} automatically",
+                        if (controls) "Copy here, paste on ${Computer.your}" else "Copy here, paste on ${Computer.your}. Turns on clipboard and controls.",
+                        controls) { explainControls = true }
                     SwitchRow(Icons.Outlined.Screenshot, "Screenshots",
-                        if (shotsAllowed) "New screenshots are ready to paste on your Mac" else "Needs access to photos",
+                        if (shotsAllowed) "New screenshots are ready to paste on ${Computer.your}" else "Needs access to photos",
                         shots && shotsAllowed) { on ->
                         if (on && !shotsAllowed) photosPermission.launch(app.macndroid.service.ScreenshotWatcher.permission)
                         else { Prefs.setScreenshotsToMac(on); refreshService() }
@@ -364,14 +382,24 @@ private fun HomeScreen() {
             }
 
             item {
-                SectionCard("Messages and music") {
-                    SwitchRow(Icons.Outlined.Sms, "Messages on Mac",
-                        if (smsAllowed) "Read and reply to texts from ${pairing?.macName ?: "your Mac"}" else "Read and reply to texts. Needs access to SMS.",
+                SectionCard("Photos, messages and music") {
+                    SwitchRow(Icons.Outlined.PhotoLibrary, "Photos on ${Computer.word}",
+                        when {
+                            !galleryAllowed -> "See this phone's photos and videos on ${Computer.your}. Needs access to photos."
+                            galleryOn -> "${pairing?.macName ?: Computer.your} can browse your photos and videos"
+                            else -> "${Computer.your} can't see your photos and videos"
+                        },
+                        galleryOn && galleryAllowed) { on ->
+                        if (on && !galleryAllowed) galleryPermission.launch(app.macndroid.service.Gallery.permissions)
+                        else { Prefs.setGalleryOnMac(on); app.macndroid.service.Gallery.reportAccess(ctx) }
+                    }
+                    SwitchRow(Icons.Outlined.Sms, "Messages on ${Computer.word}",
+                        if (smsAllowed) "Read and reply to texts from ${pairing?.macName ?: Computer.your}" else "Read and reply to texts. Needs access to SMS.",
                         smsOn && smsAllowed) { on ->
                         if (on && !smsAllowed) smsPermission.launch(app.macndroid.service.SmsBridge.permissions)
                         else { Prefs.setSmsOnMac(on); refreshService() }
                     }
-                    SwitchRow(Icons.Outlined.MusicNote, "Music on your Mac",
+                    SwitchRow(Icons.Outlined.MusicNote, "Music on ${Computer.your}",
                         "Play, pause and skip from your phone",
                         macMusic) { on ->
                         Prefs.setMacMusic(on)
@@ -383,11 +411,11 @@ private fun HomeScreen() {
 
             item {
                 SectionCard("Phone") {
-                    SwitchRow(Icons.Outlined.TouchApp, "Control from Mac",
-                        if (control) "Tap and type here from the Phone Screen window" else "Mirroring is watch-only without it. Needs one setting.",
-                        control) { explainControl = true }
+                    SwitchRow(Icons.Outlined.TouchApp, "Control from ${Computer.word}",
+                        if (controls) "Tap and type here from the Phone Screen window" else "Mirroring is watch-only without it. Turns on clipboard and controls.",
+                        controls) { explainControls = true }
                     SwitchRow(Icons.Outlined.NotificationsActive, "Left-behind alerts",
-                        "A chime if you leave the Wi-Fi network ${pairing?.macName ?: "your Mac"} is on while it's awake",
+                        "A chime if you leave the Wi-Fi network ${pairing?.macName ?: Computer.your} is on while it's awake",
                         leftBehind) { Prefs.setLeftBehind(it) }
                     SwitchRow(Icons.Outlined.VolumeUp, "Sounds",
                         "Sounds when files arrive or send, and for left-behind alerts",
@@ -415,61 +443,16 @@ private fun HomeScreen() {
         }
     }
 
-    openTip?.let { TipSheet(it, macName = pairing?.macName ?: "Mac", onDismiss = { openTip = null }) }
+    openTip?.let { TipSheet(it, macName = pairing?.macName ?: Computer.word, onDismiss = { openTip = null }) }
 
-    if (explainAutoClip) {
-        AlertDialog(
-            onDismissRequest = { explainAutoClip = false },
-            icon = { Icon(Icons.Outlined.AutoAwesome, null) },
-            title = { Text(if (autoClip) "Turn off automatic clipboard?" else "Copy here, paste on your Mac") },
-            text = {
-                Text(
-                    if (autoClip) "In the next screen, open Mac n Droid clipboard sync and turn it off."
-                    else "Android only lets the app you're using read the clipboard. Mac n Droid can watch for when you tap Copy, " +
-                        "then pass what you copied to your Mac.\n\nIn the next screen, open Installed apps → Mac n Droid clipboard sync and turn it on. " +
-                        "It can't tap or type on your screen, and never reads or stores what's on it."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    explainAutoClip = false
-                    ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                }) { Text("Open settings") }
-            },
-            dismissButton = { TextButton(onClick = { explainAutoClip = false }) { Text("Not now") } },
-        )
-    }
-
-    if (explainControl) {
-        AlertDialog(
-            onDismissRequest = { explainControl = false },
-            icon = { Icon(Icons.Outlined.TouchApp, null) },
-            title = { Text(if (control) "Turn off control from Mac?" else "Use this phone from your Mac") },
-            text = {
-                Text(
-                    if (control) "In the next screen, open Mac n Droid phone control and turn it off. Mirroring still works, watch-only."
-                    else "While you mirror this screen, clicks on your Mac become taps here, and you can scroll, type and use Back and Home.\n\n" +
-                        "It only acts on what you do in the Phone Screen window on your paired Mac.\n\n" +
-                        "Some banking and UPI apps show a warning while this is on, because it can tap on other apps. " +
-                        "You can turn it off at any time.\n\nIn the next screen, open Installed apps → Mac n Droid phone control and turn it on."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    explainControl = false
-                    ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                }) { Text("Open settings") }
-            },
-            dismissButton = { TextButton(onClick = { explainControl = false }) { Text("Not now") } },
-        )
-    }
+    if (explainControls) ControlsConsentDialog(on = controls) { explainControls = false }
 
     if (confirmUnpair) {
         AlertDialog(
             onDismissRequest = { confirmUnpair = false },
             icon = { Icon(Icons.Outlined.LinkOff, null) },
-            title = { Text("Unpair ${pairing?.macName ?: "Mac"}?") },
-            text = { Text("This phone will stop syncing with your Mac. You can pair again at any time.") },
+            title = { Text("Unpair ${pairing?.macName ?: Computer.word}?") },
+            text = { Text("This phone will stop syncing with ${Computer.your}. You can pair again at any time.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmUnpair = false
@@ -491,8 +474,8 @@ private fun StatusCard(status: Link.Status, macName: String) {
     val (label, detail) = when (status) {
         Link.Status.Connected -> "Connected" to "Notifications, clipboard and files are syncing."
         Link.Status.Connecting -> "Connecting" to "Securing the connection."
-        Link.Status.Searching -> "Searching" to "Make sure Mac n Droid is open on your Mac and you're on the same Wi-Fi."
-        Link.Status.AuthFailed -> "Expired" to "Your Mac reset its pairing code. Unpair, then scan the new QR code."
+        Link.Status.Searching -> "Searching" to "Make sure Mac n Droid is open on ${Computer.your} and you're on the same Wi-Fi."
+        Link.Status.AuthFailed -> "Expired" to "Your ${Computer.word} reset its pairing code. Unpair, then scan the new QR code."
         Link.Status.Unpaired -> "Not paired" to ""
     }
     val dot = when (status) {
@@ -524,31 +507,6 @@ private fun StatusCard(status: Link.Status, macName: String) {
             }
         }
     }
-}
-
-@Composable
-private fun SetupCard(p: PermissionState, onNotifPermission: () -> Unit, onListener: () -> Unit, onBattery: () -> Unit) {
-    SectionCard("Finish setup") {
-        if (!p.postNotifications) SetupRow(Icons.Outlined.NotificationAdd, "Allow notifications",
-            "Needed to show connection status and received files", onNotifPermission)
-        if (!p.listener) SetupRow(Icons.Outlined.NotificationsActive, "Notification access",
-            "Lets your Mac show this phone's notifications. If the switch is greyed out, open App info → ⋮ → Allow restricted settings first.",
-            onListener)
-        if (!p.battery) SetupRow(Icons.Outlined.BatteryChargingFull, "Run in background",
-            "Stops Android from cutting the connection to save battery", onBattery)
-    }
-}
-
-@Composable
-private fun SetupRow(icon: ImageVector, title: String, body: String, onClick: () -> Unit) {
-    ListItem(
-        modifier = Modifier.tileRow(),
-        headlineContent = { Text(title) },
-        supportingContent = { Text(body) },
-        leadingContent = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) },
-        trailingContent = { Button(onClick = onClick) { Text("Allow") } },
-        colors = ListItemDefaults.colors(containerColor = tileColor),
-    )
 }
 
 @Composable
@@ -584,7 +542,7 @@ fun Modifier.clickableRow(onClick: () -> Unit) = this.then(Modifier.clickable(on
 
 // MARK: Permissions
 
-private data class PermissionState(val postNotifications: Boolean, val listener: Boolean, val battery: Boolean) {
+internal data class PermissionState(val postNotifications: Boolean, val listener: Boolean, val battery: Boolean) {
     val allGranted get() = postNotifications && listener && battery
 
     companion object {
@@ -608,7 +566,7 @@ internal fun openListenerSettings(ctx: Context) {
 }
 
 @android.annotation.SuppressLint("BatteryLife")
-private fun requestBatteryExemption(ctx: Context) {
+internal fun requestBatteryExemption(ctx: Context) {
     runCatching {
         ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")))
     }.onFailure { ctx.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }

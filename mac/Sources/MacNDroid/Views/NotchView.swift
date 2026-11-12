@@ -39,6 +39,9 @@ final class TopPanelHost<Content: View> {
     private let level: NSWindow.Level
     private let makeContent: () -> Content
     var hitSize: () -> CGSize = { .zero }
+    /// Moves the clickable area right of center (for bubbles beside the notch), so the menu bar on the
+    /// other side stays clickable.
+    var hitOffsetX: () -> CGFloat = { 0 }
     var onHoverChange: (Bool) -> Void = { _ in }
     private var inside = false
 
@@ -46,7 +49,18 @@ final class TopPanelHost<Content: View> {
         self.size = size
         self.level = level
         self.makeContent = content
+        // Switching apps, Stage Manager stages or desktops can leave the panel behind the new front window:
+        // put it back on top whenever that happens while it's showing.
+        let nc = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didActivateApplicationNotification, NSWorkspace.activeSpaceDidChangeNotification] {
+            observers.append(nc.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                guard let p = self?.panel, p.isVisible else { return }
+                p.orderFrontRegardless()
+            })
+        }
     }
+
+    private var observers: [NSObjectProtocol] = []
 
     var isVisible: Bool { panel?.isVisible == true }
 
@@ -129,7 +143,7 @@ final class TopPanelHost<Content: View> {
     private func track() {
         guard let p = panel else { return }
         let s = hitSize()
-        let rect = NSRect(x: p.frame.midX - s.width / 2, y: p.frame.maxY - s.height, width: s.width, height: s.height)
+        let rect = NSRect(x: p.frame.midX + hitOffsetX() - s.width / 2, y: p.frame.maxY - s.height, width: s.width, height: s.height)
         let now = rect.contains(NSEvent.mouseLocation)
         if p.ignoresMouseEvents == now { p.ignoresMouseEvents = !now }
         if now != inside { inside = now; onHoverChange(now) }
@@ -770,7 +784,7 @@ final class LiveBarController {
     weak var state: AppState?
 
     let model = LiveBarModel()
-    private lazy var host = TopPanelHost(size: CGSize(width: 520, height: 120), level: .statusBar) { [model] in
+    private lazy var host = TopPanelHost(size: CGSize(width: 720, height: 340), level: .statusBar) { [model] in
         LiveBarView(model: model)
     }
     private var suspended = false
@@ -780,8 +794,11 @@ final class LiveBarController {
     private let pausedLinger: TimeInterval = 15 * 60
 
     init() {
-        host.hitSize = { [weak self] in self?.model.visibleSize ?? .zero }
+        host.hitSize = { [weak self] in self?.model.hitSize ?? .zero }
+        host.hitOffsetX = { [weak self] in self?.model.hitOffsetX ?? 0 }
         model.onCommand = { [weak self] cmd in self?.state?.mediaCommand(cmd, id: self?.model.media?.id) }
+        model.onVolume = { [weak self] v in self?.state?.setPhoneVolume(v) }
+        model.onMute = { [weak self] in self?.state?.togglePhoneMute() }
         model.onSelectPlayer = { [weak self] id in
             self?.selectedPlayer = id
             self?.update()
@@ -806,7 +823,6 @@ final class LiveBarController {
         guard let state else { return }
         model.geometry = NotchGeometry.current()
         let enabled = Prefs.bool(Prefs.liveActivities) && state.isConnected
-        let activity = state.live.first
         // A newly started player takes over; otherwise keep the one picked in the switcher.
         if let top = state.players.first(where: \.playing)?.id, top != lastTopPlayer {
             lastTopPlayer = top
@@ -833,40 +849,76 @@ final class LiveBarController {
             pausedSince = nil
             expireWork?.cancel()
         }
+        // Everything live at once: calls first, then playing music, then timers and the rest, paused music last.
+        var items = state.live.sorted { $0.priority > $1.priority }.map(LiveItem.activity)
+        if let m = media {
+            if m.playing { items.insert(.media(m), at: items.prefix { if case .activity(let a) = $0 { a.kind == .call } else { false } }.count) }
+            else { items.append(.media(m)) }
+        }
         withAnimation(smooth) {
-            model.activity = activity
-            model.media = activity == nil ? media : nil
+            model.items = items
+            if let p = model.primaryID, !items.contains(where: { $0.id == p }) { model.primaryID = nil }
             model.mediaArt = media.flatMap { state.playerArt[$0.id] }
             model.players = state.players
             model.playerArt = state.playerArt
-            model.playerIcons = state.icons
-            model.icon = activity.flatMap { state.icons[$0.pkg] }
-            model.extraCount = max(0, state.live.count - 1) + (activity != nil && media != nil ? 1 : 0)
-            if activity == nil && media == nil { model.expanded = false }
+            model.icons = state.icons
+            model.volume = state.phoneVolume
+            if items.isEmpty { model.expanded = false }
         }
-        wouldShow = enabled && (activity != nil || media != nil)
+        wouldShow = enabled && !items.isEmpty
         let shouldShow = wouldShow && !suspended
         if shouldShow, !host.isVisible { host.show(geometry: model.geometry, fade: !NotchController.shared.isCovering) }
         if !shouldShow, host.isVisible { host.hide() }
     }
 }
 
+/// One live thing on the phone: music, or a timer, stopwatch, call, ride, delivery, download.
+enum LiveItem: Identifiable, Equatable {
+    case media(NowPlaying)
+    case activity(LiveActivity)
+
+    var id: String {
+        switch self {
+        case .media(let m): "m:" + m.id
+        case .activity(let a): "a:" + a.id
+        }
+    }
+}
+
 final class LiveBarModel: ObservableObject {
-    @Published var activity: LiveActivity?
-    @Published var media: NowPlaying?
+    /// Everything live, in order; the first (or the one you picked) sits beside the notch.
+    @Published var items: [LiveItem] = []
+    @Published var primaryID: String?
     @Published var mediaArt: NSImage?
     /// All players on the phone, for switching in the detail strip.
     @Published var players: [NowPlaying] = []
     @Published var playerArt: [String: NSImage] = [:]
-    @Published var playerIcons: [String: NSImage] = [:]
-    var onSelectPlayer: (String) -> Void = { _ in }
-    @Published var icon: NSImage?
-    @Published var extraCount = 0
+    @Published var icons: [String: NSImage] = [:]
     @Published var expanded = false
-    var geometry = NotchGeometry.current()
+    /// The phone's media volume (shown with the music controls), and how to change it.
+    @Published var volume: Int?
+    var onSelectPlayer: (String) -> Void = { _ in }
     var onCommand: (String) -> Void = { _ in }
+    var onVolume: (Int) -> Void = { _ in }
+    var onMute: () -> Void = {}
+    var geometry = NotchGeometry.current()
 
     static let ear: CGFloat = 78
+    static let bubbleWidth: CGFloat = 74
+    static let bubbleGap: CGFloat = 6
+    static let rowHeight: CGFloat = 34
+    static let pad: CGFloat = 26
+
+    var primary: LiveItem? { items.first { $0.id == primaryID } ?? items.first }
+    var others: [LiveItem] { items.filter { $0.id != primary?.id } }
+    var media: NowPlaying? {
+        for i in items { if case .media(let m) = i { return m } }
+        return nil
+    }
+    var primaryIsMedia: Bool { if case .media = primary { true } else { false } }
+    /// Up to two other activities run as small bubbles beside the notch.
+    var bubbles: [LiveItem] { expanded ? [] : Array(others.prefix(2)) }
+    var bubblesWidth: CGFloat { bubbles.isEmpty ? 0 : CGFloat(bubbles.count) * (Self.bubbleWidth + Self.bubbleGap) }
 
     var barHeight: CGFloat { geometry.hasNotch ? geometry.notchSize.height : geometry.barHeight }
 
@@ -876,12 +928,22 @@ final class LiveBarModel: ObservableObject {
             : CGSize(width: 150, height: barHeight)
     }
 
-    var showsSwitcher: Bool { media != nil && players.count > 1 }
+    var showsSwitcher: Bool { primaryIsMedia && players.count > 1 }
+    var showsVolume: Bool { primaryIsMedia && volume != nil }
 
+    /// The black shape.
     var visibleSize: CGSize {
         guard expanded else { return collapsedSize }
-        return CGSize(width: max(collapsedSize.width, 340), height: barHeight + 44 + (showsSwitcher ? 34 : 0))
+        let list = others.isEmpty ? 0 : CGFloat(others.count) * Self.rowHeight + 8
+        return CGSize(width: max(collapsedSize.width, 380),
+                      height: barHeight + 50 + (showsVolume ? 30 : 0) + (showsSwitcher ? 34 : 0) + list + 10)
     }
+
+    /// The clickable area: the shape plus the bubbles to its right.
+    var hitSize: CGSize { CGSize(width: visibleSize.width + bubblesWidth, height: visibleSize.height) }
+    var hitOffsetX: CGFloat { bubblesWidth / 2 }
+
+    func select(_ id: String) { withAnimation(smooth) { primaryID = id } }
 }
 
 struct LiveBarView: View {
@@ -890,68 +952,101 @@ struct LiveBarView: View {
     var body: some View {
         let size = model.visibleSize
         let radii: (CGFloat, CGFloat) = model.geometry.hasNotch ? (8, model.expanded ? 18 : 12) : (0, model.barHeight / 2)
-        VStack(spacing: 0) {
-            ZStack(alignment: .top) {
-                NotchShape(topRadius: radii.0, bottomRadius: radii.1).fill(Color.black)
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    VStack(spacing: 0) {
-                        glanceRow(now: ctx.date)
-                        if model.expanded {
-                            detailRow(now: ctx.date).transition(.opacity)
-                            if model.showsSwitcher { switcher.transition(.opacity) }
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                ZStack(alignment: .top) {
+                    NotchShape(topRadius: radii.0, bottomRadius: radii.1).fill(Color.black)
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        VStack(spacing: 0) {
+                            glanceRow(now: ctx.date)
+                            if model.expanded, let p = model.primary {
+                                detailRow(p, now: ctx.date).transition(.opacity)
+                                if model.showsVolume, let v = model.volume {
+                                    HStack {
+                                        Spacer(minLength: 0)
+                                        PhoneVolumeSlider(volume: v, set: model.onVolume, mute: model.onMute, dark: true)
+                                            .frame(width: 130)
+                                    }
+                                    .padding(.horizontal, LiveBarModel.pad)
+                                    .frame(height: 30)
+                                    .transition(.opacity)
+                                }
+                                if model.showsSwitcher { switcher.transition(.opacity) }
+                                if !model.others.isEmpty {
+                                    VStack(spacing: 0) {
+                                        ForEach(model.others) { otherRow($0, now: ctx.date) }
+                                    }
+                                    .padding(.top, 8)
+                                    .transition(.opacity)
+                                }
+                            }
                         }
                     }
                 }
+                .frame(width: size.width, height: size.height)
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation(smooth) { model.expanded.toggle() } }
+                Spacer(minLength: 0)
             }
-            .frame(width: size.width, height: size.height)
-            .contentShape(Rectangle())
-            .onTapGesture { withAnimation(smooth) { model.expanded.toggle() } }
-            Spacer(minLength: 0)
+            if !model.bubbles.isEmpty {
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    HStack(spacing: LiveBarModel.bubbleGap) {
+                        ForEach(model.bubbles) { bubble($0, now: ctx.date) }
+                    }
+                }
+                .frame(height: model.barHeight)
+                .offset(x: size.width / 2 + LiveBarModel.bubbleGap / 2 + model.bubblesWidth / 2)
+                .transition(.opacity)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.colorScheme, .dark)
     }
 
-    @ViewBuilder private var leading: some View {
-        if let a = model.activity {
-            if let icon = model.icon {
-                Image(nsImage: icon).resizable().interpolation(.high).frame(width: 18, height: 18)
-            } else {
-                Image(systemName: a.symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(tint(a))
-            }
-        } else if model.media != nil {
-            if let art = model.mediaArt {
+    // MARK: Pieces
+
+    /// Music and videos show their cover (or the app's logo); everything else shows its app's logo (Clock for
+    /// timers, the delivery or ride app's own logo), with a symbol only when the phone hasn't sent one.
+    @ViewBuilder private func icon(_ item: LiveItem, size: CGFloat) -> some View {
+        let corner = RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
+        switch item {
+        case .media(let m):
+            if let art = model.playerArt[m.id] ?? model.mediaArt ?? model.icons[m.pkg] {
                 Image(nsImage: art).resizable().aspectRatio(contentMode: .fill)
-                    .frame(width: 18, height: 18).clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .frame(width: size, height: size).clipShape(corner)
             } else {
-                Image(systemName: "music.note").font(.system(size: 12, weight: .semibold)).foregroundStyle(.pink)
+                Image(systemName: "music.note").font(.system(size: size * 0.66, weight: .semibold)).foregroundStyle(.pink)
+                    .frame(width: size, height: size)
+            }
+        case .activity(let a):
+            if let img = model.icons[a.pkg] {
+                Image(nsImage: img).resizable().interpolation(.high).frame(width: size, height: size)
+            } else {
+                Image(systemName: a.symbol).font(.system(size: size * 0.66, weight: .semibold)).foregroundStyle(tint(a))
+                    .frame(width: size, height: size)
             }
         }
     }
 
-    @ViewBuilder private func trailing(now: Date) -> some View {
-        if let a = model.activity {
+    @ViewBuilder private func glanceText(_ item: LiveItem, now: Date, size: CGFloat) -> some View {
+        switch item {
+        case .media(let m):
+            PlayPauseGlance(playing: m.playing) { model.onCommand("toggle") }
+        case .activity(let a):
             HStack(spacing: 4) {
-                if let f = a.fraction {
-                    ProgressRing(fraction: f).frame(width: 12, height: 12)
-                }
+                if let f = a.fraction { ProgressRing(fraction: f).frame(width: size - 1, height: size - 1) }
                 Text(a.glance(at: now))
-                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                    .font(.system(size: size, weight: .semibold).monospacedDigit())
                     .foregroundStyle(tint(a).opacity(a.isPaused ? 0.55 : 1))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                if model.extraCount > 0 {
-                    Circle().fill(.white.opacity(0.5)).frame(width: 4, height: 4)
-                }
+                    .minimumScaleFactor(0.7)
             }
-        } else if let m = model.media {
-            PlayPauseGlance(playing: m.playing) { model.onCommand("toggle") }
         }
     }
 
     private func glanceRow(now: Date) -> some View {
         HStack(spacing: 0) {
-            HStack { leading; Spacer(minLength: 0) }
+            HStack { if let p = model.primary { icon(p, size: 18) }; Spacer(minLength: 0) }
                 .padding(.leading, 12)
                 .frame(width: model.geometry.hasNotch ? LiveBarModel.ear : 60)
             if model.geometry.hasNotch {
@@ -959,36 +1054,84 @@ struct LiveBarView: View {
             } else {
                 Spacer(minLength: 0)
             }
-            HStack { Spacer(minLength: 0); trailing(now: now) }
+            HStack { Spacer(minLength: 0); if let p = model.primary { glanceText(p, now: now, size: 12) } }
                 .padding(.trailing, 12)
                 .frame(width: model.geometry.hasNotch ? LiveBarModel.ear : 80)
         }
         .frame(width: model.visibleSize.width, height: model.barHeight)
     }
 
-    /// The slim strip under the glance after a click: what it is, plus controls for music.
-    @ViewBuilder private func detailRow(now: Date) -> some View {
-        HStack(spacing: 10) {
-            if let a = model.activity {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(a.title.isEmpty ? a.app : a.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+    /// A small running bubble beside the notch; click to put it beside the notch instead.
+    private func bubble(_ item: LiveItem, now: Date) -> some View {
+        Button { model.select(item.id) } label: {
+            HStack(spacing: 5) {
+                icon(item, size: 14)
+                glanceText(item, now: now, size: 11)
+            }
+            .padding(.horizontal, 8)
+            .frame(width: LiveBarModel.bubbleWidth, height: max(20, model.barHeight - 8))
+            .background(Color.black, in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.12), lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.white)
+    }
+
+    /// What's beside the notch, in more detail, with controls for music.
+    @ViewBuilder private func detailRow(_ item: LiveItem, now: Date) -> some View {
+        HStack(spacing: 12) {
+            icon(item, size: 30)
+            switch item {
+            case .activity(let a):
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(a.title.isEmpty ? a.app : a.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                     Text(a.text.isEmpty ? a.app : a.text).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
                 }
                 Spacer(minLength: 0)
-            } else if let m = model.media {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(m.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                glanceText(item, now: now, size: 15)
+            case .media(let m):
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(m.title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                     Text(m.artist.isEmpty ? m.app : m.artist).font(.system(size: 11)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                MediaButton(symbol: "backward.fill") { model.onCommand("prev") }.disabled(!m.canPrev)
-                MediaButton(symbol: m.playing ? "pause.fill" : "play.fill") { model.onCommand("toggle") }
-                MediaButton(symbol: "forward.fill") { model.onCommand("next") }.disabled(!m.canNext)
+                HStack(spacing: 6) {
+                    MediaButton(symbol: "backward.fill") { model.onCommand("prev") }.disabled(!m.canPrev)
+                    MediaButton(symbol: m.playing ? "pause.fill" : "play.fill") { model.onCommand("toggle") }
+                    MediaButton(symbol: "forward.fill") { model.onCommand("next") }.disabled(!m.canNext)
+                }
             }
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 22)
-        .frame(height: 40)
+        .padding(.horizontal, LiveBarModel.pad)
+        .padding(.top, 6)
+        .frame(height: 50)
+    }
+
+    /// Another live activity; click to put it beside the notch (the current one moves down here).
+    private func otherRow(_ item: LiveItem, now: Date) -> some View {
+        Button { model.select(item.id) } label: {
+            HStack(spacing: 10) {
+                icon(item, size: 18)
+                Group {
+                    switch item {
+                    case .activity(let a): Text(a.title.isEmpty ? a.app : a.title)
+                    case .media(let m): Text(m.title)
+                    }
+                }
+                .font(.system(size: 12, weight: .medium)).lineLimit(1)
+                Spacer(minLength: 0)
+                glanceText(item, now: now, size: 12)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: LiveBarModel.rowHeight - 6)
+            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.white)
+        .padding(.horizontal, LiveBarModel.pad - 10)
+        .frame(height: LiveBarModel.rowHeight)
     }
 
     /// One chip per music app on the phone; click to control that one here.
@@ -999,7 +1142,7 @@ struct LiveBarView: View {
                 Button { model.onSelectPlayer(p.id) } label: {
                     HStack(spacing: 5) {
                         Group {
-                            if let img = model.playerIcons[p.pkg] ?? model.playerArt[p.id] {
+                            if let img = model.icons[p.pkg] ?? model.playerArt[p.id] {
                                 Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
                             } else {
                                 Image(systemName: "music.note").font(.system(size: 9))
@@ -1019,8 +1162,8 @@ struct LiveBarView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 22)
-        .frame(height: 30)
+        .padding(.horizontal, LiveBarModel.pad)
+        .frame(height: 34)
     }
 
     private func tint(_ a: LiveActivity) -> Color {

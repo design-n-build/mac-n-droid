@@ -12,15 +12,19 @@
     "soundcloud.com": { name: "SoundCloud", next: ".skipControl__next", prev: ".skipControl__previous" },
   };
   const site = SITES[location.hostname] || { name: location.hostname.replace(/^www\./, "") };
+  // Video calls aren't media to control from the phone.
+  const CALLS = /(^|\.)(meet\.google\.com|zoom\.us|teams\.microsoft\.com|teams\.live\.com|whereby\.com|meet\.jit\.si|discord\.com|app\.slack\.com|web\.skype\.com|webex\.com|gather\.town|around\.co)$/;
+  if (CALLS.test(location.hostname)) return;
 
   function visible(sel) {
     const el = sel && document.querySelector(sel);
     return el && el.offsetParent !== null && !el.disabled && el.getAttribute("aria-disabled") !== "true" ? el : null;
   }
 
-  /** The element that's playing, or the last one that played. Muted previews and ads are ignored. */
+  /** The element that's playing, or the last one that played. Muted previews, ads and live call
+   *  streams (WebRTC, which play through srcObject) are ignored. */
   function media() {
-    const all = [...document.querySelectorAll("video, audio")].filter((e) => !e.muted && e.volume > 0);
+    const all = [...document.querySelectorAll("video, audio")].filter((e) => !e.muted && e.volume > 0 && !e.srcObject);
     return all.find((e) => !e.paused && !e.ended && e.readyState > 2)
       || all.filter((e) => e.currentTime > 0 && !e.ended).sort((a, b) => (b.duration || 0) - (a.duration || 0))[0];
   }

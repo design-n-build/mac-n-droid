@@ -1,0 +1,131 @@
+# Builds Mac n Droid for Windows and Linux and tests both end to end with a fake phone (tools/fake_phone.py).
+# Runs on every release tag (v1.2.3), and from the Actions tab (Run workflow). On a tag, the installers are added
+# to that GitHub release; otherwise they appear under the run's "Artifacts".
+name: Windows and Linux
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  protocol-test:
+    name: End-to-end test (both apps, with a fake phone)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "8.0.x" }
+      - name: Install GTK, GStreamer and ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-gi gir1.2-glib-2.0 gir1.2-gtk-4.0 gir1.2-gstreamer-1.0 \
+            gir1.2-gst-plugins-base-1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+            gstreamer1.0-libav ffmpeg > /dev/null
+          ffmpeg -loglevel error -f lavfi -i testsrc=size=540x1200:rate=30 -t 2 -c:v libx264 -pix_fmt yuv420p \
+            -profile:v baseline -x264-params keyint=30:aud=1 -f h264 $RUNNER_TEMP/clip.h264
+      - name: Linux app
+        run: |
+          export MACNDROID_CONFIG=$RUNNER_TEMP/lx MACNDROID_PORT=47900 MACNDROID_DOWNLOADS=$RUNNER_TEMP/lx/dl MIRROR_VIDEO=1
+          mkdir -p $MACNDROID_DOWNLOADS
+          python3 linux/tests/e2e.py &
+          APP=$!
+          sleep 3
+          python3 tools/fake_phone.py --identity $MACNDROID_CONFIG/identity.json --port 47900 --video $RUNNER_TEMP/clip.h264 \
+            --seconds 10 --expect clip_history,sms_threads,sms_thread,contacts_search,sms_send,mirror_start,media_cmd,notif_action,open_url,file_ok,folder_ok,mac_media
+          wait $APP
+      - name: Windows app core
+        run: |
+          export MACNDROID_CONFIG=$RUNNER_TEMP/win MACNDROID_PORT=47901 MACNDROID_DOWNLOADS=$RUNNER_TEMP/win/dl MIRROR_VIDEO=1
+          dotnet build windows/CoreTest -c Release -v q
+          dotnet run --no-build -c Release --project windows/CoreTest -- 9 &
+          APP=$!
+          sleep 3
+          python3 tools/fake_phone.py --identity $MACNDROID_CONFIG/identity.json --port 47901 --video $RUNNER_TEMP/clip.h264 \
+            --seconds 10 --expect clip_history,sms_threads,sms_thread,contacts_search,sms_send,mirror_start,media_cmd,notif_action,open_url,file_ok,folder_ok,mac_media
+          wait $APP
+
+  windows:
+    name: Windows (${{ matrix.arch }})
+    needs: protocol-test
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "8.0.x" }
+      - name: Build
+        shell: pwsh
+        run: |
+          $platform = if ("${{ matrix.arch }}" -eq "arm64") { "ARM64" } else { "x64" }
+          dotnet publish windows/App/MacNDroid.csproj -c Release -r win-${{ matrix.arch }} -p:Platform=$platform -o publish/${{ matrix.arch }}
+      - name: Installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          $version = ([xml](Get-Content windows/App/MacNDroid.csproj)).Project.PropertyGroup.Version | Select-Object -First 1
+          New-Item -ItemType Directory -Force release | Out-Null
+          & $iscc /DVersion=$version /DArch=${{ matrix.arch }} "/DSource=..\publish\${{ matrix.arch }}" windows/installer.iss
+          Compress-Archive -Path publish/${{ matrix.arch }}/* -DestinationPath release/MacNDroid-$version-Windows-${{ matrix.arch }}-portable.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: release/*
+      - name: Add to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release upload "${{ github.ref_name }}" (Get-ChildItem release/*).FullName --clobber
+
+  linux:
+    name: Linux (${{ matrix.arch }} Flatpak)
+    needs: protocol-test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-latest }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: MacNDroid-Linux-${{ matrix.arch }}.flatpak
+          manifest-path: linux/app.macndroid.Linux.yml
+          arch: ${{ matrix.arch }}
+          cache-key: flatpak-${{ matrix.arch }}-${{ github.sha }}
+      - name: Add to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          dnf install -y -q gh > /dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq gh > /dev/null)
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          gh release upload "${{ github.ref_name }}" MacNDroid-Linux-${{ matrix.arch }}.flatpak --clobber
+
+  extension:
+    name: Browser extension (Chrome, Edge, Firefox)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package and check
+        run: |
+          VERSION=$(python3 -c "import json;print(json.load(open('browser-extension/manifest.json'))['version'])")
+          tools/package-extension.sh "$VERSION"
+          mkdir ffx && cd ffx && unzip -q ../release/MacNDroid-extension-firefox-$VERSION.zip && npx -y web-ext@8 lint --warnings-as-errors
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-extension
+          path: release/*.zip
+      - name: Add to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release upload "${{ github.ref_name }}" release/*.zip --clobber

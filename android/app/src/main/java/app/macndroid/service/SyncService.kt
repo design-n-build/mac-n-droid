@@ -1,5 +1,7 @@
 package app.macndroid.service
 
+import app.macndroid.core.Computer
+
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
@@ -42,6 +44,7 @@ class SyncService : Service() {
     lateinit var media: MediaSync
         private set
     private lateinit var screenshots: ScreenshotWatcher
+    private lateinit var volume: PhoneVolume
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) = reportBattery(i, force = false)
@@ -60,6 +63,8 @@ class SyncService : Service() {
         screenshots = ScreenshotWatcher(this)
         startInForeground(Link.status.value)
         media.start()
+        volume = PhoneVolume(this).also { it.start() }
+        Controls.checkLost(this)
         screenshots.refresh()
 
         Link.onMessage = ::handle
@@ -75,6 +80,7 @@ class SyncService : Service() {
             ClipboardSync.flushPending()
             app.macndroid.ui.ShareShortcuts.publish(this)
             media.resync()
+            main.post { volume.report(force = true) }
             main.post { screenshots.refresh(); SmsBridge.start(this) }
         }
         Link.onDisconnected = {
@@ -122,6 +128,7 @@ class SyncService : Service() {
         statusJob?.cancel()
         ScreenMirror.stop(notifyMac = false)
         media.stop()
+        volume.stop()
         screenshots.stop()
         ringer.stop(notifyMac = false)
         LeftBehind.stop()
@@ -153,7 +160,7 @@ class SyncService : Service() {
             "mirror_key" -> ScreenMirror.requestKeyFrame()
             "bye" -> LeftBehind.onMacSleeping()
             "input" -> {
-                val cw = PhoneControl.instance
+                val cw = CopyWatcher.instance
                 val key = msg.optString("key")
                 if (key == "volume_up" || key == "volume_down") {
                     // Works without the control service: the system volume panel shows on the phone.
@@ -162,7 +169,7 @@ class SyncService : Service() {
                         android.media.AudioManager.USE_DEFAULT_STREAM_TYPE, android.media.AudioManager.FLAG_SHOW_UI)
                 } else if (cw == null) {
                     Link.post(JSONObject().put("t", "input_unavailable"))
-                    main.post { PhoneControlPrompt.show(this) }
+                    main.post { Controls.prompt(this) }
                 } else {
                     val pts = msg.optJSONArray("p")
                     val points = (0 until (pts?.length() ?: 0)).mapNotNull { i ->
@@ -179,6 +186,12 @@ class SyncService : Service() {
             "clip_history" -> ClipHistory.receive(msg)
             "mac_media" -> main.post { MacMusic.receive(this, msg) }
             "mac_media_end" -> main.post { MacMusic.end() }
+            "mac_volume" -> main.post { MacMusic.volume(msg) }
+            "volume_set" -> main.post { volume.set(msg.optInt("vol", -1).takeIf { it >= 0 } ?: return@post) }
+            "gallery_list" -> Gallery.list(this, msg)
+            "gallery_thumbs" -> Gallery.thumbs(this, msg)
+            "gallery_get" -> Gallery.get(this, msg)
+            "gallery_ask" -> main.post { Gallery.ask(this) }
             "sms_threads" -> SmsBridge.sendThreads(this)
             "sms_thread" -> SmsBridge.sendThread(this, msg.optString("id"))
             "contacts_search" -> SmsBridge.searchContacts(this, msg.optString("q"))
@@ -201,7 +214,7 @@ class SyncService : Service() {
     // MARK: status notification
 
     private fun buildNotification(s: Link.Status): Notification {
-        val mac = Prefs.pairing.value?.macName ?: "Mac"
+        val mac = Prefs.pairing.value?.macName ?: Computer.word
         val text = when (s) {
             Link.Status.Connected -> "Connected to $mac"
             Link.Status.Connecting -> "Connecting to $mac…"

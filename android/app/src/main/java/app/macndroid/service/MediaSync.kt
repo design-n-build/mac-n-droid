@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Base64
+import android.os.Build
 import app.macndroid.core.Link
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -43,12 +44,10 @@ class MediaSync(private val ctx: Context) {
     private fun callbackFor(token: () -> MediaSession.Token) = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) {
             val p = players[token()] ?: return
-            // One player at a time: when this one starts, pause any other app that's still playing.
-            if (isPlaying(state) && p.playingSince == 0L) {
-                players.values.filter { it !== p && it.id != p.id && isPlaying(it.controller.playbackState) }
-                    .forEach { runCatching { it.controller.transportControls.pause() } }
-            }
+            // Never pause other apps here: Android's audio focus already decides who plays sound, and a silent
+            // video starting in a feed (Instagram, YouTube) would otherwise stop your music.
             push(p)
+            handler.postDelayed({ MacMusic.refresh() }, 500)
         }
         override fun onMetadataChanged(metadata: MediaMetadata?) { players[token()]?.let(::push) }
         override fun onSessionDestroyed() = refreshSessions()
@@ -164,6 +163,13 @@ class MediaSync(private val ctx: Context) {
             ?: players.values.maxByOrNull { it.playingSince }
             ?: return@post
         val t = p.controller.transportControls
+        // Android 17 mutes an app that starts playing in the background because another app asked, unless that
+        // app may act for you in the background (Mac n Droid can while one of its accessibility services is on).
+        // Tell the computer, so it can explain instead of the music silently not playing.
+        val starts = cmd == "play" || (cmd == "toggle" && !isPlaying(p.controller.playbackState))
+        if (starts && Build.VERSION.SDK_INT >= 37 && !Controls.running) {
+            Link.post(JSONObject().put("t", "media_limited").put("id", p.id).put("reason", "background"))
+        }
         when (cmd) {
             "play" -> t.play()
             "pause" -> t.pause()

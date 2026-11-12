@@ -160,4 +160,20 @@ for (pt, scales) in [(16, [1, 2]), (32, [1, 2]), (128, [1, 2]), (256, [1, 2]), (
     }
 }
 
+// MARK: Windows and Linux app icons — Windows 11 and GNOME icons fill their square more than macOS ones,
+// so this is a brand-green rounded square edge to edge, with the off-white glyph.
+func desktopIcon(_ px: Int) -> NSBitmapImageRep {
+    bitmap(px, px) { size in
+        let s = size.width
+        let inset = s * 0.04
+        let body = NSRect(x: inset, y: inset, width: s - inset * 2, height: s - inset * 2)
+        green.setFill()
+        NSBezierPath(roundedRect: body, xRadius: s * 0.22, yRadius: s * 0.22).fill()
+        drawGlyph(white, in: body.insetBy(dx: body.width * 0.2, dy: body.height * 0.2))
+    }
+}
+for px in [16, 20, 24, 32, 40, 48, 64, 256] { save(desktopIcon(px), "windows/App/Assets/ico/\(px).png") }
+save(desktopIcon(256), "windows/App/Assets/AppIcon.png")
+save(desktopIcon(512), "linux/data/icons/app.macndroid.Linux.png")
+
 print("green = \(greenHex)")

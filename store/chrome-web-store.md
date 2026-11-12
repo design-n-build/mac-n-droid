@@ -1,16 +1,19 @@
 # Chrome Web Store, Edge Add-ons and Firefox Add-ons listing
 
 Everything to paste into the Chrome Web Store developer dashboard for the Mac n Droid browser extension.
-The same text and zip work for Microsoft Edge Add-ons (Partner Center) and Firefox Add-ons (addons.mozilla.org), which are both free.
+The same text works for Microsoft Edge Add-ons (Partner Center) and Firefox Add-ons (addons.mozilla.org), which are both free. Each store gets its own zip (same code; each manifest has only the keys that store reads).
 
 ---
 
 ## Package
 
-Zip the **contents** of `browser-extension/` (with `manifest.json` at the top level of the zip):
+Make the three zips (GitHub also attaches them to each release):
 
 ```
-cd browser-extension && zip -r ../release/MacNDroid-extension-0.12.2.zip . -x ".*"
+tools/package-extension.sh 0.13.0
+# → release/MacNDroid-extension-chrome-0.13.0.zip   (Chrome Web Store)
+#   release/MacNDroid-extension-edge-0.13.0.zip     (Edge Add-ons)
+#   release/MacNDroid-extension-firefox-0.13.0.zip  (Firefox Add-ons)
 ```
 
 ---

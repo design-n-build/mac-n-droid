@@ -1,5 +1,7 @@
 package app.macndroid.ui
 
+import app.macndroid.core.Computer
+
 import android.app.Activity
 import android.content.ClipboardManager
 import android.content.Intent
@@ -31,7 +33,7 @@ class SendClipboardActivity : Activity() {
                 ClipboardSync.Result.SentText -> toast(this, "Copied to ${macName()}")
                 ClipboardSync.Result.SentImage -> toast(this, "Image copied to ${macName()}")
                 ClipboardSync.Result.Empty -> toast(this, "Clipboard is empty")
-                ClipboardSync.Result.NotConnected -> toast(this, "Not connected to your Mac")
+                ClipboardSync.Result.NotConnected -> toast(this, "Not connected to ${Computer.your}")
                 ClipboardSync.Result.Duplicate, ClipboardSync.Result.Sensitive -> {}
             }
         }
@@ -52,7 +54,7 @@ class ShareActivity : Activity() {
             else -> emptyList()
         }
         when {
-            !Link.isConnected -> toast(this, "Not connected to your Mac")
+            !Link.isConnected -> toast(this, "Not connected to ${Computer.your}")
             uris.isNotEmpty() -> {
                 ShareShortcuts.reportUsed(this, ShareShortcuts.SEND_ID)
                 SyncService.sendUris(this, uris)
@@ -74,7 +76,7 @@ class OpenOnMacActivity : Activity() {
         val link = app.macndroid.service.Handoff.findLink(intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString())
         when {
             link == null -> toast(this, "There's no web link to open")
-            !Link.isConnected -> toast(this, "Not connected to your Mac")
+            !Link.isConnected -> toast(this, "Not connected to ${Computer.your}")
             app.macndroid.service.Handoff.sendToMac(link) -> {
                 ShareShortcuts.reportUsed(this, ShareShortcuts.OPEN_ID)
                 toast(this, "Opening on ${macName()}")
@@ -105,7 +107,7 @@ class PickFilesActivity : Activity() {
         }
         when {
             resultCode != RESULT_OK || uris.isEmpty() -> {}
-            !Link.isConnected -> toast(this, "Not connected to your Mac")
+            !Link.isConnected -> toast(this, "Not connected to ${Computer.your}")
             else -> {
                 SyncService.sendUris(this, uris)
                 toast(this, if (uris.size == 1) "Sending to ${macName()}…" else "Sending ${uris.size} files to ${macName()}…")
@@ -116,14 +118,14 @@ class PickFilesActivity : Activity() {
     }
 }
 
-private fun macName() = Prefs.pairing.value?.macName ?: "Mac"
+private fun macName() = Prefs.pairing.value?.macName ?: Computer.word
 
 private fun toast(a: Activity, s: String) = Toast.makeText(a.applicationContext, s, Toast.LENGTH_SHORT).show()
 
 fun sendText(a: Activity, text: String?) {
     when {
         text.isNullOrEmpty() -> toast(a, "Clipboard is empty")
-        !Link.isConnected -> toast(a, "Not connected to your Mac")
+        !Link.isConnected -> toast(a, "Not connected to ${Computer.your}")
         else -> {
             Link.post(JSONObject().put("t", "clip").put("text", text).put("explicit", true))
             toast(a, "Copied to ${macName()}")

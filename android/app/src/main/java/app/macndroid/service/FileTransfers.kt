@@ -1,5 +1,7 @@
 package app.macndroid.service
 
+import app.macndroid.core.Computer
+
 import android.app.PendingIntent
 import android.content.ContentValues
 import android.content.Context
@@ -250,7 +252,7 @@ class FileTransfers(private val ctx: Context) {
         } else {
             PendingIntent.getActivity(ctx, 0, Intent(ctx, app.macndroid.ui.MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         }
-        val mac = app.macndroid.core.Prefs.pairing.value?.macName ?: "Mac"
+        val mac = app.macndroid.core.Prefs.pairing.value?.macName ?: Computer.word
         val n = NotificationCompat.Builder(ctx, MacNDroidApp.CH_FILES)
             .setSilent(!app.macndroid.core.Prefs.sounds.value)
             .setSmallIcon(R.drawable.ic_stat_logo)
@@ -279,6 +281,21 @@ class FileTransfers(private val ctx: Context) {
             Link.scope.launch {
                 sendLock.withLock { stream(uri, id, name, size, mime, clip) }
             }
+        }
+    }
+
+    /** A photo or video the computer asked for from its Photos page (`gallery_get`). Opening it there ("view")
+     *  goes quietly to its cache; "save" goes to its Downloads like any sent file. */
+    fun sendGallery(uri: Uri, galleryId: String, view: Boolean) {
+        val (name, size) = meta(uri)
+        val id = UUID.randomUUID().toString()
+        val mime = ctx.contentResolver.getType(uri) ?: "application/octet-stream"
+        if (!view) {
+            Transfers.add(TransferItem(id, name, size, outgoing = true, uri = uri, mime = mime))
+            synchronized(sendBatch) { sendsActive++ }
+        }
+        Link.scope.launch {
+            sendLock.withLock { stream(uri, id, name, size, mime, clip = false, gallery = galleryId, galleryView = view) }
         }
     }
 
@@ -342,11 +359,12 @@ class FileTransfers(private val ctx: Context) {
 
     private suspend fun stream(
         uri: Uri, id: String, name: String, size: Long, mime: String, clip: Boolean,
-        folder: Boolean = false, label: String = name,
+        folder: Boolean = false, label: String = name, gallery: String? = null, galleryView: Boolean = false,
     ) {
         val start = JSONObject().put("t", "file_start").put("id", id).put("name", name).put("size", size).put("mime", mime)
         if (clip) start.put("clip", true)
         if (folder) start.put("folder", true)
+        if (gallery != null) start.put("gallery", gallery).put("view", galleryView)
         var ok = Link.send(start)
         var sent = 0L
         if (ok) {
@@ -371,6 +389,7 @@ class FileTransfers(private val ctx: Context) {
         Transfers.update(id) {
             it.copy(bytes = sent, state = if (ok) TransferItem.State.Done else TransferItem.State.Failed)
         }
+        if (galleryView) return
         if (clip) {
             app.macndroid.core.Haptics.play(if (ok) app.macndroid.core.Haptics.Kind.Tick else app.macndroid.core.Haptics.Kind.Failure)
             return
@@ -392,7 +411,7 @@ class FileTransfers(private val ctx: Context) {
 
     /** Short-lived confirmation with the channel's (subtle) sound. */
     private fun notifySent(names: List<String>, failed: Int) {
-        val mac = app.macndroid.core.Prefs.pairing.value?.macName ?: "Mac"
+        val mac = app.macndroid.core.Prefs.pairing.value?.macName ?: Computer.word
         val ok = failed == 0
         val name = names.joinToString(", ")
         val n = NotificationCompat.Builder(ctx, MacNDroidApp.CH_SENT)

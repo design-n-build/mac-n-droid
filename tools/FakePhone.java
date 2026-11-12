@@ -2,7 +2,7 @@
 // Usage: java tools/FakePhone.java [host] [port] [--wrong-key | --full]
 // Default is handshake-only (nothing shows up on the Mac). --full also sends test notifications,
 // clipboard text and a file, which DO appear on the Mac.
-// Reads the pairing key from ~/Library/Application Support/MacNDroid/identity.json.
+// Reads the pairing key from ~/Library/Application Support/MacNDroid/identity.json (or -Didentity=<path>).
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
@@ -47,7 +47,9 @@ public class FakePhone {
         boolean wrongKey = a.length > 2 && a[2].equals("--wrong-key");
         boolean full = a.length > 2 && a[2].equals("--full");
 
-        String id = Files.readString(Path.of(System.getProperty("user.home"),
+        // -Didentity=<path> tests the Windows or Linux app (their identity.json has the same format).
+        String idPath = System.getProperty("identity");
+        String id = Files.readString(idPath != null ? Path.of(idPath) : Path.of(System.getProperty("user.home"),
             "Library/Application Support/MacNDroid/identity.json"));
         String macId = field(id, "macId");
         byte[] pairingKey = Base64.getDecoder().decode(field(id, "key").replace("\\/", "/"));

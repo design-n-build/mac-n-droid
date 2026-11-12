@@ -14,9 +14,10 @@ struct MirrorWindowView: View {
                     .opacity(state.mirror == .live ? 1 : 0)
                 if state.mirror != .live { placeholder }
             }
+            .clipShape(RoundedRectangle(cornerRadius: MirrorControlBar.screenCorner, style: .continuous))
             .overlay(alignment: .bottom) {
                 if state.mirror == .live && state.controlUnavailable {
-                    Label("To control your phone from here, turn on \"Control from Mac\" on your phone. Tap the notification there to open the setting.",
+                    Label("To control your phone from here, turn on Mac n Droid clipboard and controls on your phone. Tap the notification there to open the setting.",
                           systemImage: "hand.tap")
                         .font(.callout)
                         .padding(10)
@@ -24,9 +25,11 @@ struct MirrorWindowView: View {
                         .padding(12)
                 }
             }
-            MirrorNavBar()
-                .disabled(state.mirror != .live)
+            .padding([.horizontal, .top], MirrorControlBar.screenPadding)
+            // The controls sit under the screen, never on top of it.
+            MirrorControlBar()
         }
+        .background(Color(white: 0.09))
         .ignoresSafeArea(edges: .top)
         .navigationTitle(state.phone?.name ?? "Phone")
         .toolbar {
@@ -58,7 +61,7 @@ struct MirrorWindowView: View {
         .focusedSceneValue(\.mirrorLive, state.mirror == .live)
         .onAppear { state.startMirroring() }
         .onDisappear { state.stopMirroring() }
-        .frame(minWidth: 240, minHeight: 400)
+        .frame(minWidth: 300, minHeight: 480)
     }
 
     @ViewBuilder private var placeholder: some View {
@@ -85,33 +88,104 @@ struct MirrorWindowView: View {
     }
 }
 
-/// Android's three navigation buttons, under the phone screen.
-struct MirrorNavBar: View {
+/// The controls under the phone screen: Back, Home, Recent, Type and Stop, in one floating bar.
+struct MirrorControlBar: View {
     @EnvironmentObject private var state: AppState
-    static let height: CGFloat = 40
+    @State private var typing = false
+    @State private var text = ""
+    static let screenPadding: CGFloat = 10
+    static let screenCorner: CGFloat = 22
+    /// Space the bar takes under the screen (bar plus its margins).
+    static let height: CGFloat = 78
+
+    private var live: Bool { state.mirror == .live }
 
     var body: some View {
-        HStack(spacing: 0) {
-            button("Back", "arrowtriangle.backward", "back", "Back (Esc, ⌘[ or right-click)")
-            button("Home", "circle", "home", "Home (⇧⌘H or middle-click)")
-            button("Recent Apps", "square", "recents", "Recent apps (⇧⌘A)")
+        HStack(spacing: 2) {
+            item("Back", "chevron.backward", help: "Back (Esc, ⌘[ or right-click)") { state.sendKey("back") }
+            item("Home", "house", help: "Home (⇧⌘H or middle-click)") { state.sendKey("home") }
+            item("Recent", "square.on.square", help: "Recent apps (⇧⌘A)") { state.sendKey("recents") }
+            item("Type", "keyboard", help: "Type on your phone. You can also just type while this window is in front.") { typing.toggle() }
+                .popover(isPresented: $typing, arrowEdge: .bottom) { typePanel }
+            if live {
+                item("Stop", "stop.circle.fill", tint: .red, help: "Stop mirroring") { state.stopMirroring() }
+            } else {
+                item("Start", "play.circle.fill", tint: .green, help: "Start mirroring") { state.startMirroring() }
+                    .disabled(!state.isConnected || state.mirror == .waiting)
+            }
         }
-        .frame(height: Self.height)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.08)))
+        .environment(\.colorScheme, .dark)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
         .frame(maxWidth: .infinity)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
+        .frame(height: Self.height)
     }
 
-    private func button(_ title: String, _ symbol: String, _ key: String, _ help: String) -> some View {
-        Button { state.sendKey(key) } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 14, weight: .medium))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
+    private func item(_ title: String, _ symbol: String, tint: Color? = nil, help: String,
+                      action: @escaping () -> Void) -> some View {
+        let needsLive = title != "Start"
+        return Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: symbol)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(tint ?? .primary)
+                    .frame(height: 20)
+                Text(title)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(tint ?? .secondary)
+            }
+            .frame(width: 52, height: 44)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(MirrorBarButtonStyle())
+        .disabled(needsLive && !live)
         .accessibilityLabel(title)
         .help(help)
+    }
+
+    private var typePanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Type on \(state.phone?.name ?? "your phone")").font(.headline)
+            HStack {
+                TextField("Text", text: $text)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 240)
+                    .onSubmit(sendText)
+                Button("Send", action: sendText).disabled(text.isEmpty)
+            }
+            HStack(spacing: 8) {
+                Button { state.sendKey("backspace") } label: { Label("Delete", systemImage: "delete.backward") }
+                Button { state.sendKey("enter") } label: { Label("Return", systemImage: "return") }
+                Spacer()
+                Button { if let s = NSPasteboard.general.string(forType: .string) { state.sendInput(["t": "input", "text": s]) } } label: {
+                    Label("Paste", systemImage: "doc.on.clipboard")
+                }
+            }
+            .controlSize(.small)
+            Text("Tap a text field on the phone first. Return in the box sends the text.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(14)
+    }
+
+    private func sendText() {
+        guard !text.isEmpty else { return }
+        state.sendInput(["t": "input", "text": text])
+        text = ""
+    }
+}
+
+private struct MirrorBarButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var enabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(Capsule().fill(.white.opacity(configuration.isPressed ? 0.16 : 0)))
+            .opacity(enabled ? 1 : 0.35)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -215,12 +289,14 @@ final class MirrorNSView: NSView {
     /// Lock the window to the phone's aspect ratio and give it a sensible first size.
     private func fitWindow() {
         guard let window, videoSize.width > 0, videoSize.height > 0 else { return }
-        let bar = MirrorNavBar.height
+        let pad = MirrorControlBar.screenPadding
+        let bar = MirrorControlBar.height + pad
         let screenH = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 900
         let currentH = window.contentLayoutRect.height - bar
         let h = min(max(currentH, 560), screenH - 80 - bar)
-        let w = h * videoSize.width / videoSize.height
-        // Phone + navigation bar. The bar is a fixed height, so the ratio drifts a little as the
+        // Wide enough for the control bar's five buttons.
+        let w = max(h * videoSize.width / videoSize.height + pad * 2, 300)
+        // Phone + control bar. The bar is a fixed height, so the ratio drifts a little as the
         // window is resized; the video is aspect-fit on black, so that only shows as thin black edges.
         window.contentAspectRatio = CGSize(width: w, height: h + bar)
         var frame = window.frameRect(forContentRect: NSRect(x: 0, y: 0, width: w, height: h + bar))

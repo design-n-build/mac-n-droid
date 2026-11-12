@@ -1,5 +1,7 @@
 package app.macndroid
 
+import app.macndroid.core.Computer
+
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -22,7 +24,7 @@ class MacNDroidApp : Application() {
         nm.createNotificationChannels(
             listOf(
                 NotificationChannel(CH_STATUS, "Connection status", NotificationManager.IMPORTANCE_MIN).apply {
-                    description = "Shows while Mac n Droid keeps your phone linked to your Mac"
+                    description = "Shows while Mac n Droid keeps your phone linked to ${Computer.your}"
                     setShowBadge(false)
                 },
                 NotificationChannel(CH_FILES, "Received files", NotificationManager.IMPORTANCE_DEFAULT).apply {
@@ -30,29 +32,29 @@ class MacNDroidApp : Application() {
                     enableVibration(false)
                 },
                 NotificationChannel(CH_SENT, "Sent files", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                    description = "Confirms a file reached your Mac"
+                    description = "Confirms a file reached ${Computer.your}"
                     setSound(raw(R.raw.mnd_sent), soft)
                     enableVibration(false)
                 },
                 NotificationChannel(CH_MIRROR, "Screen mirroring", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Asks before your screen is shown on your Mac"
+                    description = "Asks before your screen is shown on ${Computer.your}"
                     setSound(null, null)
                 },
                 NotificationChannel(CH_RING, "Find my phone", NotificationManager.IMPORTANCE_HIGH).apply {
                     setSound(null, null)
                 },
                 NotificationChannel(CH_LEFT_BEHIND, "Left-behind alerts", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Tells you when you leave the Wi-Fi network your Mac is on while it's awake"
+                    description = "Tells you when you leave the Wi-Fi network ${Computer.your} is on while it's awake"
                     setSound(raw(R.raw.mnd_left_behind), soft)
                     enableVibration(true)
                     vibrationPattern = longArrayOf(0, 250, 150, 250)
                 },
-                NotificationChannel(CH_LINKS, "Links from Mac", NotificationManager.IMPORTANCE_HIGH).apply {
-                    description = "Links sent from your Mac, when they can't open by themselves"
+                NotificationChannel(CH_LINKS, "Links from ${Computer.word}", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Links sent from ${Computer.your}, when they can't open by themselves"
                     setSound(null, null)
                 },
-                NotificationChannel(CH_MAC_MUSIC, "Music on your Mac", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "Play, pause and skip what's playing on your Mac"
+                NotificationChannel(CH_MAC_MUSIC, "Music on ${Computer.your}", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Play, pause and skip what's playing on ${Computer.your}"
                     setShowBadge(false)
                 },
             )

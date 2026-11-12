@@ -1,18 +1,21 @@
 # Mac n Droid
 
-Free, private continuity between an Android phone and a Mac, with no account and no cloud.
+Free, private continuity between an Android phone and a Mac (or, in beta, a Windows or Linux PC), with no
+account and no cloud.
 
 | | |
 |---|---|
 | **Mac app** | Native SwiftUI. Follows your Mac's appearance (light/dark, accent color, Liquid Glass) automatically. macOS 14+, Apple silicon and Intel. |
 | **Android app** | Jetpack Compose + Material 3 with Material You dynamic color. Android 10+. |
+| **Windows app** (beta) | WinUI 3 with Fluent design (Mica, Settings-style cards). Windows 10 2004+ and 11, x64 and ARM. See [windows/](windows/README.md). |
+| **Linux app** (beta) | GTK 4 + libadwaita (GNOME design). Flatpak for x86_64 and ARM, or from source. See [linux/](linux/README.md). |
 | **Link** | Local Wi-Fi only, QR-code pairing, AES-256-GCM end-to-end encryption. See [PROTOCOL.md](PROTOCOL.md). |
 
 ## Features
 What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 ### Clipboard
-- **Copy on one, paste on the other:** text and images, both ways. Automatic copying from the phone is optional (Settings → Accessibility → Mac n Droid clipboard sync). Passwords from password managers are never sent.
+- **Copy on one, paste on the other:** text and images, both ways. Automatic copying from the phone is optional (Settings → Accessibility → Mac n Droid clipboard and controls). Passwords from password managers are never sent.
 - **Clipboard history:** the last 20 copies from both devices, on both devices. Tap to copy again, or clear it from either side.
 
 ### Files
@@ -49,7 +52,7 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 - **Read and reply to texts from your Mac,** and start new conversations with contact search.
 
 ### Mirroring and webcam
-- **Mirror and control your phone** in a Mac window (control needs the optional phone control setting).
+- **Mirror and control your phone** in a Mac window (control needs the optional clipboard and controls setting).
 - **Phone as webcam** over USB (Android 14+).
 
 ### Everything else
@@ -71,8 +74,13 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
    - **Notification access greyed out?** Sideloaded apps on Android 13+ need: Settings → Apps → Mac n Droid → ⋮ → **Allow restricted settings**, then try again.
    - On Xiaomi/Samsung/Oppo/OnePlus also set battery to **Unrestricted** and enable autostart (see dontkillmyapp.com).
 
+### Windows and Linux (beta)
+Download the Windows installer or the Linux Flatpak from [Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases)
+and follow [windows/README.md](windows/README.md) or [linux/README.md](linux/README.md). Testers: see
+[docs/TESTING-WINDOWS-LINUX.md](docs/TESTING-WINDOWS-LINUX.md).
+
 ### Browser extension (optional)
-Works in Chrome, Edge, Firefox, Brave, Arc and other Chrome-based browsers.
+Works in Chrome, Edge, Firefox, Brave, Arc and other Chrome-based browsers, with the Mac, Windows or Linux app.
 1. On the Mac, click **Browser Extension** in Mac n Droid's sidebar (or **Settings → Sync → Browser → Add to Browser…**).
 2. Click **Add to Chrome-Based Browser** (Chrome Web Store) or **Add to Firefox-Based Browser** (Firefox Add-ons). The store opens in the browser you're using; click **Add** there.
 
@@ -82,7 +90,7 @@ Developers can load it from source instead: open the browser's Extensions page (
 
 ```bash
 # Mac app → mac/dist/Mac n Droid.app + .dmg (needs only Command Line Tools)
-cd mac && ./scripts/build-app.sh 0.12.2
+cd mac && ./scripts/build-app.sh 0.13.0
 
 # Android APK → android/app/build/outputs/apk/release/app-release.apk
 cd android
@@ -124,7 +132,11 @@ security import id.p12 -k ~/Library/Keychains/login.keychain-db -P macndroid -T 
 ```
 mac/        SwiftUI app (Swift Package) + build scripts
 android/    Kotlin/Compose app (Gradle)
-browser-extension/  Browser extension (Manifest V3), bundled into the Mac app
+browser-extension/  Browser extension (Manifest V3), bundled into the Mac app; tools/package-extension.sh
+                    makes the Chrome, Edge and Firefox store zips
+windows/            Windows app (WinUI 3, C#): Core/ is the protocol and logic, App/ the window
+linux/              Linux app (GTK 4 + libadwaita, Python)
+tools/fake_phone.py A fake phone that tests the Windows and Linux apps end to end
 tools/      FakePhone.java protocol test client, icon and sound generators
 docs/       Maintainer guide
 PROTOCOL.md Wire protocol

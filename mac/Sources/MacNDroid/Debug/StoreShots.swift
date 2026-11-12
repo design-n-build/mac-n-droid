@@ -66,6 +66,35 @@ enum StoreShots {
             window(ScrollView { VStack { Text("Row one"); Text("Row two") } }.frame(width: 300, height: 200), size: nil, titled: false, to: out.appendingPathComponent("probe-scroll.png"))
             exit(0)
         }
+        if CommandLine.arguments.contains("--live") {
+            if let np = state.nowPlaying {
+                window(NowPlayingCard(nowPlaying: np, art: state.playerArt[np.id], compact: false).environmentObject(state)
+                        .padding(16).frame(width: 720).background(Color(nsColor: .windowBackgroundColor)),
+                       size: nil, titled: false, to: out.appendingPathComponent("live-card\(suffix).png"))
+            }
+            window(MainView(initialPane: .overview).environmentObject(state), size: CGSize(width: 1000, height: 760), titled: true,
+                   to: out.appendingPathComponent("live-main\(suffix).png"))
+            let now = Date().timeIntervalSince1970 * 1000
+            let timer = LiveActivity(["key": "t", "pkg": "com.google.android.deskclock", "app": "Clock", "kind": "timer",
+                                      "title": "Timer", "text": "Pasta", "when": now + 263_000])!
+            let ride = LiveActivity(["key": "r", "pkg": "demo.food", "app": "Food delivery", "kind": "status",
+                                     "title": "Order on the way", "text": "Arriving in 12 min", "short": "12 min"])!
+            for (label, expanded, primary) in [("collapsed", false, nil), ("expanded", true, nil), ("expanded-timer", true, "a:t")] as [(String, Bool, String?)] {
+                let m = LiveBarModel()
+                m.items = [.media(state.nowPlaying!), .activity(timer), .activity(ride)]
+                m.mediaArt = state.playerArt[state.nowPlaying!.id]
+                m.icons = state.icons
+                m.players = [state.nowPlaying!]
+                m.volume = 70
+                m.expanded = expanded
+                m.primaryID = primary
+                let sz = m.hitSize
+                window(LiveBarView(model: m).frame(width: sz.width * 2 + 40, height: sz.height + 30, alignment: .top)
+                        .background(Color(white: 0.85)), size: nil, titled: false,
+                       to: out.appendingPathComponent("live-notch-\(label).png"))
+            }
+            exit(0)
+        }
         let size = CGSize(width: 1000, height: 640)
         func main(_ pane: Pane, _ name: String, height: CGFloat = 640, after: (() -> Void)? = nil) {
             window(MainView(initialPane: pane).environmentObject(state)

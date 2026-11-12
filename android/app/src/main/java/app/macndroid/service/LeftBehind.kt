@@ -1,5 +1,7 @@
 package app.macndroid.service
 
+import app.macndroid.core.Computer
+
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -167,7 +169,7 @@ object LeftBehind {
     }
 
     private fun alert(c: Context) {
-        val mac = Prefs.pairing.value?.macName ?: "your Mac"
+        val mac = Prefs.pairing.value?.macName ?: Computer.your
         Log.i(TAG, "alerting: left $mac behind")
         val open = PendingIntent.getActivity(c, NOTIF, Intent(c, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE)

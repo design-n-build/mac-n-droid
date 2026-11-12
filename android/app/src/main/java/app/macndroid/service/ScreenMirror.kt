@@ -1,5 +1,7 @@
 package app.macndroid.service
 
+import app.macndroid.core.Computer
+
 import android.app.Activity
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -38,7 +40,7 @@ import kotlin.math.roundToInt
 
 /**
  * Screen mirroring: MediaProjection → VirtualDisplay → hardware H.264 encoder → encrypted link.
- * The Mac decodes it with VideoToolbox. Taps and keys from the Mac are injected by [PhoneControl].
+ * The Mac decodes it with VideoToolbox. Taps and keys from the Mac are injected by [CopyWatcher] (clipboard and controls).
  */
 object ScreenMirror {
     private const val TAG = "ScreenMirror"
@@ -68,7 +70,7 @@ object ScreenMirror {
         val pi = PendingIntent.getActivity(ctx, 40, intent, PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(ctx, MacNDroidApp.CH_MIRROR)
             .setSmallIcon(R.drawable.ic_stat_logo)
-            .setContentTitle("Show this screen on your Mac?")
+            .setContentTitle("Show this screen on ${Computer.your}?")
             .setContentText("Tap to allow screen mirroring")
             .setContentIntent(pi)
             .setAutoCancel(true)

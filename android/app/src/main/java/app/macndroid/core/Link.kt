@@ -93,6 +93,7 @@ object Link {
 
             val sock = connect(ctx, pairing)
             Log.i(TAG, "connect to ${pairing.hosts} → ${sock?.inetAddress}")
+            if (sock == null) LocalNetworkBlocked.check(ctx)
             if (sock != null) {
                 _status.value = Status.Connecting
                 when (session(ctx, sock, pairing)) {
@@ -144,6 +145,7 @@ object Link {
             val hello = JSONObject(String(readFrame(input)))
             if (hello.optString("t") != "hello" || hello.optString("macId") != p.macId) return Outcome.Failed
             val macNonce = Base64.decode(hello.getString("nonce"), Base64.DEFAULT)
+            Prefs.updateComputerOs(hello.optString("os").ifEmpty { "mac" })
             val c = SessionCipher(p.key, phoneNonce, macNonce)
 
             // 2. Encrypted device info. A wrong key makes the Mac hang up before "welcome".
@@ -216,4 +218,31 @@ object Link {
     fun deviceName(ctx: Context): String =
         Settings.Global.getString(ctx.contentResolver, Settings.Global.DEVICE_NAME)
             ?: "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}"
+}
+
+/** Android 17+ can block the app from the local network. Then nothing connects, so say so (at most hourly). */
+internal object LocalNetworkBlocked {
+    private const val NOTIF = 44
+    @Volatile private var last = 0L
+
+    fun check(ctx: Context) {
+        if (app.macndroid.ui.LocalNetwork.allowed(ctx)) return
+        val now = System.currentTimeMillis()
+        if (now - last < 3_600_000) return
+        last = now
+        Log.w("Link", "local network access is blocked")
+        val open = android.content.Intent(ctx, app.macndroid.ui.MainActivity::class.java)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        val pi = android.app.PendingIntent.getActivity(ctx, NOTIF, open, android.app.PendingIntent.FLAG_IMMUTABLE)
+        val n = androidx.core.app.NotificationCompat.Builder(ctx, app.macndroid.MacNDroidApp.CH_MIRROR)
+            .setSmallIcon(app.macndroid.R.drawable.ic_stat_logo)
+            .setContentTitle("Can't reach ${Computer.your}")
+            .setContentText("Allow Mac n Droid to use your local network")
+            .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(
+                "Android is blocking Mac n Droid from your Wi-Fi network. Tap here, then Allow."))
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .build()
+        runCatching { ctx.getSystemService(android.app.NotificationManager::class.java).notify(NOTIF, n) }
+    }
 }

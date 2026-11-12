@@ -1,5 +1,7 @@
 package app.macndroid.ui
 
+import app.macndroid.core.Computer
+
 import android.os.Build
 import android.text.format.DateUtils
 import android.widget.Toast
@@ -38,7 +40,7 @@ fun ClipboardScreen() {
     val items by ClipHistory.items.collectAsState()
     val status by Link.status.collectAsState()
     val pairing by Prefs.pairing.collectAsState()
-    val mac = pairing?.macName ?: "Mac"
+    val mac = pairing?.macName ?: Computer.word
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var menuFor by remember { mutableStateOf<ClipHistory.Item?>(null) }
     var confirmClear by remember { mutableStateOf(false) }

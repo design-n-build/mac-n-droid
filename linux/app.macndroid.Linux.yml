@@ -1,0 +1,35 @@
+# Flatpak build: flatpak-builder --user --install --force-clean build-dir app.macndroid.Linux.yml
+# A single .flatpak file for the website: see .github/workflows/desktop.yml.
+id: app.macndroid.Linux
+runtime: org.gnome.Platform
+runtime-version: "50"
+sdk: org.gnome.Sdk
+command: macndroid
+finish-args:
+  - --share=network            # The phone connects over your Wi-Fi
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=xdg-download  # Files from the phone are saved in Downloads
+  - --system-talk-name=org.freedesktop.Avahi  # Lets the phone find this computer on the network
+  - --system-talk-name=org.freedesktop.login1  # Notices sleep, so the phone isn't told it was left behind
+  - --talk-name=org.mpris.MediaPlayer2.*       # Shows what's playing on this computer on the phone
+# Screen mirroring decodes H.264 with GStreamer's OpenH264 decoder from the runtime's
+# org.freedesktop.Platform.openh264 extension, which Flatpak installs automatically.
+modules:
+  - name: python-qrcode
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-index --no-deps --prefix=/app qrcode-8.2-py3-none-any.whl
+    sources:
+      - type: file
+        url: https://files.pythonhosted.org/packages/dd/b8/d2d6d731733f51684bbf76bf34dab3b70a9148e8f2cef2bb544fccec681a/qrcode-8.2-py3-none-any.whl
+        sha256: 16e64e0716c14960108e85d853062c9e8bba5ca8252c0b4d0231b9df4060ff4f
+  - name: macndroid
+    buildsystem: simple
+    build-commands:
+      - ./install.sh /app
+    sources:
+      - type: dir
+        path: .

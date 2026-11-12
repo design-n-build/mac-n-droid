@@ -1,5 +1,7 @@
 package app.macndroid.ui
 
+import app.macndroid.core.Computer
+
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
@@ -44,7 +46,7 @@ fun FilesScreen() {
     val ctx = LocalContext.current
     val items by Transfers.items.collectAsState()
     val status by Link.status.collectAsState()
-    val mac = Prefs.pairing.collectAsState().value?.macName ?: "Mac"
+    val mac = Prefs.pairing.collectAsState().value?.macName ?: Computer.word
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var tab by rememberSaveable { mutableIntStateOf(0) }   // 0 = Received, 1 = Sent
     val received = items.filter { !it.outgoing }
@@ -107,8 +109,8 @@ fun FilesScreen() {
                 Text(if (tab == 0) "Nothing received yet" else "Nothing sent yet", style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    if (tab == 0) "Drag files or folders onto Mac n Droid on your Mac to send them here. They're saved in Downloads › Mac n Droid."
-                    else "Tap Send to $mac, or use Share → Send to Mac in any app.",
+                    if (tab == 0) "Drag files or folders onto Mac n Droid on ${Computer.your} to send them here. They're saved in Downloads › Mac n Droid."
+                    else "Tap Send to $mac, or use Share → Send to ${Computer.word} in any app.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )

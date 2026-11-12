@@ -53,7 +53,9 @@ struct LiveActivity: Identifiable, Equatable {
             if pausedSeconds != nil || when != nil {
                 let secs = Int(pausedSeconds ?? abs(now.timeIntervalSince(when!)))
                 let h = secs / 3600, m = (secs % 3600) / 60, s = secs % 60
-                return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
+                let time = h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
+                // A finished timer counts its overtime with a minus sign, as the phone's Clock does ("−0:05").
+                return isOvertime(at: now) ? "−" + time : time
             }
             return short.isEmpty ? (title.isEmpty ? text : title) : short
         case .progress:
@@ -66,6 +68,11 @@ struct LiveActivity: Identifiable, Equatable {
     }
 
     var isPaused: Bool { pausedSeconds != nil }
+
+    /// A timer that has run out and is now counting how long ago it ended.
+    func isOvertime(at now: Date) -> Bool {
+        kind == .timer && pausedSeconds == nil && (when.map { now > $0 } ?? false)
+    }
 
     var fraction: Double? { max > 0 ? min(1, Double(progress) / Double(max)) : nil }
 

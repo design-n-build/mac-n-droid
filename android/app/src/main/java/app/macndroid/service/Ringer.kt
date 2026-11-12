@@ -1,5 +1,7 @@
 package app.macndroid.service
 
+import app.macndroid.core.Computer
+
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -53,7 +55,7 @@ class Ringer(private val ctx: Context) {
             PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(ctx, MacNDroidApp.CH_RING)
             .setSmallIcon(R.drawable.ic_stat_logo)
-            .setContentTitle("Your Mac is looking for this phone")
+            .setContentTitle("Your ${Computer.word} is looking for this phone")
             .setContentText("Tap to stop ringing")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)

@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- No App Nap: the notch and notifications must react the moment the phone sends something, even when
+	     none of Mac n Droid's windows are on screen (for example when Stage Manager has them in the strip). -->
+	<key>NSAppSleepDisabled</key>
+	<true/>
 	<key>CFBundleDevelopmentRegion</key><string>en</string>
 	<key>CFBundleExecutable</key><string>MacNDroid</string>
 	<key>CFBundleIdentifier</key><string>app.macndroid.mac</string>

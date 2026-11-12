@@ -1,5 +1,7 @@
 package app.macndroid.service
 
+import app.macndroid.core.Computer
+
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -39,7 +41,7 @@ object Handoff {
         val screenOn = ctx.getSystemService(PowerManager::class.java)?.isInteractive == true
         val locked = ctx.getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == true
         // An enabled accessibility service lets the app open screens from the background.
-        val canOpen = CopyWatcher.instance != null || PhoneControl.instance != null
+        val canOpen = Controls.running
         if (screenOn && !locked && canOpen && runCatching { ctx.startActivity(view) }.isSuccess) {
             Log.i(TAG, "opened link from Mac")
             app.macndroid.core.Haptics.play(app.macndroid.core.Haptics.Kind.Tick)
@@ -47,7 +49,7 @@ object Handoff {
         }
         // Locked: open it the moment you unlock (the notification stays as a fallback).
         if (canOpen) openOnUnlock(ctx.applicationContext, view)
-        val mac = Prefs.pairing.value?.macName ?: "your Mac"
+        val mac = Prefs.pairing.value?.macName ?: Computer.your
         val host = Uri.parse(url).host?.removePrefix("www.") ?: url
         val open = PendingIntent.getActivity(ctx, url.hashCode(), view, PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(ctx, MacNDroidApp.CH_LINKS)
@@ -59,6 +61,16 @@ object Handoff {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(open)
             .addAction(R.drawable.ic_stat_logo, "Open", open)
+            .apply {
+                // Without clipboard and controls on, Android won't let links open by themselves.
+                if (!canOpen) {
+                    val settings = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addAction(R.drawable.ic_stat_logo, "Open links automatically",
+                        PendingIntent.getActivity(ctx, NOTIF, settings, PendingIntent.FLAG_IMMUTABLE))
+                    setStyle(NotificationCompat.BigTextStyle().bigText(
+                        "$url\n\nTo open links from $mac right away, turn on ${Controls.NAME} in Accessibility settings."))
+                }
+            }
             .setAutoCancel(true)
             .setTimeoutAfter(10 * 60_000)
             .build()

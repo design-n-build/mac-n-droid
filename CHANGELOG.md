@@ -1,5 +1,37 @@
 # What's new
 
+## 0.13.0 (Windows and Linux beta; Android and browser extension)
+- **Mac n Droid for Windows and Linux (beta),** with the same features as the Mac app: notifications with
+  Reply and call buttons, **Messages** (read and send texts), **Phone screen** (see and use your phone, with
+  mouse and keyboard), music both ways, clipboard with history, files and folders both ways, links both ways,
+  ring your phone, the browser extension, and the left-behind alert. Windows 10 and 11 (Intel, AMD and ARM);
+  Linux as a Flatpak (x86_64 and ARM) or from source. The webcam works too: it's Android's own USB webcam.
+- **Android says "PC" when paired with Windows or Linux,** everywhere it used to say "Mac".
+- **Volume, both ways:** a slider for your phone's volume next to its music on the Mac's Overview and in the
+  notch. On the phone, "Music on your Mac" works like a Cast device: a Mac volume slider in Android's media
+  controls, volume buttons in its notification, and the phone's volume keys change the Mac's volume while
+  that's what's playing.
+- **The notch shows over every app again** (with Stage Manager on, it could show only while Mac n Droid's own
+  window was up).
+- **Several live activities at once in the notch:** music beside the notch with a timer or delivery running as
+  small bubbles next to it. Click the notch to see them all, and click one to put it beside the notch.
+  The phone's volume has a mute button (click the speaker).
+- Live activities end on the Mac as soon as you leave that app on the phone or lock it (a finished timer could
+  stay up counting).
+- **Browser extension:** video calls (Google Meet, Zoom, Teams and others) no longer show up as music on your
+  phone. Separate packages for the Chrome Web Store, Edge Add-ons and Firefox Add-ons.
+- **Android: one setting instead of two.** Clipboard sync and phone control are now a single optional
+  accessibility setting, **Mac n Droid clipboard and controls**. It covers automatic copying, using the phone
+  from your computer, links that open by themselves and music started from your computer. If you had clipboard
+  sync on, it stays on; if you only had phone control on, turn on the new setting once (the phone reminds you).
+- **Android: new first-run setup.** A welcome screen, then **Make it yours**: turn on only the features you want
+  before pairing, each with a plain explanation. Before Android's Accessibility settings open, the app explains
+  exactly what the setting looks at and asks you to agree.
+- **Android: setup checklist** on the Home tab shows what's on and what's off, with an Enable button for each.
+  If Android switches clipboard and controls off (it can happen after an update), the phone tells you.
+- Android: a link from your computer that arrives as a notification explains how to make links open by
+  themselves.
+
 ## 0.12.2 (Mac, Android and browser extension)
 - **Turn off sounds:** on the Mac, Settings → General → **Play sounds**; on the phone, **Sounds** on the
   Home screen. Notifications and alerts still appear, just silently. Find My Phone still rings.

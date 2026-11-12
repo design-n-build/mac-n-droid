@@ -1,5 +1,7 @@
 package app.macndroid.ui
 
+import app.macndroid.core.Computer
+
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -106,9 +108,9 @@ fun NotificationsScreen() {
         LazyColumn(contentPadding = PaddingValues(top = pad.calculateTopPadding(), bottom = 24.dp)) {
             item {
                 Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SectionCard("On your Mac") {
-                        SwitchRow(Icons.Outlined.Notifications, "Show notifications on your Mac",
-                            if (mirror) "New notifications appear on your Mac as they arrive" else "Notifications stay on this phone only",
+                    SectionCard("On ${Computer.your}") {
+                        SwitchRow(Icons.Outlined.Notifications, "Show notifications on ${Computer.your}",
+                            if (mirror) "New notifications appear on ${Computer.your} as they arrive" else "Notifications stay on this phone only",
                             mirror) { on ->
                             Prefs.setMirrorNotifications(on)
                             if (on) NotificationMirror.instance?.syncAll()
@@ -134,7 +136,7 @@ fun NotificationsScreen() {
                 Text("Apps", style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = 16.dp, top = 20.dp))
                 Text(
-                    "${list.count { it.pkg !in blocked }} of ${list.size} apps send notifications to your Mac. " +
+                    "${list.count { it.pkg !in blocked }} of ${list.size} apps send notifications to ${Computer.your}. " +
                         "Turned-off apps still notify you here on your phone.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

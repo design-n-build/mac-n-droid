@@ -61,8 +61,14 @@ struct MacNDroidApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private static var noNap: NSObjectProtocol?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         DockVisibility.apply()
+        // Opt out of App Nap for good (see NSAppSleepDisabled in Info.plist): a napping app handles the phone's
+        // messages late and its notch animations may not draw at all while its own windows are hidden.
+        Self.noNap = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep,
+                                                           reason: "Shows phone notifications as they arrive")
         AppState.shared.start()
         _ = Updater.shared
         // Right-click → Services → "Open on Phone" / "Send to Phone".

@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import app.macndroid.core.Computer
 import app.macndroid.core.Link
 import app.macndroid.core.Prefs
 
@@ -24,6 +25,7 @@ class FilesTileService : TileService() {
     override fun onStartListening() {
         qsTile?.apply {
             state = if (Link.isConnected) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+            label = "Send files to ${Computer.word}"
             if (Build.VERSION.SDK_INT >= 29) subtitle = if (Link.isConnected) Prefs.pairing.value?.macName else "Not connected"
             updateTile()
         }
