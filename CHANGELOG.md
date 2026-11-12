@@ -1,6 +1,13 @@
 # What's new
 
-## 0.13.0 (Windows and Linux beta; Android and browser extension)
+## 0.13.0 (Mac, Android, browser extension; Windows and Linux beta)
+- **Photos on the Mac:** a new **Photos** page shows your phone's photos and videos, newest first, by album.
+  Click one to open it in Quick Look, or save originals to Downloads. Nothing is copied until you open or save
+  it. Turn it off any time with **Photos on Mac** on the phone's Home tab.
+- **New controls under the mirrored screen:** Back, Home, Recent, Type and Stop in one bar below the phone,
+  never on top of it.
+- **Android 17:** if Android blocks Mac n Droid from your Wi-Fi network, the app now says so and asks for
+  local network access, instead of searching forever.
 - **Mac n Droid for Windows and Linux (beta),** with the same features as the Mac app: notifications with
   Reply and call buttons, **Messages** (read and send texts), **Phone screen** (see and use your phone, with
   mouse and keyboard), music both ways, clipboard with history, files and folders both ways, links both ways,
