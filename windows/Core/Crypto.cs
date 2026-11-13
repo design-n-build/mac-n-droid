@@ -35,7 +35,8 @@ public sealed class SessionCipher
     public byte[] Seal(byte[] plain)
     {
         var output = new byte[plain.Length + 16];
-        _aes.Encrypt(Nonce(PcToPhone, _send++), plain, output.AsSpan(0, plain.Length), output.AsSpan(plain.Length));
+        // AesGcm isn't safe to use from two threads at once, and sending and receiving run on different ones.
+        lock (_aes) _aes.Encrypt(Nonce(PcToPhone, _send++), plain, output.AsSpan(0, plain.Length), output.AsSpan(plain.Length));
         return output;
     }
 
@@ -43,7 +44,7 @@ public sealed class SessionCipher
     {
         if (data.Length < 16) throw new CryptographicException("Frame too short");
         var plain = new byte[data.Length - 16];
-        _aes.Decrypt(Nonce(PhoneToPc, _recv++), data.AsSpan(0, plain.Length), data.AsSpan(plain.Length), plain);
+        lock (_aes) _aes.Decrypt(Nonce(PhoneToPc, _recv++), data.AsSpan(0, plain.Length), data.AsSpan(plain.Length), plain);
         return plain;
     }
 }
