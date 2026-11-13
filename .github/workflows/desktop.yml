@@ -152,5 +152,7 @@ jobs:
           GH_TOKEN: "${{ github.token }}"
           TAG: "${{ inputs.tag || github.ref_name }}"
         run: |
+          # The Flatpak action also saves an unversioned copy of each bundle; only the versioned ones are published.
+          rm -f out/MacNDroid-Linux-*.flatpak
           ls -la out
           gh release upload "$TAG" out/* --clobber --repo "${{ github.repository }}"
