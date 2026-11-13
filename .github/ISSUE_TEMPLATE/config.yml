@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security problem
-    url: https://github.com/santosh-mudragada-1/mac-n-droid/security/advisories/new
+    url: https://github.com/design-n-build/mac-n-droid/security/advisories/new
     about: Please report security issues privately here, not as a public issue.
   - name: Email
     url: mailto:help.macndroid@gmail.com

@@ -63,12 +63,12 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 ## Install
 
 ### Mac
-1. Download the latest **MacNDroid-x.y.z.dmg** from [Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest), open it and drag **Mac n Droid** to Applications.
+1. Download the latest **MacNDroid-x.y.z.dmg** from [Releases](https://github.com/design-n-build/mac-n-droid/releases/latest), open it and drag **Mac n Droid** to Applications.
 2. First launch: the app isn't notarized yet, so macOS blocks it. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
 3. Allow **Local Network** and **Notifications** when asked.
 
 ### Android
-1. On the phone, download the latest **MacNDroid-x.y.z.apk** from [Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest) and open it. Allow "install unknown apps" for the app you opened it from.
+1. On the phone, download the latest **MacNDroid-x.y.z.apk** from [Releases](https://github.com/design-n-build/mac-n-droid/releases/latest) and open it. Allow "install unknown apps" for the app you opened it from.
    - **"App blocked to protect your device"?** Google Play Protect blocks apps from outside the Play Store that ask for SMS, notification or accessibility access. Open the **Play Store** → your profile picture → **Play Protect** → ⚙ → turn off **Scan apps with Play Protect**, install Mac n Droid, then turn it back on. Mac n Droid keeps working.
 2. Open Mac n Droid → **Scan QR code** → scan the code on the Mac (**Pair a Phone**).
 3. Tap **Allow** on each item in **Finish setup**.
@@ -77,10 +77,10 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 ### Windows and Linux (beta)
 The Windows and Linux apps are new, so there may be a few bugs; we're working on them. Please
-[report anything that doesn't work](https://github.com/santosh-mudragada-1/mac-n-droid/issues/new?template=bug_report.yml).
+[report anything that doesn't work](https://github.com/design-n-build/mac-n-droid/issues/new?template=bug_report.yml).
 
 Download the Windows installer (`-x64.exe` for most PCs, `-arm64.exe` for ARM laptops) or the Linux Flatpak from
-[Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest). The Windows app isn't signed yet, so
+[Releases](https://github.com/design-n-build/mac-n-droid/releases/latest). The Windows app isn't signed yet, so
 Windows shows "Windows protected your PC": click **More info → Run anyway**. Then follow [windows/README.md](windows/README.md) or [linux/README.md](linux/README.md). Testers: see
 [docs/TESTING-WINDOWS-LINUX.md](docs/TESTING-WINDOWS-LINUX.md).
 
@@ -149,7 +149,7 @@ RESEARCH.md Market research and roadmap
 ```
 
 ## Contributing
-Bug reports and ideas are welcome: open an [issue](https://github.com/santosh-mudragada-1/mac-n-droid/issues/new/choose). See [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports and ideas are welcome: open an [issue](https://github.com/design-n-build/mac-n-droid/issues/new/choose). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 Mac n Droid is free software under the [GNU General Public License v3.0](LICENSE). You can use,

@@ -503,7 +503,7 @@ public sealed class MainWindow : Window
         {
             Header = "Mac n Droid", Description = $"Version {version?.ToString(3)} · Free and open source (GPL-3.0)",
             HeaderIcon = new ImageIcon { Source = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.png"))) },
-            Content = new HyperlinkButton { Content = "GitHub", NavigateUri = new Uri("https://github.com/santosh-mudragada-1/mac-n-droid") },
+            Content = new HyperlinkButton { Content = "GitHub", NavigateUri = new Uri("https://github.com/design-n-build/mac-n-droid") },
         });
         SetPage(page);
     }

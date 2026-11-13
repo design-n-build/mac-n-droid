@@ -261,8 +261,8 @@ class Application(Adw.Application):
         d = Adw.AboutDialog(application_name="Mac n Droid", application_icon=APP_ID, version=__version__,
                             developer_name="Design n Build Studio", license_type=Gtk.License.GPL_3_0,
                             comments="Your Android phone and your computer, together.",
-                            website="https://github.com/santosh-mudragada-1/mac-n-droid",
-                            issue_url="https://github.com/santosh-mudragada-1/mac-n-droid/issues")
+                            website="https://github.com/design-n-build/mac-n-droid",
+                            issue_url="https://github.com/design-n-build/mac-n-droid/issues")
         d.present(self.window)
 
 

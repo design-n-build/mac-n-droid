@@ -102,8 +102,8 @@ echo "✓ $DMG"
 KEY="$ROOT/signing/sparkle_ed25519_private.key"
 if [ -f "$KEY" ]; then
   SIG="$("$ROOT/.build/artifacts/sparkle/Sparkle/bin/sign_update" --ed-key-file "$KEY" "$DMG")"
-  URL="https://github.com/santosh-mudragada-1/mac-n-droid/releases/download/v$VERSION/MacNDroid-$VERSION.dmg"
-  DEFAULT_NOTES="<p>See what&#8217;s new on <a href=\"https://github.com/santosh-mudragada-1/mac-n-droid/releases/tag/v$VERSION\">GitHub</a>.</p>"
+  URL="https://github.com/design-n-build/mac-n-droid/releases/download/v$VERSION/MacNDroid-$VERSION.dmg"
+  DEFAULT_NOTES="<p>See what&#8217;s new on <a href=\"https://github.com/design-n-build/mac-n-droid/releases/tag/v$VERSION\">GitHub</a>.</p>"
   NOTES="${NOTES_HTML:-$DEFAULT_NOTES}"
   cat > "$DIST/appcast.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>

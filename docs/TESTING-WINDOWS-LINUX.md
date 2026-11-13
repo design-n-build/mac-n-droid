@@ -5,7 +5,7 @@ notifications, texts, your phone's screen, music, clipboard, files and links. No
 the internet, and it's free.
 
 The Windows and Linux apps are new, so you may run into a few bugs; we're working on them. Please
-[report anything that doesn't work](https://github.com/santosh-mudragada-1/mac-n-droid/issues/new?template=bug_report.yml) — that's exactly what this beta is for.
+[report anything that doesn't work](https://github.com/design-n-build/mac-n-droid/issues/new?template=bug_report.yml) — that's exactly what this beta is for.
 
 ## 1. Install on your phone
 Android 10 or later. Download **MacNDroid-0.13.1.apk** from the release page (the link you were sent), open it
@@ -47,7 +47,7 @@ Phone and computer on the **same Wi-Fi**. On the computer, open **Pair a phone**
 
 ## 5. Tell us what happened
 Anything that didn't work, looked odd, or was confusing: open an issue at
-https://github.com/santosh-mudragada-1/mac-n-droid/issues or email **help.macndroid@gmail.com**. Please include
+https://github.com/design-n-build/mac-n-droid/issues or email **help.macndroid@gmail.com**. Please include
 Windows or Linux (which version), your phone model, what you did and what happened. A screenshot helps.
 
 ---

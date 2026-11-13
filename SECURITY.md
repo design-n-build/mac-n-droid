@@ -6,7 +6,7 @@ matter a lot to us.
 ## Reporting a problem
 Please report it privately, not in a public issue:
 
-- **[Report a vulnerability](https://github.com/santosh-mudragada-1/mac-n-droid/security/advisories/new)** on GitHub (preferred), or
+- **[Report a vulnerability](https://github.com/design-n-build/mac-n-droid/security/advisories/new)** on GitHub (preferred), or
 - email **help.macndroid@gmail.com** with "Security" in the subject.
 
 Include what you found, the steps to reproduce it, and the app versions. You'll get a reply within a week. Once

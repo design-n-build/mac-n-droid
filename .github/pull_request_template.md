@@ -8,4 +8,4 @@
 
 ## Contributor agreement
 
-- [ ] I agree to the [contributor agreement (CLA)](https://github.com/santosh-mudragada-1/mac-n-droid/blob/main/CONTRIBUTING.md#contributor-agreement-cla): I keep my copyright, my contribution is GPL-3.0, and the maintainer may also use it under other licenses.
+- [ ] I agree to the [contributor agreement (CLA)](https://github.com/design-n-build/mac-n-droid/blob/main/CONTRIBUTING.md#contributor-agreement-cla): I keep my copyright, my contribution is GPL-3.0, and the maintainer may also use it under other licenses.

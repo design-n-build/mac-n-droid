@@ -25,7 +25,7 @@
 	<key>NSBonjourServices</key>
 	<array><string>_macndroid._tcp</string></array>
 	<key>SUFeedURL</key>
-	<string>https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest/download/appcast.xml</string>
+	<string>https://github.com/design-n-build/mac-n-droid/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>E7ffdKnvElZafD/8/7ymQAg20BBVNBOvg7ljRliJO5Q=</string>
 	<key>SUEnableAutomaticChecks</key><true/>

@@ -21,8 +21,8 @@
     </ul>
   </description>
   <launchable type="desktop-id">app.macndroid.Linux.desktop</launchable>
-  <url type="homepage">https://github.com/santosh-mudragada-1/mac-n-droid</url>
-  <url type="bugtracker">https://github.com/santosh-mudragada-1/mac-n-droid/issues</url>
+  <url type="homepage">https://github.com/design-n-build/mac-n-droid</url>
+  <url type="bugtracker">https://github.com/design-n-build/mac-n-droid/issues</url>
   <content_rating type="oars-1.1" />
   <releases>
     <release version="0.13.1" date="2026-11-13" />
