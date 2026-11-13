@@ -95,7 +95,7 @@ Developers can load it from source instead: open the browser's Extensions page (
 
 ```bash
 # Mac app → mac/dist/Mac n Droid.app + .dmg (needs only Command Line Tools)
-cd mac && ./scripts/build-app.sh 0.13.1
+cd mac && ./scripts/build-app.sh 0.14.0
 
 # Android APK → android/app/build/outputs/apk/release/app-release.apk
 cd android

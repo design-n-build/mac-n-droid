@@ -1495,6 +1495,12 @@ extension AppState {
     }
 
     /// Puts a sent file first, so the Files page switches to its Sent tab.
+    /// "Sharing paused on Phone · until …" for the store screenshots.
+    func storeDemoPause(_ on: Bool) {
+        sharingPaused = on
+        pausedUntil = on ? Calendar.current.date(bySettingHour: 18, minute: 30, second: 0, of: Date()) : nil
+    }
+
     func storeDemoShowSent() {
         let sent = transfers.filter { $0.direction == .toPhone }
         transfers = sent + transfers.filter { $0.direction == .fromPhone }

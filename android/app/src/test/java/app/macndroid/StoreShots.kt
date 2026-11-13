@@ -26,12 +26,20 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.activity.compose.setContent
+import app.macndroid.core.Pause
+import app.macndroid.service.PairingPrompts
+import app.macndroid.ui.MacNDroidTheme
+import app.macndroid.ui.PairedScreen
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.macndroid.core.Link
 import app.macndroid.core.Pairing
 import app.macndroid.core.Prefs
 import app.macndroid.service.ClipHistory
+import app.macndroid.service.CopyWatcher
 import app.macndroid.service.NotificationMirror
 import app.macndroid.service.TransferItem
 import app.macndroid.service.Transfers
@@ -76,8 +84,14 @@ class StoreShots {
         )
         Settings.Secure.putString(app.contentResolver, "enabled_notification_listeners",
             ComponentName(app, NotificationMirror::class.java).flattenToString())
+        // Clipboard and controls on, so Home shows the finished setup (no checklist).
+        Settings.Secure.putString(app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            ComponentName(app, CopyWatcher::class.java).flattenToString())
+        Settings.Secure.putInt(app.contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED, 1)
         shadowOf(app.getSystemService(PowerManager::class.java)).setIgnoringBatteryOptimizations(app.packageName, true)
 
+        // One fixed time zone, so pause times read like "Until 6:30 PM" rather than a full date.
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("GMT"))
         Prefs.init(app)
         previewColors = { dark -> if (dark) greenDark else greenLight }
         Prefs.setSmsOnMac(true)
@@ -161,8 +175,55 @@ class StoreShots {
         tab("Notifications").performClick()
         rule.waitUntil(10_000) { rule.onAllNodesWithText("Food delivery").fetchSemanticsNodes().isNotEmpty() }
         shot("android-06-notifications$suffix")
+
+        // Pause sharing: the sheet, the paused Home, and what tapping a dimmed option asks.
+        tab("Home").performClick()
+        rule.onRoot().performTouchInput { swipeDown(startY = top + 10f, endY = bottom * 0.9f, durationMillis = 400) }
+        rule.onNodeWithContentDescription("Pause sharing").performClick()
+        rule.waitForIdle()
+        rule.onNode(hasText("Until I resume")).performTouchInput { swipeUp(startY = centerY, endY = 0f, durationMillis = 300) }
+        shot("android-08-pause-sheet$suffix")
+        rule.onNode(hasText("For 1 hour")).performClick()
+        shot("android-09-paused$suffix")
+        rule.onNode(hasText("Send files")).performClick()
+        shot("android-10-paused-resume-dialog$suffix")
+        rule.onNode(hasText("Not now")).performClick()
+        Pause.resume(ApplicationProvider.getApplicationContext())
+
+        // On the paired phone: another phone scanned the computer's code.
+        val request = PairingPrompts::class.java.getDeclaredField("_request").apply { isAccessible = true }.get(PairingPrompts)
+        @Suppress("UNCHECKED_CAST")
+        (request as MutableStateFlow<PairingPrompts.Request?>).value = PairingPrompts.Request("demo", "Alex's phone")
+        shot("android-11-allow-new-phone$suffix")
+        request.value = null
+
+        Prefs.setOnboarded(true)
         Prefs.clearPairing()
         shot("android-07-pair$suffix")
+        Prefs.setOnboarded(false)
+        shot("android-12-welcome$suffix")
+        rule.onNode(hasText("Get started")).performClick()
+        shot("android-13-setup$suffix")
+
+        // Right after scanning: connected (celebration), and waiting for approval on the other phone.
+        Prefs.savePairing(Pairing("demo", ByteArray(32), listOf("192.168.1.24"), 47800, "MacBook Air"))
+        rule.runOnUiThread { rule.activity.setContent { MacNDroidTheme { PairedScreen("MacBook Air") {} } } }
+        shot("android-14-paired$suffix")
+        @Suppress("UNCHECKED_CAST")
+        (Link::class.java.getDeclaredField("_approvalBy").apply { isAccessible = true }.get(Link) as MutableStateFlow<String?>).value = "Old phone"
+        status(Link.Status.AwaitingApproval)
+        // The electricity keeps moving while it waits, so Compose never goes idle: step the clock by hand.
+        rule.mainClock.autoAdvance = false
+        rule.runOnUiThread { rule.activity.setContent { MacNDroidTheme { PairedScreen("MacBook Air") {} } } }
+        rule.mainClock.advanceTimeBy(2500)
+        rule.onRoot().captureRoboImage("$out/android-15-waiting-for-approval$suffix.png")
+        rule.mainClock.autoAdvance = true
+        status(Link.Status.Connected)
+    }
+
+    private fun status(s: Link.Status) {
+        @Suppress("UNCHECKED_CAST")
+        (Link::class.java.getDeclaredField("_status").apply { isAccessible = true }.get(Link) as MutableStateFlow<Link.Status>).value = s
     }
 
     @Test fun light() = all("")

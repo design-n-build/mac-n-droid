@@ -7,6 +7,9 @@ import SwiftUI
 
 // MARK: Welcome
 
+/// Store screenshots draw offscreen, where entrance animations never run: they show the end state instead.
+enum FirstRunMotion { static var instant = false }
+
 struct WelcomeView: View {
     var onStart: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -217,7 +220,7 @@ struct OnboardingPairView: View {
     var onPreviewScan: (() -> Void)? = nil
     @EnvironmentObject private var state: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var shown = false
+    @State private var shown = FirstRunMotion.instant
     @State private var copied = false
 
     var body: some View {
@@ -271,7 +274,7 @@ struct OnboardingPairView: View {
         }
         .ignoresSafeArea()
         .onAppear {
-            if reduceMotion { shown = true } else { withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.05)) { shown = true } }
+            if reduceMotion || FirstRunMotion.instant { shown = true } else { withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.05)) { shown = true } }
         }
     }
 }
@@ -283,10 +286,10 @@ struct ConnectedView: View {
     var onContinue: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
-    @State private var snapped = false
-    @State private var lines = false
-    @State private var check = false
-    @State private var text = false
+    @State private var snapped = FirstRunMotion.instant
+    @State private var lines = FirstRunMotion.instant
+    @State private var check = FirstRunMotion.instant
+    @State private var text = FirstRunMotion.instant
 
     private let green = Color(red: 0.05, green: 0.64, blue: 0.34)
 
@@ -345,7 +348,7 @@ struct ConnectedView: View {
     }
 
     private func play() {
-        if reduceMotion { snapped = true; lines = true; check = true; text = true; return }
+        if reduceMotion || FirstRunMotion.instant { snapped = true; lines = true; check = true; text = true; return }
         withAnimation(.spring(response: 0.7, dampingFraction: 0.62)) { snapped = true }
         withAnimation(.easeInOut(duration: 0.4).delay(0.55)) { lines = true }
         withAnimation(.spring(response: 0.45, dampingFraction: 0.5).delay(0.85)) { check = true }

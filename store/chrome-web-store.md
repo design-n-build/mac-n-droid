@@ -10,10 +10,10 @@ The same text works for Microsoft Edge Add-ons (Partner Center) and Firefox Add-
 Make the three zips (GitHub also attaches them to each release):
 
 ```
-tools/package-extension.sh 0.13.1
-# → release/MacNDroid-extension-chrome-0.13.1.zip   (Chrome Web Store)
-#   release/MacNDroid-extension-edge-0.13.1.zip     (Edge Add-ons)
-#   release/MacNDroid-extension-firefox-0.13.1.zip  (Firefox Add-ons)
+tools/package-extension.sh 0.14.0
+# → release/MacNDroid-extension-chrome-0.14.0.zip   (Chrome Web Store)
+#   release/MacNDroid-extension-edge-0.14.0.zip     (Edge Add-ons)
+#   release/MacNDroid-extension-firefox-0.14.0.zip  (Firefox Add-ons)
 ```
 
 ---

@@ -35,9 +35,11 @@ import java.util.Date
 fun pauseEndText(ctx: Context, until: Long): String {
     if (until == Pause.FOREVER) return "Until you resume"
     val time = DateFormat.getTimeFormat(ctx).format(Date(until))
-    return when {
-        DateUtils.isToday(until) -> "Until $time"
-        DateUtils.isToday(until - DateUtils.DAY_IN_MILLIS) -> "Until tomorrow, $time"
+    fun day(ms: Long) = java.util.Calendar.getInstance().apply { timeInMillis = ms }.let { it.get(java.util.Calendar.YEAR) * 400 + it.get(java.util.Calendar.DAY_OF_YEAR) }
+    val now = System.currentTimeMillis()
+    return when (day(until)) {
+        day(now) -> "Until $time"
+        day(now + DateUtils.DAY_IN_MILLIS) -> "Until tomorrow, $time"
         else -> "Until " + DateUtils.formatDateTime(ctx, until, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME)
     }
 }

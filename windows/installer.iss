@@ -1,5 +1,5 @@
 ; Mac n Droid for Windows installer (Inno Setup 6). Built by .github/workflows/desktop.yml:
-;   iscc /DVersion=0.13.1 /DArch=x64 /DSource=publish\x64 windows\installer.iss
+;   iscc /DVersion=0.14.0 /DArch=x64 /DSource=publish\x64 windows\installer.iss
 #ifndef Version
   #define Version "0.0.0"
 #endif

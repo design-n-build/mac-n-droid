@@ -130,6 +130,65 @@ enum StoreShots {
             window(NotchView(model: m).frame(width: sz.width + 60, height: sz.height + 40, alignment: .top), size: nil, titled: false,
                    to: out.appendingPathComponent("mac-10-notch-\(label)\(suffix).png"), clear: true)
         }
+
+        // First launch: welcome, the pairing code, and the moment the phone connects.
+        let first = CGSize(width: 1000, height: 700)
+        FirstRunMotion.instant = true
+        func firstRun<V: View>(_ v: V, _ name: String) {
+            window(ZStack { Color(nsColor: .windowBackgroundColor); v }.environmentObject(state), size: first, titled: true,
+                   to: out.appendingPathComponent("mac-11-first-run-\(name)\(suffix).png"))
+        }
+        firstRun(WelcomeView(onStart: {}), "1-welcome")
+        firstRun(OnboardingPairView(onLater: {}), "2-pair")
+        firstRun(ConnectedView(phoneName: "Phone", onContinue: {}), "3-connected")
+
+        // A file from the phone, in the notch: Open and Show in Finder.
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("store-shots/Downloads", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let pdf = dir.appendingPathComponent("Boarding pass.pdf")
+        let page = NSHostingView(rootView: Text("Boarding pass").font(.largeTitle).frame(width: 300, height: 400).background(.white))
+        page.frame = CGRect(x: 0, y: 0, width: 300, height: 400)
+        try? page.dataWithPDF(inside: page.bounds).write(to: pdf)
+        for (label, urls) in [("one", [pdf]), ("several", [pdf, pdf, pdf])] {
+            let m = NotchModel()
+            m.style = .large
+            m.expanded = true
+            m.content = .files(urls, "Phone")
+            let sz = m.visibleSize
+            window(NotchView(model: m).frame(width: sz.width + 60, height: sz.height + 40, alignment: .top), size: nil, titled: false,
+                   to: out.appendingPathComponent("mac-12-notch-file-\(label)\(suffix).png"), clear: true)
+        }
+
+        // Sharing paused on the phone.
+        state.storeDemoPause(true)
+        main(.overview, "13-sharing-paused")
+        state.storeDemoPause(false)
+
+        // Another phone scanned the code: allow it?
+        let alert = NSAlert()
+        alert.messageText = "Allow “Alex's phone” to connect?"
+        alert.informativeText = "It scanned this Mac's pairing code. If you allow it, it replaces Phone, which will be "
+            + "disconnected. Only allow a phone that's yours."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Allow")
+        alert.addButton(withTitle: "Don't Allow")
+        alert.layout()
+        let aw = alert.window
+        aw.setFrameOrigin(CGPoint(x: -20000, y: -20000))
+        aw.alphaValue = 0
+        aw.orderFrontRegardless()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.8))
+        if let view = aw.contentView?.superview {
+            let b = view.bounds
+            let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(b.width * 2), pixelsHigh: Int(b.height * 2),
+                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                       colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            rep.size = b.size
+            view.cacheDisplay(in: b, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: out.appendingPathComponent("mac-14-allow-new-phone\(suffix).png"))
+            print("✓ mac-14-allow-new-phone\(suffix).png")
+        }
+        aw.orderOut(nil)
         exit(0)
     }
 

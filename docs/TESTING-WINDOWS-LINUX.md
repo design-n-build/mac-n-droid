@@ -8,7 +8,7 @@ The Windows and Linux apps are new, so you may run into a few bugs; we're workin
 [report anything that doesn't work](https://github.com/design-n-build/mac-n-droid/issues/new?template=bug_report.yml) — that's exactly what this beta is for.
 
 ## 1. Install on your phone
-Android 10 or later. Download **MacNDroid-0.13.1.apk** from the release page (the link you were sent), open it
+Android 10 or later. Download **MacNDroid-0.14.0.apk** from the release page (the link you were sent), open it
 and allow **Install unknown apps** when Android asks. Open Mac n Droid and allow notifications.
 If it says **"App blocked to protect your device"**: open the **Play Store** → your profile picture → **Play Protect**
 → ⚙ → turn off **Scan apps with Play Protect**, install Mac n Droid, then turn it back on.
@@ -16,11 +16,11 @@ If it says **"App blocked to protect your device"**: open the **Play Store** →
 ## 2. Install on your computer
 From the same release page:
 
-- **Windows 10 or 11:** `MacNDroid-0.13.1-Windows-x64.exe` (most PCs) or `-arm64` (ARM laptops such as Surface
+- **Windows 10 or 11:** `MacNDroid-0.14.0-Windows-x64.exe` (most PCs) or `-arm64` (ARM laptops such as Surface
   Pro X or Copilot+ PCs). Windows says "Windows protected your PC" because the app isn't signed yet: click
   **More info → Run anyway**. When Windows Firewall asks, allow **Private networks**.
-- **Linux:** `MacNDroid-0.13.1-Linux-x86_64.flatpak` (or `-aarch64` on ARM). In a terminal:
-  `flatpak install --user MacNDroid-0.13.1-Linux-x86_64.flatpak`, then open Mac n Droid from your apps.
+- **Linux:** `MacNDroid-0.14.0-Linux-x86_64.flatpak` (or `-aarch64` on ARM). In a terminal:
+  `flatpak install --user MacNDroid-0.14.0-Linux-x86_64.flatpak`, then open Mac n Droid from your apps.
   On Fedora, also allow the port: `sudo firewall-cmd --add-port=47800/tcp --permanent && sudo firewall-cmd --reload`.
 
 ## 3. Pair
