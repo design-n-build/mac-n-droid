@@ -5,4 +5,7 @@
     <string name="copy_watcher_desc">Lets your paired computer work with this phone: what you copy here is sent to it, you can use this phone from its Phone Screen window, links from it open right away, music you start from it plays, and a timer or map stays on it while that app is open here. To do this, Mac n Droid looks only at the label of what you tap (to tell whether it\'s Copy), which app is open, and the text field you type into from your computer. It taps and types only when you do so from your computer. Nothing is stored, and nothing is sent anywhere except to your own paired computer, encrypted.</string>
     <string name="open_on_mac_label">Open on Mac</string>
     <string name="files_tile_label">Send files to Mac</string>
+    <string name="tile_pause_hour">Pause 1 hour</string>
+    <string name="tile_pause_3h">Pause 3 hours</string>
+    <string name="tile_pause">Pause sharing</string>
 </resources>

@@ -143,3 +143,15 @@ The Mac's Photos pane browses the phone's photos and videos. Nothing is sent unl
 | `gallery_get` | Mac → phone | `id`, `mode`: `view` \| `save` | Send the original through the normal file transfer; its `file_start` carries `gallery` (the id) and `view`. `view` files go to the Mac's cache and open in Quick Look; `save` files go to Downloads. |
 | `gallery_ask` | Mac → phone | — | The phone shows a notification that asks for photo and video access. |
 | `gallery_access` | phone → Mac | `access` | Access changed; the Mac loads the library again. |
+
+## v0.13.2 additions: Pause sharing
+
+| Type | Dir | Fields |
+|---|---|---|
+| `paused` | P→M | `on` (bool), `until` (ms since 1970; 0 = until the person resumes). Sent when sharing is paused or resumed, and on connect while paused. |
+
+While paused the phone stays connected but sends only `ping`, `pong`, `hello`, `device`, `battery`, `paused`,
+`ring_stopped` and messages that switch things off (`gallery_access`, `mac_media_want`, `notif_removed`,
+`live_end`, `media_end`, `mirror_stopped`). From the computer it accepts only `ring`, `ring_stop` and `bye`;
+a `mirror_start` is answered with `mirror_stopped` (`reason: "paused"`). Computers that don't know `paused`
+simply see a quiet connection.

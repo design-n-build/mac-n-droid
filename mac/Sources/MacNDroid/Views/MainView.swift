@@ -118,6 +118,9 @@ struct MainView: View {
                 case .pair: PairView()
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if state.isConnected && state.sharingPaused { PausedBanner() }
+            }
             .overlay {
                 if dropTargeted && state.isConnected {
                     DropHint(phoneName: state.phone?.name ?? "phone")
@@ -266,21 +269,48 @@ struct ConnectionFooter: View {
     }
 
     private var color: Color {
+        if state.isConnected && state.sharingPaused { return .yellow }
         switch state.status {
-        case .connected: .green
-        case .waiting: .orange
-        case .starting: .gray
-        case .error: .red
+        case .connected: return .green
+        case .waiting: return .orange
+        case .starting: return .gray
+        case .error: return .red
         }
     }
 
     private var label: String {
+        if state.isConnected && state.sharingPaused { return "Sharing paused" }
         switch state.status {
-        case .connected: "Connected"
-        case .waiting: state.hasPairedBefore ? "Waiting for phone…" : "Not paired"
-        case .starting: "Starting…"
-        case .error: "Network error"
+        case .connected: return "Connected"
+        case .waiting: return state.hasPairedBefore ? "Waiting for phone…" : "Not paired"
+        case .starting: return "Starting…"
+        case .error: return "Network error"
         }
+    }
+}
+
+/// Shown across the top of every page while the phone has paused sharing.
+struct PausedBanner: View {
+    @EnvironmentObject private var state: AppState
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "pause.circle.fill").foregroundStyle(.yellow).font(.title3)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Sharing paused on \(state.phone?.name ?? "your phone")").font(.callout.weight(.semibold))
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    private var detail: String {
+        let resume = "Still connected. Nothing is shared until it's resumed on the phone"
+        guard let until = state.pausedUntil else { return resume + "." }
+        return resume + ", or by itself at " + until.formatted(date: .omitted, time: .shortened) + "."
     }
 }
 

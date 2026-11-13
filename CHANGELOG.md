@@ -1,5 +1,15 @@
 # What's new
 
+## Unreleased (next: 0.13.2)
+- **Pause sharing (Android):** stay connected but share nothing for 1 hour, 3 hours, or until you resume.
+  The switches you had on are turned off and come back exactly as they were. Pause from Home, the status
+  notification, or three new Quick Settings tiles (Pause 1 hour, Pause 3 hours, Pause sharing). While
+  paused, everything is dimmed and tapping it offers to resume. Find my phone and battery keep working.
+  The Mac shows a "Sharing paused" bar. These tiles replace the connection tile.
+- **Files from your phone, in the notch:** a card with a preview, **Open** and **Show in Finder**.
+- **New messages in an ongoing chat** now show in the notch again; a run of messages in one chat alerts once,
+  and again after 30 seconds of quiet. Progress-style updates (downloads) alert only the first time.
+
 ## 0.13.1 (Mac, Android, browser extension; Windows and Linux beta)
 - **A welcome on the Mac:** the first time you open Mac n Droid, your phone and Mac appear linked by a live
   electric current, with the app's features circling them. Then a full-window pairing screen, with rings

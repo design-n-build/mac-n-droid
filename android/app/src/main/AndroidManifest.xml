@@ -179,12 +179,32 @@
                 android:resource="@xml/copy_watcher" />
         </service>
 
-        <!-- Quick Settings tile: shows the connection, tap to reconnect. -->
+        <!-- Quick Settings tiles: pause sharing for 1 hour, 3 hours, or until you resume (see core/Pause.kt). -->
         <service
-            android:name=".service.LinkTile"
+            android:name=".service.PauseHourTile"
             android:exported="true"
-            android:icon="@drawable/ic_stat_logo"
-            android:label="@string/app_name"
+            android:icon="@drawable/ic_pause_tile"
+            android:label="@string/tile_pause_hour"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".service.PauseThreeHoursTile"
+            android:exported="true"
+            android:icon="@drawable/ic_pause_tile"
+            android:label="@string/tile_pause_3h"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".service.PauseTile"
+            android:exported="true"
+            android:icon="@drawable/ic_pause_tile"
+            android:label="@string/tile_pause"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />

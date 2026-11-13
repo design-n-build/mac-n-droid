@@ -239,6 +239,8 @@ private enum class Tab(val label: String, val icon: ImageVector, val selectedIco
 @Composable
 private fun AppShell() {
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
+    val pausedUntil by app.macndroid.core.Pause.until.collectAsState()
+    var askResume by remember { mutableStateOf(false) }
     val transfers by Transfers.items.collectAsState()
     val active = transfers.count { it.state == app.macndroid.service.TransferItem.State.Active }
 
@@ -262,14 +264,17 @@ private fun AppShell() {
         },
     ) { outer ->
         Box(Modifier.padding(bottom = outer.calculateBottomPadding())) {
-            when (tab) {
-                Tab.Home -> HomeScreen()
-                Tab.Notifications -> NotificationsScreen()
-                Tab.Clipboard -> ClipboardScreen()
-                Tab.Files -> FilesScreen()
+            if (tab == Tab.Home) HomeScreen()
+            else PausedGate(pausedUntil != 0L, onBlocked = { askResume = true }) {
+                when (tab) {
+                    Tab.Notifications -> NotificationsScreen()
+                    Tab.Clipboard -> ClipboardScreen()
+                    else -> FilesScreen()
+                }
             }
         }
     }
+    if (askResume) ResumeDialog { askResume = false }
 }
 
 // MARK: Home
@@ -296,6 +301,11 @@ private fun HomeScreen() {
     val featureActions = rememberFeatureActions(features) { explainControls = true }
     val allowLocalNetwork = rememberLocalNetworkRequest { features.value = Features.read(ctx) }
     var menu by remember { mutableStateOf(false) }
+    val pausedUntil by app.macndroid.core.Pause.until.collectAsState()
+    val paused = pausedUntil != 0L
+    var pauseSheet by remember { mutableStateOf(false) }
+    var askResume by remember { mutableStateOf(false) }
+    val gate = { askResume = true }
     var confirmUnpair by remember { mutableStateOf(false) }
     var openTip by remember { mutableStateOf<Tip?>(null) }
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -342,6 +352,7 @@ private fun HomeScreen() {
             ClipboardSync.Result.NotConnected -> "Not connected to ${Computer.your}"
             ClipboardSync.Result.Duplicate -> "Already on $macLabel"
             ClipboardSync.Result.Sensitive -> "Not sent: marked as sensitive"
+            ClipboardSync.Result.Paused -> "Sharing is paused"
         }
         chip = (chip?.first ?: 0) + 1 to msg
     }
@@ -360,6 +371,7 @@ private fun HomeScreen() {
             LargeTopAppBar(
                 title = { Text("Mac n Droid") },
                 actions = {
+                    if (!paused) IconButton(onClick = { pauseSheet = true }) { Icon(Icons.Outlined.PauseCircle, "Pause sharing") }
                     IconButton(onClick = { menu = true }) { Icon(Icons.Outlined.MoreVert, "More") }
                     DropdownMenu(menu, { menu = false }) {
                         DropdownMenuItem(text = { Text("Reconnect") }, onClick = { menu = false; Link.kick() },
@@ -378,8 +390,10 @@ private fun HomeScreen() {
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatusCard(status, pairing?.macName ?: Computer.word)
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    androidx.compose.animation.AnimatedContent(paused, label = "pause") { p ->
+                        if (p) PausedCard(pausedUntil, macLabel) else StatusCard(status, macLabel)
+                    }
+                    PausedGate(paused, gate) { Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Box(Modifier.weight(1f)) {
                             FilledTonalButton(
                                 onClick = { sendMenu = true },
@@ -402,14 +416,14 @@ private fun HomeScreen() {
                             }
                             SentChip(chip, Modifier.align(Alignment.TopCenter).offset(y = (-8).dp))
                         }
-                    }
+                    } }
                 }
             }
 
             if (!features.value.localNetwork) item { LocalNetworkCard(allowLocalNetwork) }
-            item { SetupChecklist(features.value, featureActions) }
+            item { PausedGate(paused, gate) { SetupChecklist(features.value, featureActions) } }
 
-            item {
+            item { PausedGate(paused, gate) {
                 SectionCard("Clipboard") {
                     SwitchRow(Icons.Outlined.ContentCopy, "From ${Computer.word}", "Copy on ${Computer.your}, paste here", clip) { Prefs.setReceiveClipboard(it) }
                     SwitchRow(Icons.Outlined.AutoAwesome, "To ${Computer.word} automatically",
@@ -422,9 +436,9 @@ private fun HomeScreen() {
                         else { Prefs.setScreenshotsToMac(on); refreshService() }
                     }
                 }
-            }
+            } }
 
-            item {
+            item { PausedGate(paused, gate) {
                 SectionCard("Photos, messages and music") {
                     SwitchRow(Icons.Outlined.PhotoLibrary, "Photos on ${Computer.word}",
                         when {
@@ -450,9 +464,9 @@ private fun HomeScreen() {
                         app.macndroid.core.Link.post(org.json.JSONObject().put("t", "mac_media_want").put("on", on))
                     }
                 }
-            }
+            } }
 
-            item {
+            item { PausedGate(paused, gate) {
                 SectionCard("Phone") {
                     SwitchRow(Icons.Outlined.TouchApp, "Control from ${Computer.word}",
                         if (controls) "Tap and type here from the Phone Screen window" else "Mirroring is watch-only without it. Turns on clipboard and controls.",
@@ -467,7 +481,7 @@ private fun HomeScreen() {
                         "A light tap when things sync",
                         haptics) { Prefs.setHaptics(it) }
                 }
-            }
+            } }
 
             item {
                 SectionCard("Tips") {
@@ -486,6 +500,8 @@ private fun HomeScreen() {
         }
     }
 
+    if (pauseSheet) PauseSheet(macLabel) { pauseSheet = false }
+    if (askResume) ResumeDialog { askResume = false }
     openTip?.let { TipSheet(it, macName = pairing?.macName ?: Computer.word, onDismiss = { openTip = null }) }
 
     if (explainControls) ControlsConsentDialog(on = controls) { explainControls = false }

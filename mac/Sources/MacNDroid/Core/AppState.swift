@@ -84,6 +84,10 @@ final class AppState: ObservableObject {
     var hasPairedBefore: Bool { lastPhoneName != nil }
     /// A phone just connected for the first time (or the first time since a reset): show the Connected moment.
     @Published var justPaired = false
+    /// The phone paused sharing: still connected, but it sends and accepts nothing until it resumes.
+    @Published private(set) var sharingPaused = false
+    /// When the pause ends by itself; nil while paused "until I resume".
+    @Published private(set) var pausedUntil: Date?
 
     private var identity = Identity.load()
     private lazy var server = Server(identity: identity)
@@ -261,6 +265,8 @@ final class AppState: ObservableObject {
     }
 
     private func phoneDisconnected() {
+        sharingPaused = false
+        pausedUntil = nil
         if status == .connected { leftBehind.lost() }
         browserBridge.setStatus(connected: false, phone: lastPhoneName ?? "")
         status = .waiting
@@ -301,6 +307,10 @@ final class AppState: ObservableObject {
     private func handle(_ msg: Message) {
         guard let t = msg["t"] as? String else { return }
         switch t {
+        case "paused":
+            sharingPaused = msg["on"] as? Bool ?? false
+            let until = (msg["until"] as? NSNumber)?.doubleValue ?? 0
+            pausedUntil = sharingPaused && until > 0 ? Date(timeIntervalSince1970: until / 1000) : nil
         case "battery":
             battery = msg["level"] as? Int
             charging = msg["charging"] as? Bool ?? false
@@ -425,6 +435,10 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// When each notification last alerted, so a run of messages in one chat alerts once.
+    private var lastAlertAt: [String: Date] = [:]
+    private static let chatCooldown: TimeInterval = 30
+
     private static let senderID = try! NSRegularExpression(pattern: #"^[A-Z]{2}-[A-Z0-9]{3,9}(-[A-Z])?$"#)
 
     private func receiveNotification(_ msg: Message) {
@@ -457,7 +471,15 @@ final class AppState: ObservableObject {
             actions: actions,
             otp: OTP.detect(title + " " + text),
             category: category)
-        let isUpdate = notifications.contains { $0.id == key }
+        // Chat apps keep one notification per conversation and update it for each new message: a change
+        // in what it says is a new alert. (The phone already drops updates that change nothing.)
+        let previous = notifications.first { $0.id == key }
+        let changed = previous.map { $0.title != n.title || $0.text != n.text } ?? false
+        // A chat that keeps going (several messages in a row) alerts once; the rest update quietly
+        // until it's been quiet for a while. A message after a pause alerts again.
+        let now0 = Date()
+        let recentlyAlerted = lastAlertAt[key].map { now0.timeIntervalSince($0) < Self.chatCooldown } ?? false
+        let isUpdate = previous != nil && (!changed || recentlyAlerted)
         notifications.removeAll { $0.id == key }
         notifications.insert(n, at: 0)
         if notifications.count > 200 { notifications.removeLast(notifications.count - 200) }
@@ -476,10 +498,13 @@ final class AppState: ObservableObject {
         let quiet = inBurst && !n.isCall
         if quiet && burstCount > 3 { return }
         let sound = Prefs.bool(Prefs.sounds) && Prefs.bool(Prefs.notificationSound) && !isUpdate && !quiet
+        if !isUpdate || n.isCall { lastAlertAt[key] = now0 }
+        if lastAlertAt.count > 300 { lastAlertAt = lastAlertAt.filter { now0.timeIntervalSince($0.value) < Self.chatCooldown } }
         if NotchStyle.isOn || callPanel {
             // Notch only: macOS shows its own banner for any posted notification while another app is
             // in front, so posting as well would show everything twice. History stays in this app.
             if !isUpdate || n.isCall { NotchController.shared.show(n, icon: icons[pkg]) }
+            else if changed { NotchController.shared.refresh(n, icon: icons[pkg]) }
             if sound { Feedback.notify() }
         } else {
             notifier.post(n, sound: sound, icon: icons[pkg])
@@ -1149,11 +1174,8 @@ final class AppState: ObservableObject {
             self.receivedBatch.removeAll()
             guard let first = urls.first else { return }
             let phone = self.phone?.name ?? "phone"
-            let text = urls.count == 1 ? "\(first.lastPathComponent) from \(phone)" : "\(urls.count) files from \(phone)"
             Feedback.play(.received)
-            if NotchStyle.isOn {
-                NotchController.shared.flash(symbol: "arrow.down.circle.fill", text: text)
-            } else {
+            if !(NotchStyle.isOn && NotchController.shared.showReceived(urls, from: phone)) {
                 self.notifier.postLocal(title: "Received from \(phone)",
                                         body: urls.count == 1 ? first.lastPathComponent : "\(urls.count) files in Downloads",
                                         fileURL: urls.count == 1 ? first : nil)

@@ -1,4 +1,5 @@
 import AppKit
+import QuickLookThumbnailing
 import SwiftUI
 
 // MARK: - Shared top-of-screen panel plumbing
@@ -227,6 +228,14 @@ final class NotchController {
             self?.hide()
         }
         model.onPage = { [weak self] delta in self?.page(delta) }
+        model.onOpenFiles = { [weak self] urls in
+            urls.forEach { NSWorkspace.shared.open($0) }
+            self?.hide()
+        }
+        model.onRevealFiles = { [weak self] urls in
+            NSWorkspace.shared.activateFileViewerSelecting(urls)
+            self?.hide()
+        }
     }
 
     /// True while a notification panel is on screen (the live bar appears under it without fading).
@@ -295,6 +304,31 @@ final class NotchController {
         }
         model.page = nil
         scheduleHide(after: 2.2)
+    }
+
+    /// Files that just arrived: what they are, with Open and Show in Finder. Hovering keeps it up.
+    /// Returns false when something more important is on screen (a call, or you're replying).
+    @discardableResult
+    func showReceived(_ urls: [URL], from phone: String) -> Bool {
+        guard !urls.isEmpty else { return true }
+        if model.expanded, model.replying || current?.isCall == true { return false }
+        present { m in
+            m.style = .large
+            m.replying = false
+            m.direction = 1
+            m.content = .files(urls, phone)
+        }
+        model.page = nil
+        scheduleHide(after: 8)
+        return true
+    }
+
+    /// The notification on screen changed (a new message in the same chat): show the new text in place,
+    /// without growing again or restarting the timer.
+    func refresh(_ n: PhoneNotification, icon: NSImage?) {
+        if pending?.0.id == n.id { pending = (n, icon) }
+        guard let cur = current, cur.id == n.id, model.expanded, !model.replying else { return }
+        withAnimation(smooth) { model.content = .notification(n, icon) }
     }
 
     func remove(_ key: String) {
@@ -419,11 +453,14 @@ final class NotchModel: ObservableObject {
     enum Content {
         case notification(PhoneNotification, NSImage?)
         case status(String, String)
+        /// Files that just arrived from the phone, with Open and Show in Finder.
+        case files([URL], String)
 
         var id: String {
             switch self {
             case .notification(let n, _): "n:" + n.id
             case .status(_, let t): "s:" + t
+            case .files(let urls, _): "f:" + urls.map(\.path).joined(separator: "|")
             }
         }
     }
@@ -452,6 +489,8 @@ final class NotchModel: ObservableObject {
     var onReply: (String, Int, String) -> Void = { _, _, _ in }
     var onClose: () -> Void = {}
     var onTurnOff: () -> Void = {}
+    var onOpenFiles: ([URL]) -> Void = { _ in }
+    var onRevealFiles: ([URL]) -> Void = { _ in }
 
     var notchSize: CGSize { geometry.hasNotch ? geometry.notchSize : CGSize(width: 0, height: 0) }
     var barHeight: CGFloat { geometry.hasNotch ? geometry.notchSize.height : geometry.barHeight }
@@ -464,6 +503,8 @@ final class NotchModel: ObservableObject {
     var expandedSize: CGSize {
         switch (style, content) {
         case (_, nil): return collapsedSize
+        case (_, .files):
+            return CGSize(width: max(notchSize.width + 200, 420), height: barHeight + 108)
         case (.small, _), (.off, _):
             return geometry.hasNotch
                 ? CGSize(width: notchSize.width + Self.smallEar * 2, height: barHeight)
@@ -549,6 +590,7 @@ struct NotchView: View {
             switch content {
             case .notification(let n, let img): return (img, n.isCall ? "phone.fill" : nil, n.app, n.title.isEmpty ? n.text : n.title)
             case .status(let s, let t): return (nil, s, "", t)
+            case .files(let urls, _): return (nil, "arrow.down.circle.fill", "", urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) files")
             }
         }()
         HStack(spacing: 0) {
@@ -587,6 +629,7 @@ struct NotchView: View {
             switch content {
             case .notification(let n, let icon): notificationBody(n, icon: icon)
             case .status(let symbol, let text): statusBody(symbol, text)
+            case .files(let urls, let phone): filesBody(urls, phone: phone)
             }
         }
         .padding(.top, model.barHeight + (model.geometry.hasNotch ? 6 : 10))
@@ -705,12 +748,72 @@ struct NotchView: View {
         model.onReply(n.id, reply.id, text)
     }
 
+    @ViewBuilder
+    private func filesBody(_ urls: [URL], phone: String) -> some View {
+        let one = urls.count == 1
+        let folder = urls[0].deletingLastPathComponent().lastPathComponent
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                FileThumb(url: urls[0], count: urls.count).frame(width: 38, height: 38)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Received from \(phone)").font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.6))
+                    Text(one ? urls[0].lastPathComponent : "\(urls.count) files")
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                        .lineLimit(1).truncationMode(.middle)
+                    Text("In \(folder)").font(.system(size: 12)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { model.onOpenFiles(urls) }
+            HStack(spacing: 8) {
+                NotchButton(title: one ? "Open" : "Open All", symbol: "arrow.up.forward.square", prominent: true) { model.onOpenFiles(urls) }
+                NotchButton(title: "Show in Finder", symbol: "folder") { model.onRevealFiles(urls) }
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 50)
+        }
+    }
+
     private func statusBody(_ symbol: String, _ text: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: symbol).foregroundStyle(.green)
             Text(text).font(.system(size: 13, weight: .medium)).foregroundStyle(.white).lineLimit(1)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// The file's own icon (a photo shows itself), stacked when several arrived together.
+struct FileThumb: View {
+    let url: URL
+    let count: Int
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Group {
+                if let image {
+                    Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fill)
+                } else {
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable()
+                }
+            }
+            .frame(width: 38, height: 38)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            if count > 1 {
+                Text("\(count)")
+                    .font(.system(size: 10, weight: .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 5).frame(minWidth: 17, minHeight: 17)
+                    .background(Color.accentColor, in: Capsule())
+                    .offset(x: 5, y: 5)
+            }
+        }
+        .task(id: url) {
+            let req = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: 76, height: 76), scale: 2,
+                                                   representationTypes: .thumbnail)
+            image = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: req).nsImage
+        }
     }
 }
 

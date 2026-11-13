@@ -72,6 +72,7 @@ object Link {
     fun post(msg: JSONObject) { scope.launch { send(msg) } }
 
     suspend fun send(msg: JSONObject): Boolean {
+        if (!Pause.allowsOut(msg.optString("t"))) return false   // sharing is paused
         val c = cipher ?: return false
         val o = out ?: return false
         return writeLock.withLock {

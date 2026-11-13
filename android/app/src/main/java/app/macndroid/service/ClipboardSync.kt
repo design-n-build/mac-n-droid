@@ -29,10 +29,11 @@ object ClipboardSync {
     /** A copy made while the Mac was unreachable, sent on reconnect (if still fresh). */
     @Volatile private var pending: Pair<Long, () -> Unit>? = null
 
-    enum class Result { SentText, SentImage, Empty, Duplicate, NotConnected, Sensitive }
+    enum class Result { SentText, SentImage, Empty, Duplicate, NotConnected, Sensitive, Paused }
 
     /** Call only while one of our windows has focus (Android 10+ rule). */
     fun sendCurrent(ctx: Context, auto: Boolean): Result {
+        if (app.macndroid.core.Pause.active) return Result.Paused
         if (!Link.isConnected && !auto) return Result.NotConnected
         val clip = ctx.getSystemService(ClipboardManager::class.java).primaryClip
         val item = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0) ?: return Result.Empty

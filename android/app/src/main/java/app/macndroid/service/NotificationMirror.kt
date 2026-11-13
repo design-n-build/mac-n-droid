@@ -255,7 +255,12 @@ class NotificationMirror : NotificationListenerService() {
         // Skip no-op updates (progress ticks, re-posts with identical content).
         val signature = (title + "\u0000" + text + "\u0000" + actions).hashCode()
         if (lastSent[sbn.key] == signature) return
+        val wasSent = lastSent.containsKey(sbn.key)
         lastSent[sbn.key] = signature
+
+        // Apps mark progress-style updates "alert only once": the first one alerts, the rest go quietly.
+        val firstTime = !wasSent
+        val quiet = silent || (!firstTime && n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
 
         val msg = JSONObject()
             .put("t", "notif")
@@ -267,7 +272,7 @@ class NotificationMirror : NotificationListenerService() {
             .put("time", sbn.postTime.toDouble())
             .put("call", n.category == Notification.CATEGORY_CALL)
             .put("cat", categorize(sbn))
-            .put("silent", silent)
+            .put("silent", quiet)
             .put("actions", actions)
         if (!sentIcons.contains(sbn.packageName)) {
             appIcon(sbn)?.let { msg.put("icon", it); sentIcons.add(sbn.packageName) }

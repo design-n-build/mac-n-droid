@@ -71,6 +71,7 @@ class SyncService : Service() {
         Link.onMessage = ::handle
         LeftBehind.start(this)
         Link.onConnected = {
+            app.macndroid.core.Pause.onConnected()
             LeftBehind.onConnected()
             // Which extras this phone wants from the Mac.
             Link.post(JSONObject().put("t", "mac_media_want").put("on", Prefs.macMusic.value))
@@ -97,7 +98,7 @@ class SyncService : Service() {
         getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(netCallback)
 
         statusJob = Link.scope.launch {
-            combine(Link.status, Prefs.pairing) { s, _ -> s }.collect { s -> main.post { updateNotification(s) } }
+            combine(Link.status, Prefs.pairing, app.macndroid.core.Pause.until) { s, _, _ -> s }.collect { s -> main.post { updateNotification(s) } }
         }
     }
 
@@ -117,6 +118,7 @@ class SyncService : Service() {
                 main.postDelayed({ ringer.stop(notifyMac = false) }, 3000)
             }
             ACTION_RECONNECT -> Link.kick()
+            ACTION_RESUME -> app.macndroid.core.Pause.resume(this)
             ACTION_REFRESH -> { screenshots.refresh(); media.start(); SmsBridge.stop(this); if (Link.isConnected) SmsBridge.start(this) }
             ACTION_MAC_MEDIA -> intent.getStringExtra("cmd")?.let(MacMusic::command)
         }
@@ -146,7 +148,13 @@ class SyncService : Service() {
     // MARK: messages from the Mac (IO thread, in order)
 
     private fun handle(msg: JSONObject) {
-        when (msg.optString("t")) {
+        val type = msg.optString("t")
+        if (!app.macndroid.core.Pause.allowsIn(type)) {
+            // Paused: tell the computer its screen request won't happen, rather than leaving it waiting.
+            if (type == "mirror_start") Link.post(JSONObject().put("t", "mirror_stopped").put("reason", "paused"))
+            return
+        }
+        when (type) {
             "clip" -> if (Prefs.receiveClipboard.value || msg.optBoolean("explicit")) {
                 ClipboardSync.receiveText(this, msg.optString("text"))
             }
@@ -224,16 +232,22 @@ class SyncService : Service() {
             Link.Status.Unpaired -> "Not paired"
         }
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val paused = app.macndroid.core.Pause.until.value
+        val title = if (paused != 0L && s == Link.Status.Connected) "Sharing paused · " + app.macndroid.ui.pauseEndText(this, paused) else text
         val b = NotificationCompat.Builder(this, MacNDroidApp.CH_STATUS)
             .setSmallIcon(R.drawable.ic_stat_logo)
-            .setContentTitle(text)
+            .setContentTitle(title)
             .setContentIntent(open)
             .setOngoing(true)
             .setSilent(true)
             .setShowWhen(false)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-        if (s == Link.Status.Connected) {
+        if (paused != 0L) {
+            val resume = PendingIntent.getService(
+                this, 4, Intent(this, SyncService::class.java).setAction(ACTION_RESUME), PendingIntent.FLAG_IMMUTABLE)
+            b.addAction(R.drawable.ic_stat_logo, "Resume", resume)
+        } else if (s == Link.Status.Connected) {
             val clip = PendingIntent.getActivity(
                 this, 1, Intent(this, SendClipboardActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 PendingIntent.FLAG_IMMUTABLE)
@@ -280,6 +294,7 @@ class SyncService : Service() {
         const val ACTION_TEST_RING = "app.macndroid.TEST_RING"
         const val ACTION_REFRESH = "app.macndroid.REFRESH"
         const val ACTION_MAC_MEDIA = "app.macndroid.MAC_MEDIA"
+        const val ACTION_RESUME = "app.macndroid.RESUME"
 
         @Volatile var instance: SyncService? = null
             private set
@@ -293,7 +308,7 @@ class SyncService : Service() {
 
         /** Hands URIs (with read grants) to the service so transfers outlive the calling activity. */
         fun sendUris(ctx: Context, uris: List<Uri>) {
-            if (uris.isEmpty()) return
+            if (uris.isEmpty() || app.macndroid.core.Pause.active) return
             val i = Intent(ctx, SyncService::class.java).setAction(ACTION_SEND_URIS)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             val cd = ClipData.newRawUri("files", uris.first())
@@ -304,6 +319,7 @@ class SyncService : Service() {
 
         /** A folder from the system folder picker (a document tree). */
         fun sendFolder(ctx: Context, tree: Uri) {
+            if (app.macndroid.core.Pause.active) return
             val i = Intent(ctx, SyncService::class.java).setAction(ACTION_SEND_FOLDER).setData(tree)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             ContextCompat.startForegroundService(ctx, i)

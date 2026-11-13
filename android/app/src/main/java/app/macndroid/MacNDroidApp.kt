@@ -13,6 +13,7 @@ class MacNDroidApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Prefs.init(this)
+        app.macndroid.core.Pause.init(this)
         app.macndroid.core.Haptics.init(this)
         val nm = getSystemService(NotificationManager::class.java)
         nm.deleteNotificationChannel("files")   // v0.1–0.4 channel used the system sound

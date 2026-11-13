@@ -34,6 +34,7 @@ class SendClipboardActivity : Activity() {
                 ClipboardSync.Result.SentImage -> toast(this, "Image copied to ${macName()}")
                 ClipboardSync.Result.Empty -> toast(this, "Clipboard is empty")
                 ClipboardSync.Result.NotConnected -> toast(this, "Not connected to ${Computer.your}")
+                ClipboardSync.Result.Paused -> toast(this, "Sharing is paused. Open Mac n Droid to resume.")
                 ClipboardSync.Result.Duplicate, ClipboardSync.Result.Sensitive -> {}
             }
         }
@@ -55,6 +56,7 @@ class ShareActivity : Activity() {
         }
         when {
             !Link.isConnected -> toast(this, "Not connected to ${Computer.your}")
+            app.macndroid.core.Pause.active -> toast(this, "Sharing is paused. Open Mac n Droid to resume.")
             uris.isNotEmpty() -> {
                 ShareShortcuts.reportUsed(this, ShareShortcuts.SEND_ID)
                 SyncService.sendUris(this, uris)
