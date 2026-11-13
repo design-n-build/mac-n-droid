@@ -186,7 +186,8 @@ def main():
             m = p.recv()
         except socket.timeout:
             continue
-        except EOFError:
+        except (EOFError, ConnectionResetError):
+            # The test app may finish its own checks and quit before our time is up; what it sent still counts.
             print("× computer closed the connection")
             break
         t = m.get("t")
