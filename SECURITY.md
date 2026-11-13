@@ -17,6 +17,10 @@ Only the latest release gets security fixes, so please stay on the newest versio
 
 ## How your data is protected
 - The phone and the computer talk directly over your own Wi-Fi. Nothing goes through a server, and there's no account.
-- Pairing shares a secret key through the QR code, never over the network. Every connection after that is
-  encrypted (AES-256-GCM) and only works with that key. See [PROTOCOL.md](PROTOCOL.md) for the details.
+- Pairing shares a secret key through the QR code, never over the network. The code works once: the paired
+  phone then gets its own key, and the computer shows a new code. A different phone has to be allowed on the
+  computer or on the paired phone.
+- Every connection is encrypted (AES-256-GCM) with a key that also comes from a one-time key exchange (P-256),
+  so a leaked key can't decrypt traffic recorded earlier. See [PROTOCOL.md](PROTOCOL.md) for the details.
+- Received files are marked as downloaded, so macOS and Windows check them before they first run.
 - See the [privacy policy](site/privacy.html) for what each permission is used for.

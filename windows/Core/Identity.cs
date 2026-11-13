@@ -13,7 +13,10 @@ public sealed class Identity
     public const string PlayLink = "https://play.google.com/store/apps/details?id=app.macndroid#";
 
     [JsonPropertyName("macId")] public string PcId { get; set; } = "";
+    /// <summary>The invite key in the QR code. Replaced once a phone has paired with it, so the code works once.</summary>
     [JsonPropertyName("key")] public byte[] Key { get; set; } = [];
+    /// <summary>The paired phone, if any.</summary>
+    [JsonPropertyName("phone")] public PairedPhone? Phone { get; set; }
 
     public static string Folder
     {
@@ -44,6 +47,13 @@ public sealed class Identity
     public void Reset()
     {
         Key = RandomNumberGenerator.GetBytes(32);
+        Phone = null;
+        Save();
+    }
+
+    public void ReplaceInviteKey()
+    {
+        Key = RandomNumberGenerator.GetBytes(32);
         Save();
     }
 
@@ -65,6 +75,16 @@ public sealed class Identity
     /// <summary>A Google Play link, so a phone without the app opens its store page. The pairing details follow
     /// the "#" (a fragment, never included in web requests).</summary>
     public string QrText(int port, IEnumerable<string> hosts, string name) => PlayLink + PairingUri(port, hosts, name);
+}
+
+/// <summary>The phone this computer is paired with. <see cref="Key"/> is its own key (null: an older app that still
+/// uses the invite key); <see cref="Confirmed"/>: it said it saved that key.</summary>
+public sealed class PairedPhone
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("key")] public byte[]? Key { get; set; }
+    [JsonPropertyName("confirmed")] public bool Confirmed { get; set; }
 }
 
 public static class Net

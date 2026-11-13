@@ -2,6 +2,7 @@ import AppKit
 import Carbon
 import Combine
 import Foundation
+import LocalAuthentication
 import ServiceManagement
 
 /// Single source of truth for the UI. Mutated on the main thread only.
@@ -201,6 +202,7 @@ final class AppState: ObservableObject {
     }
 
     func resetPairing() {
+        if let p = pendingApproval { resolveApproval(p.id, allow: false) }
         identity = Identity.reset()
         server.identity = identity
         active?.cancel()
@@ -212,6 +214,12 @@ final class AppState: ObservableObject {
     // MARK: Connection
 
     private func wire(_ pc: PhoneConnection) {
+        pc.onDevice = { [weak self, weak pc] msg in
+            DispatchQueue.main.async {
+                guard let self, let pc else { return }
+                self.decide(pc, device: msg)
+            }
+        }
         pc.onAuthenticated = { [weak self, weak pc] msg in
             DispatchQueue.main.async {
                 guard let self, let pc else { return }
@@ -241,6 +249,147 @@ final class AppState: ObservableObject {
                 }
                 if let reason, reason.contains("Pair it again") { self.lastError = reason }
             }
+        }
+    }
+
+    // MARK: Pairing: single-use codes and approving new phones
+
+    private func saveIdentity(_ change: (inout Identity) -> Void) {
+        change(&identity)
+        identity.save()
+        server.identity = identity
+    }
+
+    /// The QR code has been used: make a new one, so screenshots and copied links of the old one stop working.
+    private func replaceInviteKey() {
+        saveIdentity { $0.key = .random(32) }
+        refreshAddresses(force: true)
+    }
+
+    /// A phone proved it holds a key. Let it in, ask whether to, or turn it away.
+    private func decide(_ pc: PhoneConnection, device: Message) {
+        let name = device["name"] as? String ?? "Android phone"
+        if pc.usedDeviceKey {
+            pc.admit(device, deviceKey: nil)
+            // It connected with its own key, so it has it: the QR's key is spent.
+            if identity.phone?.confirmed == false { confirmPhoneKey() }
+            return
+        }
+        // With the QR's invite key.
+        if identity.phone == nil || identity.phone?.id == pc.phoneId {
+            pairPhone(pc, device: device, name: name)
+        } else if pc.isLegacy {
+            pc.deny("An older Mac n Droid app tried to pair")
+            lastError = "\(name) tried to pair, but its Mac n Droid app is out of date. Update it, then scan the code again."
+            replaceInviteKey()
+        } else {
+            askApproval(pc, device: device, name: name)
+        }
+    }
+
+    private func pairPhone(_ pc: PhoneConnection, device: Message, name: String) {
+        if pc.isLegacy {
+            // An older app keeps using the invite key, so it can't be replaced until that phone updates.
+            saveIdentity { $0.phone = PairedPhone(id: pc.phoneId, name: name, key: nil, confirmed: true) }
+            pc.admit(device, deviceKey: nil)
+            return
+        }
+        let key = Data.random(32)
+        // Saved before it's sent: if the phone keeps it but the reply is lost, its next connection still works.
+        saveIdentity { $0.phone = PairedPhone(id: pc.phoneId, name: name, key: key, confirmed: false) }
+        pc.admit(device, deviceKey: key)
+    }
+
+    /// The phone saved its own key: the invite key is spent.
+    private func confirmPhoneKey() {
+        guard identity.phone?.confirmed == false else { return }
+        saveIdentity { $0.phone?.confirmed = true }
+        replaceInviteKey()
+    }
+
+    private struct PendingApproval {
+        let id: String
+        let pc: PhoneConnection
+        let device: Message
+        let name: String
+        var alert: NSAlert?
+    }
+    private var pendingApproval: PendingApproval?
+    private static let approvalTime: TimeInterval = 120
+
+    /// A different phone scanned the code: ask on this Mac and on the paired phone; the first answer wins.
+    private func askApproval(_ pc: PhoneConnection, device: Message, name: String) {
+        if let old = pendingApproval { resolveApproval(old.id, allow: false) }
+        let paired = identity.phone?.name ?? lastPhoneName ?? "your phone"
+        let id = UUID().uuidString
+        pendingApproval = PendingApproval(id: id, pc: pc, device: device, name: name)
+        pc.awaitApproval(by: paired, seconds: Self.approvalTime)
+        active?.send(["t": "approve_request", "id": id, "name": name])
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.approvalTime) { [weak self] in
+            self?.resolveApproval(id, allow: false)
+        }
+        // Asked after this runs, so the phone's "Allow" can still close the question.
+        DispatchQueue.main.async { [weak self] in self?.showApprovalAlert(id, name: name, paired: paired) }
+    }
+
+    private func showApprovalAlert(_ id: String, name: String, paired: String) {
+        guard pendingApproval?.id == id else { return }
+        let alert = NSAlert()
+        alert.messageText = "Allow “\(name)” to connect?"
+        alert.informativeText = "It scanned this Mac's pairing code. If you allow it, it replaces \(paired), which will be "
+            + "disconnected. Only allow a phone that's yours."
+        alert.alertStyle = .warning
+        // Not modal: the paired phone can answer first, and then this closes by itself.
+        let answer = ApprovalButtons { [weak self] allow in
+            if allow { self?.confirmOwner(id, name: name) } else { self?.resolveApproval(id, allow: false) }
+        }
+        for (title, allow) in [("Allow", true), ("Don't Allow", false)] {
+            let b = alert.addButton(withTitle: title)
+            b.target = answer
+            b.action = allow ? #selector(ApprovalButtons.allow) : #selector(ApprovalButtons.deny)
+        }
+        alert.layout()
+        objc_setAssociatedObject(alert, &ApprovalButtons.key, answer, .OBJC_ASSOCIATION_RETAIN)
+        pendingApproval?.alert = alert
+        let w = alert.window
+        w.level = .floating
+        w.center()
+        NSApp.activate(ignoringOtherApps: true)
+        w.makeKeyAndOrderFront(nil)
+    }
+
+    /// Allowing a new phone needs the owner: Touch ID, or the Mac's password. Cancelling leaves the question open.
+    private func confirmOwner(_ id: String, name: String) {
+        let ctx = LAContext()
+        ctx.localizedCancelTitle = "Cancel"
+        var error: NSError?
+        guard ctx.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+            resolveApproval(id, allow: true)   // nothing to check with
+            return
+        }
+        pendingApproval?.alert?.buttons.forEach { $0.isEnabled = false }
+        ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "allow “\(name)” to connect to this Mac") { ok, _ in
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.pendingApproval?.id == id else { return }
+                if ok { self.resolveApproval(id, allow: true) } else { self.pendingApproval?.alert?.buttons.forEach { $0.isEnabled = true } }
+            }
+        }
+    }
+
+    /// From this Mac, the paired phone, or the time limit; only the first counts.
+    private func resolveApproval(_ id: String, allow: Bool) {
+        guard let p = pendingApproval, p.id == id else { return }
+        pendingApproval = nil
+        p.alert?.window.orderOut(nil)
+        if allow {
+            if let old = active {
+                old.send(["t": "unpaired", "by": p.name])
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { old.cancel() }
+            }
+            pairPhone(p.pc, device: p.device, name: p.name)
+        } else {
+            p.pc.deny("Not allowed")
+            replaceInviteKey()
         }
     }
 
@@ -430,6 +579,10 @@ final class AppState: ObservableObject {
             smsState = (msg["reason"] as? String) == "permission" ? .needsPermission : .off
         case "ping":
             active?.send(["t": "pong"])
+        case "key_saved":
+            confirmPhoneKey()
+        case "approve":
+            if let id = msg["id"] as? String { resolveApproval(id, allow: msg["allow"] as? Bool == true) }
         default:
             break
         }
@@ -1058,7 +1211,8 @@ final class AppState: ObservableObject {
 
     /// Runs on `fileQueue`.
     private func handleFileMessage(_ t: String, _ msg: Message) {
-        guard let id = msg["id"] as? String else { return }
+        // The id ends up in file names: letters, digits, "-" and "_" only, so it can't point anywhere else.
+        guard let raw = msg["id"] as? String, let id = Self.safeID(raw) else { return }
         switch t {
         case "file_start": startIncomingFile(id, msg)
         case "file_chunk": receiveChunk(id, msg)
@@ -1069,11 +1223,11 @@ final class AppState: ObservableObject {
 
     private func startIncomingFile(_ id: String, _ msg: Message) {
         let rawName = msg["name"] as? String ?? "file"
-        let name = (rawName as NSString).lastPathComponent.replacingOccurrences(of: ":", with: "-")
+        let name = Self.safeFileName(rawName)
         let size = (msg["size"] as? NSNumber)?.int64Value ?? 0
         let isClip = msg["clip"] as? Bool == true
         // A photo or video opened from the Photos pane: into the cache, quietly, then Quick Look.
-        if let gid = msg["gallery"] as? String, msg["view"] as? Bool == true {
+        if let rawGid = msg["gallery"] as? String, let gid = Self.safeID(rawGid), msg["view"] as? Bool == true {
             let url = GalleryModel.cacheDir.appendingPathComponent(gallery.cacheFileName(gid, name) + ".part")
             FileManager.default.createFile(atPath: url.path, contents: nil)
             guard let handle = try? FileHandle(forWritingTo: url) else { return }
@@ -1142,6 +1296,7 @@ final class AppState: ObservableObject {
                     if let result { $0.name = result.lastPathComponent }
                 }
                 if let result {
+                    Self.quarantine(result)
                     self.receivedBatch.append(result)
                     self.scheduleReceivedSummary()
                 } else {
@@ -1152,6 +1307,7 @@ final class AppState: ObservableObject {
         }
         DispatchQueue.main.async {
             self.updateTransfer(id) { $0.state = .done; $0.bytes = max($0.bytes, $0.size) }
+            Self.quarantine(file.url)
             self.receivedBatch.append(file.url)
             self.scheduleReceivedSummary()
         }
@@ -1192,6 +1348,35 @@ final class AppState: ObservableObject {
 
     func clearFinishedTransfers() {
         transfers.removeAll { $0.state != .active }
+    }
+
+    /// Ids from the other device, made safe to use in a file name (nil if nothing usable is left).
+    static func safeID(_ s: String) -> String? {
+        let ok = s.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || $0 == "-" || $0 == "_" }
+        let id = String(String.UnicodeScalarView(ok).prefix(80))
+        return id.isEmpty ? nil : id
+    }
+
+    /// Just a file name: no folders, no ".." and nothing macOS treats specially.
+    static func safeFileName(_ raw: String) -> String {
+        var name = (raw as NSString).lastPathComponent
+            .replacingOccurrences(of: ":", with: "-").replacingOccurrences(of: "/", with: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        while name.hasPrefix(".") { name.removeFirst() }
+        if name.isEmpty { name = "file" }
+        return String(name.prefix(200))
+    }
+
+    /// Marks a received file as downloaded from elsewhere, like Safari does: macOS checks apps and scripts
+    /// from the phone before they first run.
+    static func quarantine(_ url: URL) {
+        var values = URLResourceValues()
+        values.quarantineProperties = [
+            kLSQuarantineTypeKey as String: kLSQuarantineTypeOtherDownload,
+            kLSQuarantineAgentNameKey as String: "Mac n Droid",
+        ]
+        var u = url
+        try? u.setResourceValues(values)
     }
 
     private func uniqueURL(in dir: URL, name: String) -> URL {
@@ -1340,3 +1525,12 @@ extension AppState {
     }
 }
 #endif
+
+/// The approval alert's buttons, without running it modally.
+final class ApprovalButtons: NSObject {
+    static var key = 0
+    private let answer: (Bool) -> Void
+    init(_ answer: @escaping (Bool) -> Void) { self.answer = answer }
+    @objc func allow() { answer(true) }
+    @objc func deny() { answer(false) }
+}

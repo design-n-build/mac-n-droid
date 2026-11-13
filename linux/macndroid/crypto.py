@@ -42,6 +42,24 @@ _lib.EVP_CIPHER_CTX_ctrl.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int
 
 _GCM_SET_IVLEN, _GCM_GET_TAG, _GCM_SET_TAG = 0x9, 0x10, 0x11
 
+# P-256 key exchange for forward secrecy (the EC_KEY calls exist in OpenSSL 1.1 and 3).
+_NID_P256, _UNCOMPRESSED = 415, 4
+_lib.EC_KEY_new_by_curve_name.restype = ctypes.c_void_p
+_lib.EC_KEY_new_by_curve_name.argtypes = [ctypes.c_int]
+_lib.EC_KEY_generate_key.argtypes = [ctypes.c_void_p]
+_lib.EC_KEY_get0_group.restype = ctypes.c_void_p
+_lib.EC_KEY_get0_group.argtypes = [ctypes.c_void_p]
+_lib.EC_KEY_get0_public_key.restype = ctypes.c_void_p
+_lib.EC_KEY_get0_public_key.argtypes = [ctypes.c_void_p]
+_lib.EC_KEY_free.argtypes = [ctypes.c_void_p]
+_lib.EC_POINT_new.restype = ctypes.c_void_p
+_lib.EC_POINT_new.argtypes = [ctypes.c_void_p]
+_lib.EC_POINT_free.argtypes = [ctypes.c_void_p]
+_lib.EC_POINT_point2oct.restype = ctypes.c_size_t
+_lib.EC_POINT_point2oct.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_void_p]
+_lib.EC_POINT_oct2point.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_void_p]
+_lib.ECDH_compute_key.argtypes = [ctypes.c_char_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+
 
 class CryptoError(Exception):
     pass
@@ -95,11 +113,50 @@ def open_(key: bytes, nonce: bytes, data: bytes) -> bytes:
         _lib.EVP_CIPHER_CTX_free(ctx)
 
 
-class SessionCipher:
-    """Session key = HMAC-SHA256(pairingKey, "mnd-v1" ‖ phoneNonce ‖ pcNonce). Nonce = direction ‖ counter."""
+class Ephemeral:
+    """A one-time P-256 key pair for one connection. Public keys travel as X9.63 (65 bytes, uncompressed)."""
 
-    def __init__(self, pairing_key: bytes, phone_nonce: bytes, pc_nonce: bytes):
-        self.key = hmac.new(pairing_key, b"mnd-v1" + phone_nonce + pc_nonce, hashlib.sha256).digest()
+    def __init__(self):
+        self._key = _lib.EC_KEY_new_by_curve_name(_NID_P256)
+        if not self._key or _lib.EC_KEY_generate_key(self._key) != 1:
+            raise CryptoError("Couldn't make a key")
+        self._group = _lib.EC_KEY_get0_group(self._key)
+        buf = ctypes.create_string_buffer(65)
+        n = _lib.EC_POINT_point2oct(self._group, _lib.EC_KEY_get0_public_key(self._key), _UNCOMPRESSED, buf, 65, None)
+        if n != 65:
+            raise CryptoError("Couldn't export the key")
+        self.public = buf.raw
+
+    def shared(self, peer: bytes) -> bytes:
+        """The shared secret's x coordinate (32 bytes). Points that aren't on the curve are refused."""
+        if len(peer) != 65 or peer[0] != 4:
+            raise CryptoError("Bad public key")
+        point = _lib.EC_POINT_new(self._group)
+        try:
+            if _lib.EC_POINT_oct2point(self._group, point, peer, 65, None) != 1:
+                raise CryptoError("Bad public key")
+            out = ctypes.create_string_buffer(32)
+            if _lib.ECDH_compute_key(out, 32, point, self._key, None) != 32:
+                raise CryptoError("Key exchange failed")
+            return out.raw
+        finally:
+            _lib.EC_POINT_free(point)
+
+    def __del__(self):
+        if getattr(self, "_key", None):
+            _lib.EC_KEY_free(self._key)
+
+
+class SessionCipher:
+    """Session key = HMAC-SHA256(pairingKey, "mnd-v1" ‖ phoneNonce ‖ pcNonce), or with v2 also the one-time
+    key exchange: HMAC-SHA256(pairingKey, "mnd-v2" ‖ phoneNonce ‖ pcNonce ‖ phoneEph ‖ pcEph ‖ shared).
+    Nonce = direction ‖ counter."""
+
+    def __init__(self, pairing_key: bytes, phone_nonce: bytes, pc_nonce: bytes,
+                 phone_eph: bytes = b"", pc_eph: bytes = b"", shared: bytes = b""):
+        label = b"mnd-v2" if shared else b"mnd-v1"
+        extra = phone_eph + pc_eph + shared if shared else b""
+        self.key = hmac.new(pairing_key, label + phone_nonce + pc_nonce + extra, hashlib.sha256).digest()
         self.send_counter = 0
         self.recv_counter = 0
 

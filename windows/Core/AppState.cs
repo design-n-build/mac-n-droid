@@ -188,6 +188,7 @@ public sealed class AppState
     {
         _platform = platform;
         Server = new Server(Identity, Name, osName, dispatch);
+        Server.Device += Decide;
         Server.Authenticated += OnConnected;
         Server.Message += OnMessage;
         Server.SessionClosed += OnClosed;
@@ -223,12 +224,109 @@ public sealed class AppState
 
     public void ResetPairing()
     {
+        if (_pending is { } p) ResolveApproval(p.Id, false);
         Identity.Reset();
         Active?.Close("Pairing reset");
         PairingChanged?.Invoke();
     }
 
     public void RefreshAddresses() => PairingChanged?.Invoke();
+
+    // MARK: Pairing: single-use codes and approving new phones
+
+    const int ApprovalSeconds = 120;
+    sealed record Pending(string Id, Session Session, string Name);
+    Pending? _pending;
+
+    /// <summary>A different phone scanned the code: (request id, new phone, paired phone) to ask about. An empty id
+    /// closes the question (answered elsewhere or timed out).</summary>
+    public event Action<string, string, string>? ApprovalRequested;
+
+    /// <summary>The QR code has been used: make a new one, so screenshots and copied links of it stop working.</summary>
+    void ReplaceInviteKey()
+    {
+        Identity.ReplaceInviteKey();
+        PairingChanged?.Invoke();
+    }
+
+    void Decide(Session s)
+    {
+        var name = (string?)s.Device["name"] is { Length: > 0 } n ? n : "Android phone";
+        if (s.UsedDeviceKey)
+        {
+            s.Admit(null);
+            if (Identity.Phone is { Confirmed: false }) ConfirmPhoneKey();
+            return;
+        }
+        if (Identity.Phone == null || Identity.Phone.Id == s.PhoneId) Pair(s, name);
+        else if (s.Legacy)
+        {
+            s.Deny("An older Mac n Droid app tried to pair");
+            LastError = $"{name} tried to pair, but its Mac n Droid app is out of date. Update it, then scan the code again.";
+            ReplaceInviteKey();
+            StatusChanged?.Invoke();
+        }
+        else AskApproval(s, name);
+    }
+
+    void Pair(Session s, string name)
+    {
+        if (s.Legacy)
+        {
+            // An older app keeps using the invite key, so it can't be replaced until that phone updates.
+            Identity.Phone = new PairedPhone { Id = s.PhoneId, Name = name, Key = null, Confirmed = true };
+            Identity.Save();
+            s.Admit(null);
+            return;
+        }
+        var key = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        // Saved before it's sent: if the phone keeps it but the reply is lost, its next connection still works.
+        Identity.Phone = new PairedPhone { Id = s.PhoneId, Name = name, Key = key, Confirmed = false };
+        Identity.Save();
+        s.Admit(key);
+    }
+
+    void ConfirmPhoneKey()
+    {
+        if (Identity.Phone is not { Confirmed: false } p) return;
+        p.Confirmed = true;
+        Identity.Save();
+        ReplaceInviteKey();
+    }
+
+    void AskApproval(Session s, string name)
+    {
+        if (_pending is { } old) ResolveApproval(old.Id, false);
+        var paired = Identity.Phone?.Name is { Length: > 0 } pn ? pn : PhoneName;
+        var id = Guid.NewGuid().ToString("N");
+        _pending = new Pending(id, s, name);
+        s.AwaitApproval(paired, ApprovalSeconds);
+        _ = Active?.SendAsync(new JsonObject { ["t"] = "approve_request", ["id"] = id, ["name"] = name });
+        _ = Task.Delay(TimeSpan.FromSeconds(ApprovalSeconds)).ContinueWith(_ => Server.Dispatch(() => ResolveApproval(id, false)));
+        ApprovalRequested?.Invoke(id, name, paired);
+    }
+
+    /// <summary>From this PC, the paired phone or the time limit; only the first answer counts.</summary>
+    public void ResolveApproval(string id, bool allow)
+    {
+        if (_pending is not { } p || p.Id != id) return;
+        _pending = null;
+        ApprovalRequested?.Invoke("", "", "");
+        if (allow)
+        {
+            if (Active is { } old)
+            {
+                _ = old.SendAsync(new JsonObject { ["t"] = "unpaired", ["by"] = p.Name });
+                _ = Task.Delay(500).ContinueWith(_ => old.Close("Replaced by a new phone"));
+            }
+            Pair(p.Session, p.Name);
+        }
+        else
+        {
+            p.Session.Deny("Not allowed");
+            ReplaceInviteKey();
+        }
+    }
 
     // MARK: Connection
 
@@ -308,6 +406,12 @@ public sealed class AppState
         if (s != Active) return;
         switch ((string?)m["t"])
         {
+            case "key_saved":
+                ConfirmPhoneKey();
+                break;
+            case "approve":
+                ResolveApproval((string?)m["id"] ?? "", (bool?)m["allow"] == true);
+                break;
             case "battery":
                 Battery = (int?)m["level"];
                 Charging = (bool?)m["charging"] ?? false;
@@ -896,9 +1000,10 @@ public sealed class AppState
 
     static string UniquePath(string folder, string name)
     {
-        name = System.IO.Path.GetFileName(name);
+        name = System.IO.Path.GetFileName(name.Replace('\\', '/'));
         foreach (var c in System.IO.Path.GetInvalidFileNameChars()) name = name.Replace(c, '-');
-        if (name.Trim().Length == 0) name = "file";
+        name = name.Trim().TrimStart('.');
+        if (name.Length == 0) name = "file";
         var path = System.IO.Path.Combine(folder, name);
         var stem = System.IO.Path.GetFileNameWithoutExtension(name);
         var ext = System.IO.Path.GetExtension(name);
@@ -908,7 +1013,10 @@ public sealed class AppState
 
     void ReceiveFile(string t, JsonObject m)
     {
-        if ((string?)m["id"] is not { } id) return;
+        // The id ends up in file names: letters, digits, "-" and "_" only.
+        if ((string?)m["id"] is not { } rawId) return;
+        var id = new string(rawId.Where(c => char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_').Take(80).ToArray());
+        if (id.Length == 0) return;
         switch (t)
         {
             case "file_start":
@@ -955,6 +1063,7 @@ public sealed class AppState
                         {
                             var tr = Transfers.FirstOrDefault(x => x.Id == id);
                             if (outDir == null || tr == null) { Update(id, state: "failed"); return; }
+                            Folders.MarkOfTheWeb(outDir);
                             Transfers[Transfers.IndexOf(tr)] = new Transfer { Id = id, Name = System.IO.Path.GetFileName(outDir), Size = tr.Size, Bytes = tr.Size, Path = outDir, Folder = true, State = "done" };
                             TransfersChanged?.Invoke();
                             _received.Add(outDir);
@@ -964,6 +1073,7 @@ public sealed class AppState
                     return;
                 }
                 Update(id, state: "done");
+                Folders.MarkOfTheWeb(done.path);
                 _received.Add(done.path);
                 ScheduleReceivedSummary();
                 break;

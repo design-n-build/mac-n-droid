@@ -155,3 +155,28 @@ While paused the phone stays connected but sends only `ping`, `pong`, `hello`, `
 `live_end`, `media_end`, `mirror_stopped`). From the computer it accepts only `ring`, `ring_stop` and `bye`;
 a `mirror_start` is answered with `mirror_stopped` (`reason: "paused"`). Computers that don't know `paused`
 simply see a quiet connection.
+
+## v0.14 additions: Single-use pairing, approving new phones, forward secrecy
+Backward compatible both ways: a side that doesn't send the new fields gets the v1 behaviour above.
+
+**Keys.** The QR's `k` is now an *invite key*. A phone that pairs with it gets its own *device key*, and the
+invite key is replaced, so the QR (and any screenshot or copied link of it) works once.
+
+**Hello.** The phone adds `"v":2`, `"use":"invite"|"device"` (which key it holds) and `"eph"` (a fresh P-256
+public key, X9.63 uncompressed, base64). A computer that understands it answers with `"v":2` and its own `"eph"`.
+The session key is then
+`HMAC-SHA256(baseKey, "mnd-v2" ‖ phoneNonce ‖ macNonce ‖ phoneEph ‖ macEph ‖ ECDH(phoneEph, macEph))`
+(ECDH = the 32-byte x coordinate), so recorded traffic can't be decrypted later even with the key.
+`baseKey` = the device key for `use:"device"` (the phone id must match), otherwise the invite key.
+
+**Pairing with the invite key** (after the phone's `device` frame):
+- No phone paired yet, or the same phone again: `welcome` carries `"deviceKey"` (32 bytes, base64). The phone
+  saves it and sends `{"t":"key_saved"}`; then the computer replaces the invite key (new QR).
+- A different phone is paired: the computer sends `{"t":"approval","by":"<paired phone>"}` instead of
+  `welcome` and asks on screen; the paired phone, if connected, gets
+  `{"t":"approve_request","id":"…","name":"<new phone>"}` and may answer `{"t":"approve","id":"…","allow":bool}`.
+  First answer wins, 2 minutes at most. Allowed: the old phone gets `{"t":"unpaired","by":"<new phone>"}` and is
+  dropped, the new one gets `welcome` + `deviceKey`. Denied or timed out: `{"t":"denied"}`, the connection
+  closes, and the invite key is replaced either way.
+- A phone that doesn't send `use` (older app) pairs as before when nothing else is paired; when another phone is
+  paired, it's turned away (it can't show the approval).

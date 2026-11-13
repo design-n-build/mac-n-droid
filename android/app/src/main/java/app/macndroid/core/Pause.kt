@@ -125,9 +125,10 @@ object Pause {
     private val OUT = setOf(
         "ping", "pong", "hello", "device", "battery", "paused", "ring_stopped",
         "gallery_access", "mac_media_want", "notif_removed", "live_end", "media_end", "mirror_stopped",
+        "key_saved", "approve",
     )
     /** Computer → phone: Find my phone, and the computer going to sleep. */
-    private val IN = setOf("ring", "ring_stop", "bye")
+    private val IN = setOf("ring", "ring_stop", "bye", "approve_request", "unpaired")
 
     fun allowsOut(type: String) = !active || type in OUT
     fun allowsIn(type: String) = !active || type in IN

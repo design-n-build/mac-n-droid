@@ -29,7 +29,15 @@ import java.security.SecureRandom
 
 /** Keeps one encrypted connection to the paired Mac alive, reconnecting with backoff. */
 object Link {
-    enum class Status { Unpaired, Searching, Connecting, Connected, AuthFailed }
+    /**
+     * [AwaitingApproval]: another phone is paired with the computer, so it (or the computer) must allow this one.
+     * [Denied]: it wasn't allowed; scanning the code again starts over.
+     */
+    enum class Status { Unpaired, Searching, Connecting, Connected, AuthFailed, AwaitingApproval, Denied }
+
+    /** While [Status.AwaitingApproval]: the paired phone that can allow this one (or the computer can). */
+    private val _approvalBy = MutableStateFlow<String?>(null)
+    val approvalBy: StateFlow<String?> = _approvalBy
 
     private const val TAG = "Link"
     private const val MAX_FRAME = 8 * 1024 * 1024
@@ -90,6 +98,7 @@ object Link {
         while (scope.isActive) {
             val pairing = Prefs.pairing.value
             if (pairing == null) { _status.value = Status.Unpaired; wake.receive(); continue }
+            if (_status.value == Status.Denied) { wake.receive(); _status.value = Status.Searching; continue }
             if (_status.value != Status.AuthFailed) _status.value = Status.Searching
 
             val sock = connect(ctx, pairing)
@@ -99,6 +108,7 @@ object Link {
                 _status.value = Status.Connecting
                 when (session(ctx, sock, pairing)) {
                     Outcome.AuthFailed -> _status.value = Status.AuthFailed
+                    Outcome.Denied -> { _status.value = Status.Denied; continue }
                     Outcome.Ended -> backoff = 1000L
                     Outcome.Failed -> {}
                 }
@@ -129,7 +139,7 @@ object Link {
         null
     }
 
-    private enum class Outcome { Ended, Failed, AuthFailed }
+    private enum class Outcome { Ended, Failed, AuthFailed, Denied }
 
     private suspend fun session(ctx: Context, sock: Socket, p: Pairing): Outcome {
         socket = sock
@@ -138,16 +148,22 @@ object Link {
         var welcomed = false
         try {
             // 1. Plaintext hello exchange.
+            // v2: which key this phone holds, and a one-time key for forward secrecy. Older computers ignore both.
             val phoneNonce = ByteArray(16).also { SecureRandom().nextBytes(it) }
+            val eph = Ephemeral()
             writeFrame(output, JSONObject()
-                .put("t", "hello").put("v", 1).put("phoneId", Prefs.phoneId)
+                .put("t", "hello").put("v", 2).put("phoneId", Prefs.phoneId)
                 .put("nonce", Base64.encodeToString(phoneNonce, Base64.NO_WRAP))
+                .put("use", p.keyKind)
+                .put("eph", Base64.encodeToString(eph.publicX963, Base64.NO_WRAP))
                 .toString().toByteArray())
             val hello = JSONObject(String(readFrame(input)))
             if (hello.optString("t") != "hello" || hello.optString("macId") != p.macId) return Outcome.Failed
             val macNonce = Base64.decode(hello.getString("nonce"), Base64.DEFAULT)
             Prefs.updateComputerOs(hello.optString("os").ifEmpty { "mac" })
-            val c = SessionCipher(p.key, phoneNonce, macNonce)
+            val macEph = hello.optString("eph").takeIf { it.isNotEmpty() }?.let { Base64.decode(it, Base64.DEFAULT) }
+            val c = if (macEph != null) SessionCipher(p.key, phoneNonce, macNonce, eph.publicX963, macEph, eph.shared(macEph))
+                    else SessionCipher(p.key, phoneNonce, macNonce)
 
             // 2. Encrypted device info. A wrong key makes the Mac hang up before "welcome".
             writeFrame(output, c.seal(JSONObject()
@@ -156,9 +172,20 @@ object Link {
                 .put("model", "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}")
                 .put("os", "Android ${Build.VERSION.RELEASE}")
                 .toString().toByteArray()))
-            val welcome = JSONObject(String(c.open(readFrame(input))))
+            var welcome = JSONObject(String(c.open(readFrame(input))))
+            if (welcome.optString("t") == "approval") {
+                // Another phone is paired: wait (up to two minutes) for it or the computer to allow this one.
+                _approvalBy.value = welcome.optString("by").ifBlank { "your other phone" }
+                _status.value = Status.AwaitingApproval
+                sock.soTimeout = 140_000
+                try { welcome = JSONObject(String(c.open(readFrame(input)))) } finally { _approvalBy.value = null }
+            }
+            if (welcome.optString("t") == "denied") return Outcome.Denied
             if (welcome.optString("t") != "welcome") return Outcome.Failed
             welcomed = true
+            // Paired with the QR code: from now on this phone uses its own key, and the code stops working.
+            val newKey = welcome.optString("deviceKey").takeIf { it.isNotEmpty() }?.let { Base64.decode(it, Base64.DEFAULT) }
+            if (newKey != null && newKey.size == 32) Prefs.saveDeviceKey(newKey)
             welcome.optString("name").takeIf { it.isNotBlank() }?.let { Prefs.updateMacName(it) }
             Prefs.updateEndpoint(sock.inetAddress.hostAddress ?: "", sock.port)
 
@@ -166,6 +193,7 @@ object Link {
             out = output
             sock.soTimeout = 60_000   // both sides ping every 20 s
             _status.value = Status.Connected
+            if (newKey != null) send(JSONObject().put("t", "key_saved"))
             onConnected()
             val pinger = scope.launch {
                 while (isActive) { delay(20_000); send(JSONObject().put("t", "ping")) }
@@ -184,9 +212,12 @@ object Link {
             }
         } catch (e: EOFException) {
             Log.i(TAG, "session EOF (welcomed=$welcomed)")
+            // Hung up while waiting for approval: nobody allowed it in time.
+            if (!welcomed && _status.value == Status.AwaitingApproval) return Outcome.Denied
             return if (welcomed) Outcome.Ended else Outcome.AuthFailed
         } catch (e: Exception) {
             Log.i(TAG, "session ended: $e")
+            if (!welcomed && _status.value == Status.AwaitingApproval) return Outcome.Denied
             return if (welcomed) Outcome.Ended else Outcome.Failed
         } finally {
             val wasConnected = cipher != null

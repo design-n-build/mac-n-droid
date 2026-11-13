@@ -168,6 +168,8 @@ class SyncService : Service() {
             "mirror_stop" -> main.post { ScreenMirror.stop(notifyMac = false) }
             "mirror_key" -> ScreenMirror.requestKeyFrame()
             "bye" -> LeftBehind.onMacSleeping()
+            "approve_request" -> PairingPrompts.onRequest(this, msg)
+            "unpaired" -> PairingPrompts.onUnpaired(this, msg)
             "input" -> {
                 val cw = CopyWatcher.instance
                 val key = msg.optString("key")
@@ -228,7 +230,9 @@ class SyncService : Service() {
             Link.Status.Connected -> "Connected to $mac"
             Link.Status.Connecting -> "Connecting to $mac…"
             Link.Status.Searching -> "Looking for $mac…"
-            Link.Status.AuthFailed -> "$mac rejected this phone. Pair again."
+            Link.Status.AuthFailed -> "No longer paired with $mac. Scan its code to pair again."
+            Link.Status.AwaitingApproval -> "Waiting for approval on ${Link.approvalBy.value ?: "your other phone"} or $mac"
+            Link.Status.Denied -> "$mac didn't allow this phone"
             Link.Status.Unpaired -> "Not paired"
         }
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)

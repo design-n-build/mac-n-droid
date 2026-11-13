@@ -17,6 +17,8 @@ data class Pairing(
     val macName: String,
     /** "mac", "windows" or "linux": from the QR code (`o`) and the computer's hello. */
     val os: String = "mac",
+    /** "invite": the QR code's key; "device": this phone's own key, given by the computer after pairing. */
+    val keyKind: String = "invite",
 ) {
     companion object {
         /**
@@ -106,8 +108,15 @@ object Prefs {
             .putInt("port", p.port)
             .putString("macName", p.macName)
             .putString("computerOs", p.os)
+            .putString("keyKind", p.keyKind)
             .apply()
         _pairing.value = p
+    }
+
+    /** The computer gave this phone its own key: use it from now on (the QR code's key stops working). */
+    fun saveDeviceKey(key: ByteArray) {
+        val p = _pairing.value ?: return
+        savePairing(p.copy(key = key, keyKind = "device"))
     }
 
     fun updateEndpoint(host: String, port: Int) {
@@ -129,7 +138,8 @@ object Prefs {
     }
 
     fun clearPairing() {
-        sp.edit().remove("macId").remove("key").remove("hosts").remove("port").remove("macName").remove("computerOs").apply()
+        sp.edit().remove("macId").remove("key").remove("hosts").remove("port").remove("macName").remove("computerOs")
+            .remove("keyKind").apply()
         _pairing.value = null
     }
 
@@ -175,6 +185,7 @@ object Prefs {
             port = sp.getInt("port", 47800),
             macName = sp.getString("macName", "Mac") ?: "Mac",
             os = sp.getString("computerOs", "mac") ?: "mac",
+            keyKind = sp.getString("keyKind", "invite") ?: "invite",
         )
     }
 }

@@ -20,6 +20,14 @@ struct SessionCipher {
         key = SymmetricKey(data: Data(mac))
     }
 
+    /// v2: also mixes in a one-time P-256 key exchange, so a leaked pairing key can't decrypt recorded traffic.
+    init(pairingKey: Data, phoneNonce: Data, macNonce: Data, phoneEph: Data, macEph: Data, shared: Data) {
+        var msg = Data("mnd-v2".utf8)
+        for part in [phoneNonce, macNonce, phoneEph, macEph, shared] { msg.append(part) }
+        let mac = HMAC<SHA256>.authenticationCode(for: msg, using: SymmetricKey(data: pairingKey))
+        key = SymmetricKey(data: Data(mac))
+    }
+
     private static func nonce(_ direction: UInt32, _ counter: UInt64) throws -> AES.GCM.Nonce {
         var d = Data(capacity: 12)
         withUnsafeBytes(of: direction.bigEndian) { d.append(contentsOf: $0) }

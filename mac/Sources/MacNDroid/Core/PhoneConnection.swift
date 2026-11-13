@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Network
 
@@ -8,21 +9,34 @@ final class PhoneConnection {
     let id = UUID()
     private let conn: NWConnection
     private let queue: DispatchQueue
-    private let identity: Identity
+    private let identity: () -> Identity
     private var buffer = Data()
     private var cipher: SessionCipher?
+    /// Admitted: the phone's messages are handled and it can be sent anything.
     private var authenticated = false
+    /// The `device` frame decrypted: waiting to be admitted (or for approval of a new phone).
+    private var keyed = false
     private var closed = false
+    private var handshakeTimer: DispatchWorkItem?
+
+    /// From the phone's hello.
+    private(set) var phoneId = ""
+    /// It connected with its own device key (not the QR's invite key).
+    private(set) var usedDeviceKey = false
+    /// An older app: no device keys, no approval screen.
+    private(set) var isLegacy = true
     /// Keeps the session alive from accept until close (nothing else owns it during the handshake).
     private var selfRetain: PhoneConnection?
 
+    /// The phone proved it has a key; decide whether to `admit` it, ask for approval, or `deny` it.
+    var onDevice: ((Message) -> Void)?
     var onAuthenticated: ((Message) -> Void)?
     var onMessage: ((Message) -> Void)?
     var onClose: ((_ reason: String?) -> Void)?
 
     private static let maxFrame = 8 * 1024 * 1024
 
-    init(_ conn: NWConnection, identity: Identity, queue: DispatchQueue) {
+    init(_ conn: NWConnection, identity: @escaping () -> Identity, queue: DispatchQueue) {
         self.conn = conn
         self.identity = identity
         self.queue = queue
@@ -40,9 +54,47 @@ final class PhoneConnection {
         conn.start(queue: queue)
         receive()
         // A phone that never completes the handshake is dropped.
-        queue.asyncAfter(deadline: .now() + 10) { [weak self] in
+        armTimeout(10)
+    }
+
+    private func armTimeout(_ seconds: TimeInterval) {
+        handshakeTimer?.cancel()
+        let work = DispatchWorkItem { [weak self] in
             guard let self, !self.authenticated else { return }
             self.close("Handshake timed out")
+        }
+        handshakeTimer = work
+        queue.asyncAfter(deadline: .now() + seconds, execute: work)
+    }
+
+    /// Let it in: `welcome` (with its new device key, if any), then normal messages.
+    func admit(_ device: Message, deviceKey: Data?) {
+        queue.async {
+            guard !self.closed, self.keyed, !self.authenticated else { return }
+            self.authenticated = true
+            self.handshakeTimer?.cancel()
+            var welcome: Message = ["t": "welcome", "name": Net.computerName]
+            if let deviceKey { welcome["deviceKey"] = deviceKey.base64EncodedString() }
+            self.sendSealed(welcome)
+            self.onAuthenticated?(device)
+        }
+    }
+
+    /// A new phone waiting for approval: tell it, and give it time.
+    func awaitApproval(by paired: String, seconds: TimeInterval) {
+        queue.async {
+            guard !self.closed, self.keyed else { return }
+            self.armTimeout(seconds + 5)
+            self.sendSealed(["t": "approval", "by": paired])
+        }
+    }
+
+    /// Turn it away (with a message it can show) and hang up.
+    func deny(_ reason: String) {
+        queue.async {
+            guard !self.closed else { return }
+            if self.keyed { self.sendSealed(["t": "denied"]) }
+            self.queue.asyncAfter(deadline: .now() + 0.3) { self.close(reason) }
         }
     }
 
@@ -89,12 +141,40 @@ final class PhoneConnection {
             guard let msg = Self.decode(payload), msg["t"] as? String == "hello",
                   let nonceStr = msg["nonce"] as? String, let phoneNonce = Data(base64Encoded: nonceStr),
                   phoneNonce.count == 16 else { return close("Bad hello") }
+            let id = identity()
+            phoneId = msg["phoneId"] as? String ?? ""
+            let use = msg["use"] as? String
+            isLegacy = use == nil
+            // Which key it holds: its own device key (must be the paired phone), or the QR's invite key.
+            let base: Data
+            if use == "device" {
+                guard let p = id.phone, p.id == phoneId, let k = p.key else {
+                    return close("A phone that's no longer paired tried to connect.")
+                }
+                base = k
+                usedDeviceKey = true
+            } else {
+                base = id.key
+            }
             let macNonce = Data.random(16)
-            cipher = SessionCipher(pairingKey: identity.key, phoneNonce: phoneNonce, macNonce: macNonce)
-            let reply: Message = [
-                "t": "hello", "v": 1, "macId": identity.macId,
+            var reply: Message = [
+                "t": "hello", "v": 1, "macId": id.macId,
                 "nonce": macNonce.base64EncodedString(), "name": Net.computerName,
             ]
+            if let ephStr = msg["eph"] as? String, let phoneEph = Data(base64Encoded: ephStr),
+               let peer = try? P256.KeyAgreement.PublicKey(x963Representation: phoneEph) {
+                // Forward secrecy: a one-time key exchange mixed into the session key.
+                let mine = P256.KeyAgreement.PrivateKey()
+                guard let secret = try? mine.sharedSecretFromKeyAgreement(with: peer) else { return close("Bad key exchange") }
+                let shared = secret.withUnsafeBytes { Data($0) }
+                let macEph = mine.publicKey.x963Representation
+                cipher = SessionCipher(pairingKey: base, phoneNonce: phoneNonce, macNonce: macNonce,
+                                       phoneEph: phoneEph, macEph: macEph, shared: shared)
+                reply["v"] = 2
+                reply["eph"] = macEph.base64EncodedString()
+            } else {
+                cipher = SessionCipher(pairingKey: base, phoneNonce: phoneNonce, macNonce: macNonce)
+            }
             if let data = try? JSONSerialization.data(withJSONObject: reply) { write(data) }
             return
         }
@@ -106,13 +186,20 @@ final class PhoneConnection {
             return close(authenticated ? "Decryption failed" : "A phone with an old pairing code tried to connect. Pair it again.")
         }
         if !authenticated {
+            // Before it's admitted, only its device info counts (anything else waits or is dropped).
+            guard !keyed else { return }
             guard msg["t"] as? String == "device" else { return close("Expected device info") }
-            authenticated = true
-            onAuthenticated?(msg)
-            send(["t": "welcome", "name": Net.computerName])
+            keyed = true
+            onDevice?(msg)
             return
         }
         onMessage?(msg)
+    }
+
+    private func sendSealed(_ msg: Message) {
+        guard let data = try? JSONSerialization.data(withJSONObject: msg),
+              let sealed = try? cipher?.seal(data) else { return }
+        write(sealed)
     }
 
     /// Thread-safe. `completion` fires on the connection queue once the bytes are handed to the network stack.
@@ -145,13 +232,19 @@ final class Server {
     let queue = DispatchQueue(label: "app.macndroid.server")
     private var listener: NWListener?
     private(set) var port: UInt16 = 0
-    var identity: Identity
+    private let lock = NSLock()
+    private var _identity: Identity
+    /// Read on the network queue, changed on the main thread.
+    var identity: Identity {
+        get { lock.lock(); defer { lock.unlock() }; return _identity }
+        set { lock.lock(); _identity = newValue; lock.unlock() }
+    }
 
     var onReady: ((UInt16) -> Void)?
     var onFailed: ((String) -> Void)?
     var onNewConnection: ((PhoneConnection) -> Void)?
 
-    init(identity: Identity) { self.identity = identity }
+    init(identity: Identity) { _identity = identity }
 
     func start(preferredPort: UInt16 = 47800) {
         let params = NWParameters.tcp
@@ -191,7 +284,7 @@ final class Server {
         }
         listener.newConnectionHandler = { [weak self] nw in
             guard let self else { return }
-            let pc = PhoneConnection(nw, identity: self.identity, queue: self.queue)
+            let pc = PhoneConnection(nw, identity: { [weak self] in self?.identity ?? Identity.load() }, queue: self.queue)
             self.onNewConnection?(pc)
             pc.start()
         }

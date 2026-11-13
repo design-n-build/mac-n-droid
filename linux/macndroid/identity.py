@@ -24,9 +24,13 @@ def b64url(data: bytes) -> str:
 
 
 class Identity:
-    def __init__(self, pc_id: str, key: bytes):
+    """`key` is the invite key in the QR code; it's replaced once a phone has paired with it, so the code works
+    once. `phone` is the paired phone: {"id", "name", "key" (its own key, or None for an older app), "confirmed"}."""
+
+    def __init__(self, pc_id: str, key: bytes, phone: dict | None = None):
         self.pc_id = pc_id
         self.key = key
+        self.phone = phone
 
     @staticmethod
     def path() -> Path:
@@ -38,7 +42,13 @@ class Identity:
             d = json.loads(cls.path().read_text())
             key = base64.b64decode(d["key"])
             if len(key) == 32:
-                return cls(d["macId"], key)
+                phone = d.get("phone")
+                if isinstance(phone, dict) and phone.get("id"):
+                    phone = {"id": phone["id"], "name": phone.get("name", ""), "confirmed": bool(phone.get("confirmed")),
+                             "key": base64.b64decode(phone["key"]) if phone.get("key") else None}
+                else:
+                    phone = None
+                return cls(d["macId"], key, phone)
         except (OSError, ValueError, KeyError):
             pass
         ident = cls(str(uuid.uuid4()), os.urandom(32))
@@ -47,13 +57,23 @@ class Identity:
 
     def reset(self):
         self.key = os.urandom(32)
+        self.phone = None
+        self.save()
+
+    def replace_invite_key(self):
+        self.key = os.urandom(32)
         self.save()
 
     def save(self):
         p = self.path()
         tmp = p.with_suffix(".tmp")
         # "macId" keeps the file and the protocol identical to the Mac app's.
-        tmp.write_text(json.dumps({"macId": self.pc_id, "key": base64.b64encode(self.key).decode()}))
+        d = {"macId": self.pc_id, "key": base64.b64encode(self.key).decode()}
+        if self.phone:
+            ph = self.phone
+            d["phone"] = {"id": ph["id"], "name": ph["name"], "confirmed": ph["confirmed"],
+                          "key": base64.b64encode(ph["key"]).decode() if ph.get("key") else None}
+        tmp.write_text(json.dumps(d))
         os.chmod(tmp, 0o600)
         tmp.replace(p)
 

@@ -163,6 +163,8 @@ class Window(Adw.ApplicationWindow):
         state.connect("sms-changed", lambda *_: self.refresh_sms())
         state.connect("contacts-changed", lambda *_: self._refresh_contacts())
         state.connect("mirror-changed", lambda *_: self.refresh_screen())
+        state.connect("approval-request", lambda _s, req: self._approval(req))
+        self._approval_dialog = None
         self.nav.select_row(self._rows["overview" if state.identity else "pair"])
         self.refresh()
         GLib.timeout_add_seconds(30, lambda: self.refresh() or True)
@@ -926,6 +928,32 @@ class Window(Adw.ApplicationWindow):
         d.set_response_appearance("clear", Adw.ResponseAppearance.DESTRUCTIVE)
         d.connect("response", lambda _d, r: r == "clear" and self.state.clear_history())
         d.present(self)
+
+    def _approval(self, req):
+        """Another phone scanned the code while one is paired: allow it? (The paired phone is asked too.)"""
+        rid, name, paired = req
+        if self._approval_dialog:
+            d, self._approval_dialog = self._approval_dialog, None
+            d.force_close()
+        if not rid:
+            return
+        d = Adw.AlertDialog(
+            heading=f"Allow \u201c{name}\u201d to connect?",
+            body=f"It scanned this computer's pairing code. If you allow it, it replaces {paired}, which will be "
+                 "disconnected. Only allow a phone that's yours.")
+        d.add_response("deny", "Don't Allow")
+        d.add_response("allow", "Allow")
+        d.set_response_appearance("allow", Adw.ResponseAppearance.SUGGESTED)
+        d.set_close_response("deny")
+
+        def answered(_d, r):
+            if self._approval_dialog is d:
+                self._approval_dialog = None
+                self.state.resolve_approval(rid, r == "allow")
+        d.connect("response", answered)
+        self._approval_dialog = d
+        d.present(self)
+        self.present()
 
     def confirm_reset(self):
         d = Adw.AlertDialog(heading="Reset Pairing?", body="All paired phones will need to scan the new QR code.")

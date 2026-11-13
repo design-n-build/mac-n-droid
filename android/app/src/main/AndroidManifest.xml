@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 17+: reaching the paired computer on the same Wi-Fi needs local network access. -->
     <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
@@ -222,6 +223,15 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <activity
+            android:name=".service.ApproveActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.MacNDroid.Invisible" />
+        <receiver
+            android:name=".service.PairingAnswerReceiver"
+            android:exported="false" />
         <receiver
             android:name=".service.BootReceiver"
             android:exported="true">

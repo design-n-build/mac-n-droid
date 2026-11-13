@@ -54,6 +54,9 @@ class MacNDroidApp : Application() {
                     description = "Links sent from ${Computer.your}, when they can't open by themselves"
                     setSound(null, null)
                 },
+                NotificationChannel(CH_PAIRING, "Pairing requests", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "When another phone asks to pair with ${Computer.your}"
+                },
                 NotificationChannel(CH_PROGRESS, "Files in progress", NotificationManager.IMPORTANCE_LOW).apply {
                     description = "Shows how far along a file is while it moves to or from ${Computer.your}"
                     setShowBadge(false)
@@ -76,5 +79,6 @@ class MacNDroidApp : Application() {
         const val CH_LINKS = "links"
         const val CH_MAC_MUSIC = "mac_music"
         const val CH_PROGRESS = "transfer_progress"
+        const val CH_PAIRING = "pairing"
     }
 }

@@ -77,7 +77,9 @@ class FileTransfers(private val ctx: Context) {
     // MARK: Mac → phone
 
     fun handleIncoming(msg: JSONObject) {
-        val id = msg.optString("id")
+        // The id ends up in a cache file name: letters, digits, "-" and "_" only.
+        val id = msg.optString("id").filter { it.isLetterOrDigit() && it.code < 128 || it == '-' || it == '_' }.take(80)
+        if (id.isEmpty()) return
         when (msg.optString("t")) {
             "file_start" -> start(id, msg)
             "file_chunk" -> incoming[id]?.let { f ->

@@ -200,7 +200,9 @@ internal fun Confetti(burst: Int, modifier: Modifier = Modifier) {
 internal fun PairedScreen(macName: String, onDone: () -> Unit) {
     val status by Link.status.collectAsState()
     val connected = status == Link.Status.Connected
-    val failed = status == Link.Status.AuthFailed
+    val failed = status == Link.Status.AuthFailed || status == Link.Status.Denied
+    val waiting = status == Link.Status.AwaitingApproval
+    val approver by Link.approvalBy.collectAsState()
     var burst by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) { Haptics.play(Haptics.Kind.Tick) }          // the code was read
     LaunchedEffect(connected) {
@@ -218,13 +220,16 @@ internal fun PairedScreen(macName: String, onDone: () -> Unit) {
                 ConnectRow(connected)
                 Spacer(Modifier.height(36.dp))
                 AnimatedContent(
-                    targetState = when { connected -> 2; failed -> 1; else -> 0 },
+                    targetState = when { connected -> 2; failed -> if (status == Link.Status.Denied) 4 else 1; waiting -> 3; else -> 0 },
                     transitionSpec = { fadeIn(tween(400, 250)) togetherWith fadeOut(tween(200)) },
                     label = "pairedText",
                 ) { s ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            when (s) { 2 -> "You're connected"; 1 -> "Couldn't connect"; else -> "Connecting to $macName" },
+                            when (s) {
+                                2 -> "You're connected"; 1 -> "Couldn't connect"; 3 -> "Waiting for approval"; 4 -> "Not allowed"
+                                else -> "Connecting to $macName"
+                            },
                             style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center,
                         )
                         Spacer(Modifier.height(12.dp))
@@ -232,6 +237,9 @@ internal fun PairedScreen(macName: String, onDone: () -> Unit) {
                             when (s) {
                                 2 -> "This phone and $macName now work together."
                                 1 -> "$macName has a new pairing code. Scan it again."
+                                3 -> "$macName is paired with ${approver ?: "another phone"}. Allow this phone on " +
+                                    "${approver ?: "that phone"} or on $macName."
+                                4 -> "This phone wasn't allowed to connect to $macName. Scan the new code on $macName to try again."
                                 else -> "Keep Mac n Droid open on ${Computer.your}. This takes a few seconds."
                             },
                             style = MaterialTheme.typography.bodyLarge,

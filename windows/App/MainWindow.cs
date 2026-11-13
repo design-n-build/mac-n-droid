@@ -103,6 +103,7 @@ public sealed class MainWindow : Window
         state.SmsChanged += () => { if (_current == "messages") UpdateMessages(); };
         state.ContactsChanged += UpdateContacts;
         state.MirrorChanged += () => { if (_current == "screen") UpdateScreen(); };
+        state.ApprovalRequested += ShowApproval;
         _mirror = new MirrorSurface(state);
         state.MirrorSink = _mirror;
         // Addresses change when the network does.
@@ -911,6 +912,31 @@ public sealed class MainWindow : Window
             PrimaryButtonText = "Clear", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Close, XamlRoot = Content.XamlRoot,
         };
         if (await d.ShowAsync() == ContentDialogResult.Primary) _state.ClearHistory();
+    }
+
+    ContentDialog? _approval;
+
+    /// <summary>Another phone scanned the code while one is paired: allow it? (The paired phone is asked too.)</summary>
+    async void ShowApproval(string id, string name, string paired)
+    {
+        if (_approval is { } open) { _approval = null; open.Hide(); }
+        if (id.Length == 0) return;
+        var d = new ContentDialog
+        {
+            Title = $"Allow \u201c{name}\u201d to connect?",
+            Content = $"It scanned this PC's pairing code. If you allow it, it replaces {paired}, which will be disconnected. "
+                      + "Only allow a phone that's yours.",
+            PrimaryButtonText = "Allow", CloseButtonText = "Don't allow", DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot,
+        };
+        _approval = d;
+        Activate();
+        ContentDialogResult r;
+        try { r = await d.ShowAsync(); }
+        catch (Exception) { return; }   // another dialog is open: the phone can still answer, or it times out
+        if (_approval != d) return;   // answered on the phone, or timed out
+        _approval = null;
+        _state.ResolveApproval(id, r == ContentDialogResult.Primary);
     }
 
     async void ConfirmReset()

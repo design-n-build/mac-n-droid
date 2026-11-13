@@ -49,6 +49,21 @@ public static class Folders
         return parts.Select(p => new string(p.Select(c => bad.Contains(c) ? '-' : c).ToArray())).ToArray();
     }
 
+    /// <summary>
+    /// Marks received files as downloaded from the internet ("Mark of the Web"), so Windows SmartScreen and
+    /// Office check them before they run or open. A folder marks every file inside it.
+    /// </summary>
+    public static void MarkOfTheWeb(string path)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var files = Directory.Exists(path) ? Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories) : new[] { path };
+        foreach (var f in files)
+        {
+            try { File.WriteAllText(f + ":Zone.Identifier", "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=about:internet\r\n"); }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException) { }
+        }
+    }
+
     /// <summary>Unpacks a received folder zip into <paramref name="downloads"/> and returns the folder, or null.</summary>
     public static string? Unpack(string zipPath, string downloads, string name)
     {
@@ -70,7 +85,12 @@ public static class Folders
                 }
             }
             var items = Directory.GetFileSystemEntries(work);
-            var baseName = name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
+            // The name comes from the other device: keep only a plain folder name, so it can't point elsewhere.
+            var baseName = Path.GetFileName(name.Replace('\\', '/').TrimEnd('/'));
+            if (baseName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) baseName = baseName[..^4];
+            foreach (var c in Path.GetInvalidFileNameChars()) baseName = baseName.Replace(c, '-');
+            baseName = baseName.Trim().TrimStart('.');
+            if (baseName.Length == 0) baseName = "Folder";
             string src = work;
             if (items.Length == 1 && Directory.Exists(items[0])) { src = items[0]; baseName = Path.GetFileName(src); }
             var dest = Path.Combine(downloads, baseName);

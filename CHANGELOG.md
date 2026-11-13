@@ -7,6 +7,14 @@
   paused, everything is dimmed and tapping it offers to resume. Find my phone and battery keep working.
   The Mac shows a "Sharing paused" bar. These tiles replace the connection tile.
 - **Files from your phone, in the notch:** a card with a preview, **Open** and **Show in Finder**.
+- **Pairing codes work once:** after your phone pairs, it gets its own secret key and the computer makes a new
+  QR code, so a screenshot or copied pairing link of the old one is useless.
+- **New phones need your OK:** if a different phone scans the code, it waits until you allow it on the computer
+  or on the phone that's already paired. Lost your phone? Just click **Allow** on the computer.
+- **Forward secrecy:** every connection adds a one-time key exchange, so even a leaked key can't unlock traffic
+  recorded earlier. Works with older versions too (they connect the old way until they update).
+- **Safer file receiving:** received files are marked as downloaded (macOS and Windows check apps and scripts
+  before they first run), and names from the other device can't point outside Downloads.
 - **New messages in an ongoing chat** now show in the notch again; a run of messages in one chat alerts once,
   and again after 30 seconds of quiet. Progress-style updates (downloads) alert only the first time.
 

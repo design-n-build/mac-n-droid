@@ -12,7 +12,7 @@ import struct
 import threading
 import uuid
 
-from .crypto import CryptoError, SessionCipher
+from .crypto import CryptoError, Ephemeral, SessionCipher
 
 log = logging.getLogger("macndroid")
 MAX_FRAME = 8 * 1024 * 1024
@@ -25,7 +25,12 @@ class Session:
         self.sock = sock
         self.server = server
         self.cipher: SessionCipher | None = None
+        # Admitted: its messages are handled. "keyed": its device info decrypted, waiting to be admitted.
         self.authenticated = False
+        self.keyed = False
+        self.phone_id = ""
+        self.used_device_key = False
+        self.legacy = True
         self.closed = False
         self.device: dict = {}
         self._send_lock = threading.Lock()
@@ -61,11 +66,32 @@ class Session:
             nonce = base64.b64decode(msg.get("nonce", ""))
             if msg.get("t") != "hello" or len(nonce) != 16:
                 raise ConnectionError("Bad hello")
+            ident = self.server.identity
+            self.phone_id = str(msg.get("phoneId", ""))
+            use = msg.get("use")
+            self.legacy = use is None
+            # Which key it holds: its own device key (must be the paired phone), or the QR's invite key.
+            if use == "device":
+                p = ident.phone
+                if not p or p["id"] != self.phone_id or not p.get("key"):
+                    raise ConnectionError("A phone that's no longer paired tried to connect.")
+                base = p["key"]
+                self.used_device_key = True
+            else:
+                base = ident.key
             pc_nonce = os.urandom(16)
-            self.cipher = SessionCipher(self.server.identity.key, nonce, pc_nonce)
-            reply = {"t": "hello", "v": 1, "macId": self.server.identity.pc_id,
+            reply = {"t": "hello", "v": 1, "macId": ident.pc_id,
                      "nonce": base64.b64encode(pc_nonce).decode(), "name": self.server.name,
                      "os": self.server.os_name}
+            if msg.get("eph"):
+                # Forward secrecy: a one-time key exchange mixed into the session key.
+                peer = base64.b64decode(msg["eph"])
+                eph = Ephemeral()
+                self.cipher = SessionCipher(base, nonce, pc_nonce, peer, eph.public, eph.shared(peer))
+                reply["v"] = 2
+                reply["eph"] = base64.b64encode(eph.public).decode()
+            else:
+                self.cipher = SessionCipher(base, nonce, pc_nonce)
             self._write(json.dumps(reply).encode())
             return
         try:
@@ -75,20 +101,51 @@ class Session:
                                   else "A phone with an old pairing code tried to connect. Pair it again.")
         msg = json.loads(plain)
         if not self.authenticated:
+            if self.keyed:
+                return  # Waiting to be admitted: nothing else counts yet.
             if msg.get("t") != "device":
                 raise ConnectionError("Expected device info")
-            self.authenticated = True
+            self.keyed = True
             self.device = msg
-            self.sock.settimeout(90)  # Phones ping every 20 seconds.
-            self.send({"t": "welcome", "name": self.server.name})
-            self.server.dispatch(self.server.on_authenticated, self)
+            self.server.dispatch(self.server.on_device, self)
             return
         self.server.dispatch(self.server.on_message, self, msg)
+
+    # -- admitting --
+
+    def admit(self, device_key: bytes | None = None):
+        """Let it in: `welcome` (with its new device key, if any), then normal messages."""
+        if self.closed or not self.keyed or self.authenticated:
+            return
+        self.authenticated = True
+        self.sock.settimeout(90)  # Phones ping every 20 seconds.
+        welcome = {"t": "welcome", "name": self.server.name}
+        if device_key:
+            welcome["deviceKey"] = base64.b64encode(device_key).decode()
+        self.send(welcome)
+        self.server.dispatch(self.server.on_authenticated, self)
+
+    def await_approval(self, by: str, seconds: int):
+        """A new phone waiting for approval: tell it, and give it time."""
+        if self.closed or not self.keyed:
+            return
+        self.sock.settimeout(seconds + 10)
+        self._send_sealed({"t": "approval", "by": by})
+
+    def deny(self, reason: str):
+        if self.keyed:
+            self._send_sealed({"t": "denied"})
+        threading.Timer(0.3, lambda: self.close(reason)).start()
 
     # -- writing --
 
     def send(self, msg: dict) -> bool:
         """Thread-safe. Blocks until the frame is handed to the network, so callers get simple flow control."""
+        if self.closed or self.cipher is None or not self.authenticated:
+            return False
+        return self._send_sealed(msg)
+
+    def _send_sealed(self, msg: dict) -> bool:
         if self.closed or self.cipher is None:
             return False
         data = json.dumps(msg, separators=(",", ":")).encode()
@@ -123,6 +180,7 @@ class Server:
         self.os_name = os_name
         self.dispatch = dispatch
         self.port = 0
+        self.on_device = lambda s: s.admit()
         self.on_authenticated = lambda s: None
         self.on_message = lambda s, m: None
         self.on_closed = lambda s, r: None

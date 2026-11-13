@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.AllInclusive
 import androidx.compose.material.icons.outlined.HourglassBottom
 import androidx.compose.material.icons.outlined.HourglassTop
 import androidx.compose.material.icons.outlined.PauseCircle
+import androidx.compose.material.icons.outlined.PhonelinkLock
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -149,5 +150,28 @@ internal fun ResumeDialog(onDismiss: () -> Unit) {
         text = { Text("Resume sharing with ${Computer.your} to use this. Everything you had on comes back as it was.") },
         confirmButton = { TextButton(onClick = { onDismiss(); Pause.resume(ctx) }) { Text("Resume") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Not now") } },
+    )
+}
+
+/** On the paired phone: another phone scanned the computer's code and wants to replace this one. */
+@Composable
+internal fun PairingRequestDialog(r: app.macndroid.service.PairingPrompts.Request) {
+    val ctx = LocalContext.current
+    val mac = app.macndroid.core.Prefs.pairing.collectAsState().value?.macName ?: Computer.word
+    AlertDialog(
+        onDismissRequest = {},
+        icon = { Icon(Icons.Outlined.PhonelinkLock, null) },
+        title = { Text("Allow ${r.name}?") },
+        text = {
+            Text("${r.name} scanned the pairing code on $mac. If you allow it, it replaces this phone, which will be " +
+                "disconnected. Only allow a phone that's yours.")
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                // Fingerprint, face or screen lock first.
+                (ctx as? android.app.Activity)?.let { app.macndroid.service.PairingPrompts.confirmAllow(it, r.id, r.name) }
+            }) { Text("Allow") }
+        },
+        dismissButton = { TextButton(onClick = { app.macndroid.service.PairingPrompts.answer(ctx, r.id, false) }) { Text("Don't allow") } },
     )
 }

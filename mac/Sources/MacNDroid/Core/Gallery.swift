@@ -148,7 +148,7 @@ final class GalleryModel: ObservableObject {
     }
 
     func cacheFileName(_ id: String, _ name: String) -> String {
-        "\(id)-\(name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-"))"
+        "\(AppState.safeID(id) ?? "item")-\(AppState.safeFileName(name))"
     }
 
     private func cachedURL(_ item: GalleryItem) -> URL? {

@@ -2,14 +2,28 @@ import AppKit
 import CoreImage.CIFilterBuiltins
 import Foundation
 
-/// This Mac's identity and the pairing secret shared with phones.
+/// The phone this Mac is paired with.
+struct PairedPhone: Codable, Equatable {
+    var id: String
+    var name: String
+    /// Its own key (nil: an older app that still uses the invite key).
+    var key: Data?
+    /// The phone said it saved `key`; until then the invite key stays valid for it.
+    var confirmed: Bool
+}
+
+/// This Mac's identity and pairing secrets.
 struct Identity: Codable {
     var macId: String
+    /// The invite key in the QR code. Replaced once a phone has paired with it, so the code works once.
     var key: Data
+    var phone: PairedPhone?
 
     private static var url: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("MacNDroid", isDirectory: true)
+        // MACNDROID_CONFIG: a separate folder, for tests (as in the Linux app).
+        let dir = ProcessInfo.processInfo.environment["MACNDROID_CONFIG"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("MacNDroid", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("identity.json")
     }
@@ -19,7 +33,7 @@ struct Identity: Codable {
            let id = try? JSONDecoder().decode(Identity.self, from: data) {
             return id
         }
-        let id = Identity(macId: UUID().uuidString.lowercased(), key: .random(32))
+        let id = Identity(macId: UUID().uuidString.lowercased(), key: .random(32), phone: nil)
         id.save()
         return id
     }
@@ -27,6 +41,7 @@ struct Identity: Codable {
     static func reset() -> Identity {
         var id = load()
         id.key = .random(32)
+        id.phone = nil
         id.save()
         return id
     }

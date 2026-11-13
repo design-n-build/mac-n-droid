@@ -57,7 +57,11 @@ def unpack(zip_path: Path, downloads: Path, name: str) -> Path | None:
     finally:
         zip_path.unlink(missing_ok=True)
     items = [p for p in work.iterdir()]
-    base = name[:-4] if name.lower().endswith(".zip") else name
+    # The name comes from the other device: keep only a plain folder name, so it can't point elsewhere.
+    base = os.path.basename(name.replace("\\", "/").rstrip("/")).strip().lstrip(".")
+    if base.lower().endswith(".zip"):
+        base = base[:-4]
+    base = base or "Folder"
     if len(items) == 1 and items[0].is_dir():
         src = items[0]
         base = src.name

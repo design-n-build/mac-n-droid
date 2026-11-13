@@ -101,8 +101,19 @@ def downloads_dir() -> Path:
     return Path(d)
 
 
+def safe_name(name: str, fallback: str = "file") -> str:
+    """Just a file name from the other device: no folders, no "..", no hidden dot files."""
+    name = os.path.basename(str(name).replace("\\", "/").rstrip("/")).replace("\0", "").strip().lstrip(".")
+    return name[:200] or fallback
+
+
+def safe_id(s) -> str:
+    """Ids from the other device end up in file names: letters, digits, "-" and "_" only."""
+    return "".join(c for c in str(s) if c.isascii() and (c.isalnum() or c in "-_"))[:80]
+
+
 def unique_path(folder: Path, name: str) -> Path:
-    name = os.path.basename(name).replace("/", "-") or "file"
+    name = safe_name(name)
     p = folder / name
     stem, ext = os.path.splitext(name)
     n = 2
@@ -133,6 +144,8 @@ class AppState(GObject.Object):
         "mirror-changed": (GObject.SignalFlags.RUN_FIRST, None, ()),
         # (title, body) for "Did you leave your phone behind?"
         "left-behind": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
+        # (request id, new phone, paired phone): ask whether to allow a new phone; "" closes the question.
+        "approval-request": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
     }
 
     def __init__(self, settings=None):
@@ -185,7 +198,9 @@ class AppState(GObject.Object):
                                       lambda title, body: self.emit("left-behind", (title, body)),
                                       lambda: self.say_bye("sleep"))
         self.server = Server(self.identity, self.name, "linux", lambda f, *a: GLib.idle_add(lambda: f(*a) and False))
+        self.server.on_device = self._decide
         self.server.on_authenticated = self._connected
+        self._pending: dict | None = None
         self.server.on_message = self._message
         self.server.on_closed = self._closed
         self.advertiser = Advertiser()
@@ -229,10 +244,91 @@ class AppState(GObject.Object):
         return self.identity.pairing_uri(self.server.port, self.addresses, self.name)
 
     def reset_pairing(self):
+        if self._pending:
+            self.resolve_approval(self._pending["id"], False)
         self.identity.reset()
         if self.active:
             self.active.close("Pairing reset")
         self.emit("pairing-changed")
+
+    # -- pairing: single-use codes and approving new phones --
+
+    APPROVAL_SECONDS = 120
+
+    def _replace_invite_key(self):
+        """The QR code has been used: make a new one, so screenshots and copied links of it stop working."""
+        self.identity.replace_invite_key()
+        self.emit("pairing-changed")
+
+    def _decide(self, s: Session):
+        name = s.device.get("name") or "Android phone"
+        if s.used_device_key:
+            s.admit()
+            if self.identity.phone and not self.identity.phone["confirmed"]:
+                self._confirm_phone_key()
+            return
+        p = self.identity.phone
+        if p is None or p["id"] == s.phone_id:
+            self._pair(s, name)
+        elif s.legacy:
+            s.deny("An older Mac n Droid app tried to pair")
+            self.last_error = f"{name} tried to pair, but its Mac n Droid app is out of date. Update it, then scan the code again."
+            self._replace_invite_key()
+            self.emit("status-changed")
+        else:
+            self._ask_approval(s, name)
+
+    def _pair(self, s: Session, name: str):
+        if s.legacy:
+            # An older app keeps using the invite key, so it can't be replaced until that phone updates.
+            self.identity.phone = {"id": s.phone_id, "name": name, "key": None, "confirmed": True}
+            self.identity.save()
+            s.admit()
+            return
+        key = os.urandom(32)
+        # Saved before it's sent: if the phone keeps it but the reply is lost, its next connection still works.
+        self.identity.phone = {"id": s.phone_id, "name": name, "key": key, "confirmed": False}
+        self.identity.save()
+        s.admit(key)
+
+    def _confirm_phone_key(self):
+        p = self.identity.phone
+        if not p or p["confirmed"]:
+            return
+        p["confirmed"] = True
+        self.identity.save()
+        self._replace_invite_key()
+
+    def _ask_approval(self, s: Session, name: str):
+        if self._pending:
+            self.resolve_approval(self._pending["id"], False)
+        paired = (self.identity.phone or {}).get("name") or self.last_phone_name or "your phone"
+        rid = uuid.uuid4().hex
+        self._pending = {"id": rid, "session": s, "name": name}
+        s.await_approval(paired, self.APPROVAL_SECONDS)
+        if self.active:
+            self.active.send({"t": "approve_request", "id": rid, "name": name})
+        GLib.timeout_add_seconds(self.APPROVAL_SECONDS, lambda: self.resolve_approval(rid, False) and False)
+        self.emit("approval-request", (rid, name, paired))
+
+    def resolve_approval(self, rid: str, allow: bool):
+        """From this computer, the paired phone or the time limit; only the first answer counts."""
+        p = self._pending
+        if not p or p["id"] != rid:
+            return False
+        self._pending = None
+        self.emit("approval-request", ("", "", ""))
+        s = p["session"]
+        if allow:
+            old = self.active
+            if old:
+                old.send({"t": "unpaired", "by": p["name"]})
+                GLib.timeout_add(500, lambda: old.close("Replaced by a new phone") and False)
+            self._pair(s, p["name"])
+        else:
+            s.deny("Not allowed")
+            self._replace_invite_key()
+        return False
 
     # -- connection --
 
@@ -309,7 +405,11 @@ class AppState(GObject.Object):
         if s is not self.active:
             return
         t = m.get("t")
-        if t == "battery":
+        if t == "key_saved":
+            self._confirm_phone_key()
+        elif t == "approve":
+            self.resolve_approval(str(m.get("id", "")), bool(m.get("allow")))
+        elif t == "battery":
             self.battery = m.get("level")
             self.charging = bool(m.get("charging"))
             self.emit("status-changed")
@@ -839,7 +939,7 @@ class AppState(GObject.Object):
         return False
 
     def _file(self, t: str, m: dict):
-        tid = m.get("id")
+        tid = safe_id(m.get("id") or "")
         if not tid:
             return
         if t == "file_start":

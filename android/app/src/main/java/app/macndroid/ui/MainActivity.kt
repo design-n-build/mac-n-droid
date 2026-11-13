@@ -241,6 +241,7 @@ private fun AppShell() {
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     val pausedUntil by app.macndroid.core.Pause.until.collectAsState()
     var askResume by remember { mutableStateOf(false) }
+    val pairingRequest by app.macndroid.service.PairingPrompts.request.collectAsState()
     val transfers by Transfers.items.collectAsState()
     val active = transfers.count { it.state == app.macndroid.service.TransferItem.State.Active }
 
@@ -275,6 +276,7 @@ private fun AppShell() {
         }
     }
     if (askResume) ResumeDialog { askResume = false }
+    pairingRequest?.let { r -> PairingRequestDialog(r) }
 }
 
 // MARK: Home
@@ -534,12 +536,14 @@ private fun StatusCard(status: Link.Status, macName: String) {
         Link.Status.Connected -> "Connected" to "Notifications, clipboard and files are syncing."
         Link.Status.Connecting -> "Connecting" to "Securing the connection."
         Link.Status.Searching -> "Searching" to "Make sure Mac n Droid is open on ${Computer.your} and you're on the same Wi-Fi."
-        Link.Status.AuthFailed -> "Expired" to "Your ${Computer.word} reset its pairing code. Unpair, then scan the new QR code."
+        Link.Status.AuthFailed -> "Not paired" to "This phone is no longer paired with $macName. Unpair, then scan the code on $macName."
+        Link.Status.AwaitingApproval -> "Waiting" to "Allow this phone on ${Link.approvalBy.value ?: "your other phone"} or on $macName."
+        Link.Status.Denied -> "Not allowed" to "$macName didn't allow this phone. Unpair, then scan the code again."
         Link.Status.Unpaired -> "Not paired" to ""
     }
     val dot = when (status) {
         Link.Status.Connected -> scheme.primary
-        Link.Status.AuthFailed -> scheme.error
+        Link.Status.AuthFailed, Link.Status.Denied -> scheme.error
         else -> scheme.outline
     }
     Card(
@@ -551,14 +555,14 @@ private fun StatusCard(status: Link.Status, macName: String) {
                 Text(macName, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(12.dp))
-                if (status == Link.Status.Searching || status == Link.Status.Connecting) {
+                if (status == Link.Status.Searching || status == Link.Status.Connecting || status == Link.Status.AwaitingApproval) {
                     CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp, color = scheme.onSurfaceVariant)
                 } else {
                     Surface(shape = CircleShape, color = dot, modifier = Modifier.size(8.dp)) {}
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(label, style = MaterialTheme.typography.labelLarge,
-                    color = if (status == Link.Status.AuthFailed) scheme.error else scheme.onSurfaceVariant)
+                    color = if (status == Link.Status.AuthFailed || status == Link.Status.Denied) scheme.error else scheme.onSurfaceVariant)
             }
             if (detail.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
