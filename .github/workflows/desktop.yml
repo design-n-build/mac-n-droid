@@ -37,8 +37,8 @@ jobs:
           mkdir -p $MACNDROID_DOWNLOADS
           python3 linux/tests/e2e.py &
           APP=$!
-          # Wait until the app has written its identity (up to 60 s), not a fixed time: CI machines vary.
-          for i in $(seq 120); do [ -f $MACNDROID_CONFIG/identity.json ] && break; sleep 0.5; done; sleep 1
+          # Wait until the app has written its identity and is listening (up to 60 s), not a fixed time: CI machines vary.
+          for i in $(seq 120); do [ -f $MACNDROID_CONFIG/identity.json ] && ss -ltn | grep -q ":$MACNDROID_PORT " && break; sleep 0.5; done
           python3 tools/fake_phone.py --identity $MACNDROID_CONFIG/identity.json --port 47900 --video $RUNNER_TEMP/clip.h264 \
             --seconds 10 --expect clip_history,sms_threads,sms_thread,contacts_search,sms_send,mirror_start,media_cmd,notif_action,open_url,file_ok,folder_ok,mac_media
           wait $APP
@@ -48,8 +48,8 @@ jobs:
           dotnet build windows/CoreTest -c Release -v q
           dotnet run --no-build -c Release --project windows/CoreTest -- 9 &
           APP=$!
-          # Wait until the app has written its identity (up to 60 s), not a fixed time: CI machines vary.
-          for i in $(seq 120); do [ -f $MACNDROID_CONFIG/identity.json ] && break; sleep 0.5; done; sleep 1
+          # Wait until the app has written its identity and is listening (up to 60 s), not a fixed time: CI machines vary.
+          for i in $(seq 120); do [ -f $MACNDROID_CONFIG/identity.json ] && ss -ltn | grep -q ":$MACNDROID_PORT " && break; sleep 0.5; done
           python3 tools/fake_phone.py --identity $MACNDROID_CONFIG/identity.json --port 47901 --video $RUNNER_TEMP/clip.h264 \
             --seconds 10 --expect clip_history,sms_threads,sms_thread,contacts_search,sms_send,mirror_start,media_cmd,notif_action,open_url,file_ok,folder_ok,mac_media
           wait $APP
