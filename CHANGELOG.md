@@ -1,5 +1,9 @@
 # What's new
 
+## Next version
+- **A friendlier Mac installer:** the download window now shows where to drag the app, how your phone and Mac
+  connect, and what to do if macOS won't open it the first time.
+
 ## 0.13.0 (Mac, Android, browser extension; Windows and Linux beta)
 - **Photos on the Mac:** a new **Photos** page shows your phone's photos and videos, newest first, by album.
   Click one to open it in Quick Look, or save originals to Downloads. Nothing is copied until you open or save

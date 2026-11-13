@@ -78,12 +78,14 @@ codesign --force --options runtime --timestamp=none --entitlements Resources/Mac
 
 echo "▸ Creating DMG"
 DMG="$DIST/MacNDroid-$VERSION.dmg"
-STAGE="$(mktemp -d "${TMPDIR:-/tmp}/macndroid-dmg.XXXXXX")"
-cp -R "$APP" "$STAGE/"
-ln -s /Applications "$STAGE/Applications"
 rm -f "$DMG"
-hdiutil create -volname "Mac n Droid" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
-rm -rf "$STAGE"
+# The designed window (Resources/dmg/: background.html → background.tiff via scripts/render-dmg-background.mjs).
+# dmgbuild writes the layout itself, so Finder isn't scripted and nothing opens on screen.
+DMGBUILD="$ROOT/.build/dmg-venv/bin/dmgbuild"
+if [ ! -x "$DMGBUILD" ]; then
+  python3 -m venv "$ROOT/.build/dmg-venv" && "$ROOT/.build/dmg-venv/bin/pip" -q install dmgbuild
+fi
+"$DMGBUILD" -s "$ROOT/Resources/dmg/settings.py" -D app="$APP" -D dir="$ROOT/Resources/dmg" "Mac n Droid" "$DMG" >/dev/null
 rm -rf "$DIST/Mac n Droid.app" "$DIST/AppIcon.icns"
 # Keep exactly one installed copy (in /Applications) so Spotlight shows a single app.
 # NO_INSTALL=1 leaves /Applications alone and only produces the DMG.

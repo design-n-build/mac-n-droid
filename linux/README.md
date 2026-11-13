@@ -12,10 +12,10 @@ both ways, links both ways, ring your phone, the **browser extension**, and the 
 The webcam is Android's own USB webcam mode, which Linux supports without Mac n Droid.
 
 ## Install
-**Flatpak** (any distribution): download `MacNDroid-Linux-x86_64.flatpak` (or `-aarch64` for ARM computers)
+**Flatpak** (any distribution): download `MacNDroid-x.y.z-Linux-x86_64.flatpak` (or `-aarch64` for ARM computers)
 from GitHub Releases, then
 ```
-flatpak install --user MacNDroid-Linux-x86_64.flatpak
+flatpak install --user MacNDroid-*-Linux-x86_64.flatpak
 flatpak run app.macndroid.Linux
 ```
 

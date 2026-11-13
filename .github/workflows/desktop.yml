@@ -112,10 +112,14 @@ jobs:
           manifest-path: linux/app.macndroid.Linux.yml
           arch: ${{ matrix.arch }}
           cache-key: flatpak-${{ matrix.arch }}-${{ github.sha }}
+      - name: Name it with the version
+        run: |
+          VERSION=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' linux/macndroid/__init__.py)
+          mkdir -p release && mv MacNDroid-Linux-${{ matrix.arch }}.flatpak "release/MacNDroid-$VERSION-Linux-${{ matrix.arch }}.flatpak"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.arch }}
-          path: MacNDroid-Linux-${{ matrix.arch }}.flatpak
+          path: release/*.flatpak
 
   extension:
     name: Browser extension (Chrome, Edge, Firefox)

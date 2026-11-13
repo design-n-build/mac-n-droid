@@ -69,14 +69,16 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 ### Android
 1. On the phone, download the latest **MacNDroid-x.y.z.apk** from [Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest) and open it. Allow "install unknown apps" for the app you opened it from.
+   - **"App blocked to protect your device"?** Google Play Protect blocks apps from outside the Play Store that ask for SMS, notification or accessibility access. Open the **Play Store** → your profile picture → **Play Protect** → ⚙ → turn off **Scan apps with Play Protect**, install Mac n Droid, then turn it back on. Mac n Droid keeps working.
 2. Open Mac n Droid → **Scan QR code** → scan the code on the Mac (**Pair a Phone**).
 3. Tap **Allow** on each item in **Finish setup**.
    - **Notification access greyed out?** Sideloaded apps on Android 13+ need: Settings → Apps → Mac n Droid → ⋮ → **Allow restricted settings**, then try again.
    - On Xiaomi/Samsung/Oppo/OnePlus also set battery to **Unrestricted** and enable autostart (see dontkillmyapp.com).
 
 ### Windows and Linux (beta)
-Download the Windows installer or the Linux Flatpak from [Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases)
-and follow [windows/README.md](windows/README.md) or [linux/README.md](linux/README.md). Testers: see
+Download the Windows installer (`-x64.exe` for most PCs, `-arm64.exe` for ARM laptops) or the Linux Flatpak from
+[Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest). The Windows app isn't signed yet, so
+Windows shows "Windows protected your PC": click **More info → Run anyway**. Then follow [windows/README.md](windows/README.md) or [linux/README.md](linux/README.md). Testers: see
 [docs/TESTING-WINDOWS-LINUX.md](docs/TESTING-WINDOWS-LINUX.md).
 
 ### Browser extension (optional)
