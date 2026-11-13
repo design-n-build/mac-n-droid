@@ -82,6 +82,8 @@ final class AppState: ObservableObject {
 
     var isConnected: Bool { status == .connected }
     var hasPairedBefore: Bool { lastPhoneName != nil }
+    /// A phone just connected for the first time (or the first time since a reset): show the Connected moment.
+    @Published var justPaired = false
 
     private var identity = Identity.load()
     private lazy var server = Server(identity: identity)
@@ -244,6 +246,7 @@ final class AppState: ObservableObject {
             model: msg["model"] as? String ?? "",
             os: msg["os"] as? String ?? "")
         phone = info
+        if lastPhoneName == nil { justPaired = true }
         lastPhoneName = info.name
         lastError = nil
         UserDefaults.standard.set(info.name, forKey: Prefs.lastPhoneName)

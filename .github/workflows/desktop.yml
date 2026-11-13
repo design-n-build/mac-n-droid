@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Add the installers to this existing release (e.g. v0.13.0). Leave empty to only build."
+        description: "Add the installers to this existing release (e.g. v0.13.1). Leave empty to only build."
         required: false
   push:
     tags: ["v*"]

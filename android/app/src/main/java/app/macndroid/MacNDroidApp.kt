@@ -53,6 +53,10 @@ class MacNDroidApp : Application() {
                     description = "Links sent from ${Computer.your}, when they can't open by themselves"
                     setSound(null, null)
                 },
+                NotificationChannel(CH_PROGRESS, "Files in progress", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Shows how far along a file is while it moves to or from ${Computer.your}"
+                    setShowBadge(false)
+                },
                 NotificationChannel(CH_MAC_MUSIC, "Music on ${Computer.your}", NotificationManager.IMPORTANCE_LOW).apply {
                     description = "Play, pause and skip what's playing on ${Computer.your}"
                     setShowBadge(false)
@@ -70,5 +74,6 @@ class MacNDroidApp : Application() {
         const val CH_LEFT_BEHIND = "left_behind"
         const val CH_LINKS = "links"
         const val CH_MAC_MUSIC = "mac_music"
+        const val CH_PROGRESS = "transfer_progress"
     }
 }

@@ -35,10 +35,48 @@ struct MainView: View {
     @State private var selection: Pane?
     @State private var dropTargeted = false
     @State private var showBrowserSheet = false
+    @AppStorage("welcomeSeen") private var welcomeSeen = false
+    /// `open -a "Mac n Droid" --args --preview-first-run` plays Welcome → Connected without changing anything.
+    /// 1 Welcome, 2 Connected, 3 pairing.
+    @State private var preview: Int = CommandLine.arguments.contains("--preview-first-run") ? 1 : 0
+    @AppStorage("pairLater") private var pairLater = false
 
     init(initialPane: Pane = .overview) { _selection = State(initialValue: initialPane) }
 
     var body: some View {
+        // During first launch the sidebar layout isn't loaded at all, so macOS has no sidebar button or page title
+        // to show; the first-launch screens fill the window on one solid background.
+        ZStack {
+            if let step = firstRunStep {
+                Color(nsColor: .windowBackgroundColor).ignoresSafeArea()
+                firstRunScreen(step)
+                    .id(step)
+                    .transition(.opacity)
+            } else {
+                appLayout.transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.35), value: firstRunStep)
+        .toolbar(firstRunStep == nil ? .automatic : .hidden, for: .windowToolbar)
+        .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
+            guard state.isConnected else { return false }
+            loadURLs(providers) { state.sendFiles($0) }
+            return true
+        }
+        .onAppear {
+            if !state.hasPairedBefore { selection = .pair }
+            if let p = state.requestedPane { selection = p; state.requestedPane = nil }
+        }
+        // A phone that scans the code while Pair a Phone is open gets the Connected moment too (not only the first one).
+        .onChange(of: state.isConnected) { _, on in
+            if on && selection == .pair { state.justPaired = true }
+        }
+        .onChange(of: state.requestedPane) { _, p in
+            if let p { selection = p; state.requestedPane = nil }
+        }
+    }
+
+    private var appLayout: some View {
         NavigationSplitView {
             List(selection: $selection) {
                 Section(state.phone?.name ?? "Phone") {
@@ -86,17 +124,42 @@ struct MainView: View {
                 }
             }
         }
-        .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
-            guard state.isConnected else { return false }
-            loadURLs(providers) { state.sendFiles($0) }
-            return true
+    }
+}
+
+private enum FirstRunStep: Hashable { case welcome, pair, connected }
+
+private extension MainView {
+    /// Worked out before anything is drawn, so the app never flashes in between steps.
+    var firstRunStep: FirstRunStep? {
+        switch preview {
+        case 1: return .welcome
+        case 3: return .pair
+        case 2: return .connected
+        default: break
         }
-        .onAppear {
-            if !state.hasPairedBefore { selection = .pair }
-            if let p = state.requestedPane { selection = p; state.requestedPane = nil }
-        }
-        .onChange(of: state.requestedPane) { _, p in
-            if let p { selection = p; state.requestedPane = nil }
+        if state.justPaired { return .connected }
+        if state.hasPairedBefore { return nil }
+        if !welcomeSeen { return .welcome }
+        if !pairLater { return .pair }      // also picks up here if the app was quit halfway through
+        return nil
+    }
+
+    @ViewBuilder func firstRunScreen(_ step: FirstRunStep) -> some View {
+        let previewing = preview != 0
+        switch step {
+        case .welcome:
+            WelcomeView {
+                if previewing { preview = 3 } else { welcomeSeen = true; selection = .pair }
+            }
+        case .pair:
+            OnboardingPairView(
+                onLater: { if previewing { preview = 0 } else { pairLater = true } },
+                onPreviewScan: previewing ? { preview = 2 } : nil)
+        case .connected:
+            ConnectedView(phoneName: state.phone?.name ?? state.lastPhoneName ?? "Your phone") {
+                if previewing { preview = 0 } else { state.justPaired = false; selection = .overview }
+            }
         }
     }
 }

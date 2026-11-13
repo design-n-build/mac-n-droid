@@ -270,9 +270,17 @@ class MirrorConsentActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode == RESULT_OK && data != null) ScreenMirror.begin(this, resultCode, data) else ScreenMirror.denied()
-        finish()
-        @Suppress("DEPRECATION")
-        overridePendingTransition(0, 0)
+        fun close() {
+            finish()
+            @Suppress("DEPRECATION")
+            overridePendingTransition(0, 0)
+        }
+        if (resultCode == RESULT_OK && data != null) {
+            ScreenMirror.begin(this, resultCode, data)
+            app.macndroid.ui.EdgeGlow.play(this, ::close)
+        } else {
+            ScreenMirror.denied()
+            close()
+        }
     }
 }

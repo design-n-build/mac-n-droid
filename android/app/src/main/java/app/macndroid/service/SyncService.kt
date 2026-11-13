@@ -57,6 +57,7 @@ class SyncService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        TransferProgress.start(this)
         ringer = Ringer(this)
         files = FileTransfers(this)
         media = MediaSync(this)

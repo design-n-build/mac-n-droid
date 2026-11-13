@@ -1,8 +1,23 @@
 # What's new
 
-## Next version
-- **A friendlier Mac installer:** the download window now shows where to drag the app, how your phone and Mac
+## 0.13.1 (Mac, Android, browser extension; Windows and Linux beta)
+- **A welcome on the Mac:** the first time you open Mac n Droid, your phone and Mac appear linked by a live
+  electric current, with the app's features circling them. Then a full-window pairing screen, with rings
+  pulsing around the QR code while it waits.
+- **Celebrate pairing, on both devices at once:** the phone and the computer come together, a ✓ pops in, and
+  confetti bursts across the Mac's screen and the phone. **Play Confetti** to do it again.
+- **Pair a Phone, once paired:** shows the phone you're paired with, and **Pair a Different Phone** when you
+  need the code again. Mac n Droid works with one phone at a time.
+- **Android:** setup cards turn into a ✓ when you allow something, steps slide like pages, and the progress
+  bar fills smoothly. Back swipes preview the previous screen.
+- **Android:** a gentle animation when the app opens; sent files lift off towards the computer; "Sent to …"
+  confirms the clipboard; a glow traces the screen edge when the computer starts showing your screen.
+- **Android:** live progress in the notification while files move, and a **Quick Settings tile** that shows
+  the connection and opens the app.
+- **A friendlier Mac installer:** the download window shows where to drag the app, how your phone and Mac
   connect, and what to do if macOS won't open it the first time.
+- **Windows and Linux (beta):** Linux downloads are named with the version, and the bug report form now asks
+  for any computer, not only a Mac. There may still be a few bugs; please report them.
 
 ## 0.13.0 (Mac, Android, browser extension; Windows and Linux beta)
 - **Photos on the Mac:** a new **Photos** page shows your phone's photos and videos, newest first, by album.

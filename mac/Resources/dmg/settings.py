@@ -8,10 +8,10 @@ format = "UDZO"
 files = [app]
 symlinks = {"Applications": "/Applications"}
 background = os.path.join(here, "background.tiff")
-window_rect = ((200, 160), (660, 420))
+window_rect = ((200, 140), (660, 440))
 default_view = "icon-view"
 show_status_bar = show_tab_view = show_toolbar = show_pathbar = show_sidebar = False
 icon_size = 128
 text_size = 13
-icon_locations = {os.path.basename(app): (170, 178), "Applications": (490, 178)}
+icon_locations = {os.path.basename(app): (170, 172), "Applications": (490, 172)}
 hide_extensions = [os.path.basename(app)]

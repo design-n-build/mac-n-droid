@@ -36,6 +36,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= 31) animateSplashExit()
         pendingLink.value = intent?.dataString
         SyncService.start(this)
         setContent {
@@ -70,14 +72,33 @@ class MainActivity : ComponentActivity() {
                 val pairing by Prefs.pairing.collectAsState()
                 val onboarded by Prefs.onboarded.collectAsState()
                 var link by pendingLink
+                var celebrate by rememberSaveable { mutableStateOf(false) }
                 if (pairing == null && !onboarded && link == null) {
                     OnboardingScreen(onDone = { Prefs.setOnboarded(true) })
                 } else if (pairing == null) {
-                    PairScreen(initialLink = link, onPaired = { link = null }, onBack = { Prefs.setOnboarded(false) })
+                    PairScreen(initialLink = link, onPaired = { link = null; celebrate = true }, onBack = { Prefs.setOnboarded(false) })
+                } else if (celebrate) {
+                    PairedScreen(pairing?.macName ?: Computer.word, onDone = { celebrate = false })
                 } else {
                     AppShell()
                 }
             }
+        }
+    }
+
+    @androidx.annotation.RequiresApi(31)
+    private fun animateSplashExit() {
+        splashScreen.setOnExitAnimationListener { splash ->
+            val icon = splash.iconView
+            val reduced = Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
+            if (icon == null || reduced) { splash.remove(); return@setOnExitAnimationListener }
+            icon.animate().scaleX(1.12f).scaleY(1.12f).setDuration(160)
+                .setInterpolator(android.view.animation.DecelerateInterpolator())
+                .withEndAction {
+                    icon.animate().scaleX(0.4f).scaleY(0.4f).alpha(0f).setDuration(260)
+                        .setInterpolator(android.view.animation.AccelerateInterpolator()).start()
+                    splash.animate().alpha(0f).setStartDelay(60).setDuration(260).withEndAction { splash.remove() }.start()
+                }.start()
         }
     }
 
@@ -121,8 +142,11 @@ private fun PairScreen(initialLink: String?, onPaired: () -> Unit, onBack: () ->
     val allowLan = rememberLocalNetworkRequest()
     LaunchedEffect(Unit) { if (!LocalNetwork.allowed(ctx)) allowLan() }
 
-    androidx.activity.compose.BackHandler(onBack = onBack)
-    Scaffold(topBar = {
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    androidx.activity.compose.PredictiveBackHandler { events ->
+        try { events.collect { backProgress = it.progress }; onBack() } finally { backProgress = 0f }
+    }
+    Scaffold(modifier = Modifier.predictiveBack(backProgress), topBar = {
         Column {
             TopAppBar(
                 title = { Text("Mac n Droid") },
@@ -306,11 +330,26 @@ private fun HomeScreen() {
         refreshService()
     }
 
+    var flown by remember { mutableIntStateOf(0) }
+    var chip by remember { mutableStateOf<Pair<Int, String>?>(null) }
+    val macLabel = pairing?.macName ?: Computer.word
+    fun sendClipboard() {
+        // The app is in front, so it can read the clipboard itself.
+        val msg = when (ClipboardSync.sendCurrent(ctx, auto = false)) {
+            ClipboardSync.Result.SentText -> "Sent to $macLabel"
+            ClipboardSync.Result.SentImage -> "Image sent to $macLabel"
+            ClipboardSync.Result.Empty -> "Clipboard is empty"
+            ClipboardSync.Result.NotConnected -> "Not connected to ${Computer.your}"
+            ClipboardSync.Result.Duplicate -> "Already on $macLabel"
+            ClipboardSync.Result.Sensitive -> "Not sent: marked as sensitive"
+        }
+        chip = (chip?.first ?: 0) + 1 to msg
+    }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) SyncService.sendUris(ctx, uris)
+        if (uris.isNotEmpty()) { SyncService.sendUris(ctx, uris); flown++ }
     }
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
-        if (tree != null) SyncService.sendFolder(ctx, tree)
+        if (tree != null) { SyncService.sendFolder(ctx, tree); flown++ }
     }
     var sendMenu by remember { mutableStateOf(false) }
 
@@ -351,13 +390,17 @@ private fun HomeScreen() {
                             }
                             SendMenu(sendMenu, onDismiss = { sendMenu = false },
                                 onFiles = { pickFiles.launch(arrayOf("*/*")) }, onFolder = { pickFolder.launch(null) })
+                            FlyAway(flown, Icons.Outlined.InsertDriveFile, Modifier.align(Alignment.Center))
                         }
-                        FilledTonalButton(
-                            onClick = { ctx.startActivity(Intent(ctx, SendClipboardActivity::class.java)) },
-                            enabled = status == Link.Status.Connected,
-                            modifier = Modifier.weight(1f).height(56.dp),
-                        ) {
-                            Icon(Icons.Outlined.ContentPaste, null); Spacer(Modifier.width(8.dp)); Text("Send clipboard", maxLines = 1)
+                        Box(Modifier.weight(1f)) {
+                            FilledTonalButton(
+                                onClick = { sendClipboard() },
+                                enabled = status == Link.Status.Connected,
+                                modifier = Modifier.fillMaxWidth().height(56.dp),
+                            ) {
+                                Icon(Icons.Outlined.ContentPaste, null); Spacer(Modifier.width(8.dp)); Text("Send clipboard", maxLines = 1)
+                            }
+                            SentChip(chip, Modifier.align(Alignment.TopCenter).offset(y = (-8).dp))
                         }
                     }
                 }
@@ -508,6 +551,15 @@ private fun StatusCard(status: Link.Status, macName: String) {
         }
     }
 }
+
+/** Shrinks and rounds the screen as a predictive back swipe progresses, like Android's own screens. */
+internal fun Modifier.predictiveBack(progress: Float): Modifier = this.then(
+    Modifier.graphicsLayer {
+        val s = 1f - 0.1f * progress
+        scaleX = s; scaleY = s
+        shape = RoundedCornerShape((32 * progress).dp); clip = progress > 0f
+    },
+)
 
 @Composable
 internal fun SwitchRow(icon: ImageVector, title: String, body: String, checked: Boolean, onChange: (Boolean) -> Unit) {

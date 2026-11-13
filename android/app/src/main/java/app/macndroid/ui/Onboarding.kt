@@ -9,6 +9,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -248,7 +256,10 @@ internal fun OnboardingScreen(onDone: () -> Unit) {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { features.value = Features.read(ctx) }
     var consent by remember { mutableStateOf(false) }
     val actions = rememberFeatureActions(features) { consent = true }
-    BackHandler(enabled = step > 1) { step-- }
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    androidx.activity.compose.PredictiveBackHandler(enabled = step > 1) { events ->
+        try { events.collect { backProgress = it.progress }; step-- } finally { backProgress = 0f }
+    }
 
     Scaffold(
         topBar = { StepBar(step) },
@@ -264,11 +275,25 @@ internal fun OnboardingScreen(onDone: () -> Unit) {
             }
         },
     ) { pad ->
-        Column(
-            Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            if (step == 1) Welcome() else MakeItYours(features.value, actions)
+        // Steps slide like pages: forward goes left, back comes in from the left.
+        androidx.compose.animation.AnimatedContent(
+            targetState = step,
+            transitionSpec = {
+                val dir = if (targetState > initialState) 1 else -1
+                (androidx.compose.animation.slideInHorizontally(spring(0.9f, Spring.StiffnessMediumLow)) { it * dir / 3 } +
+                    androidx.compose.animation.fadeIn(tween(220, 60))) togetherWith
+                    (androidx.compose.animation.slideOutHorizontally(spring(0.9f, Spring.StiffnessMediumLow)) { -it * dir / 3 } +
+                        androidx.compose.animation.fadeOut(tween(120)))
+            },
+            modifier = Modifier.padding(pad).predictiveBack(backProgress),
+            label = "step",
+        ) { s ->
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                if (s == 1) Welcome() else MakeItYours(features.value, actions)
+            }
         }
     }
     if (consent) ControlsConsentDialog(on = features.value.controls) { consent = false }
@@ -290,11 +315,11 @@ private fun StepBar(step: Int) {
 internal fun StepProgress(step: Int) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         (1..3).forEach { i ->
-            Surface(
-                shape = CircleShape,
-                color = if (i <= step) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
-                modifier = Modifier.weight(1f).height(4.dp),
-            ) {}
+            // Each segment fills from the left with a soft spring when its step is reached.
+            val fill by animateFloatAsState(if (i <= step) 1f else 0f, spring(0.8f, Spring.StiffnessLow), label = "fill")
+            Box(Modifier.weight(1f).height(4.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest)) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(fill).clip(CircleShape).background(MaterialTheme.colorScheme.primary))
+            }
         }
     }
 }
@@ -358,18 +383,48 @@ private fun MakeItYours(f: Features, a: FeatureActions) {
 
 @Composable
 private fun FeatureCard(icon: ImageVector, title: String, body: String, on: Boolean, enable: () -> Unit) {
+    val scheme = MaterialTheme.colorScheme
+    // When a permission is allowed: the icon morphs into a ✓, the button becomes "Enabled", the card tints, and a
+    // success tap. Only for a real change while the screen is open, not for things that were already on.
+    var wasOn by remember { mutableStateOf(on) }
+    LaunchedEffect(on) {
+        if (on && !wasOn) app.macndroid.core.Haptics.play(app.macndroid.core.Haptics.Kind.Success)
+        wasOn = on
+    }
+    val container by androidx.compose.animation.animateColorAsState(
+        if (on) scheme.secondaryContainer.copy(alpha = 0.55f) else scheme.surfaceContainerHigh, tween(400), label = "card")
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = container),
     ) {
-        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().padding(20.dp).animateContentSize(spring(0.8f, Spring.StiffnessMediumLow)),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, null)
+                androidx.compose.animation.AnimatedContent(
+                    targetState = on,
+                    transitionSpec = {
+                        (androidx.compose.animation.scaleIn(spring(0.45f, Spring.StiffnessMedium), initialScale = 0.3f) +
+                            androidx.compose.animation.fadeIn(tween(150))) togetherWith
+                            (androidx.compose.animation.scaleOut(tween(150), targetScale = 0.3f) + androidx.compose.animation.fadeOut(tween(150)))
+                    },
+                    label = "icon",
+                ) { isOn ->
+                    if (isOn) Icon(Icons.Outlined.CheckCircle, "On", tint = scheme.primary) else Icon(icon, null)
+                }
                 Spacer(Modifier.width(16.dp))
                 Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             }
-            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (on) EnabledChip() else OutlinedButton(onClick = enable, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Enable") }
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
+            androidx.compose.animation.AnimatedContent(
+                targetState = on,
+                transitionSpec = {
+                    (androidx.compose.animation.fadeIn(tween(200, 100)) + androidx.compose.animation.scaleIn(spring(0.6f), initialScale = 0.85f)) togetherWith
+                        androidx.compose.animation.fadeOut(tween(100))
+                },
+                label = "action",
+            ) { isOn ->
+                if (isOn) EnabledChip() else OutlinedButton(onClick = enable, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Enable") }
+            }
         }
     }
 }

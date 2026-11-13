@@ -1,5 +1,8 @@
 # Mac n Droid for Windows (beta)
 
+> **Beta:** Mac n Droid for Windows is new, so you may run into a few bugs. We're working on it. If something
+> doesn't work, please [report it](https://github.com/santosh-mudragada-1/mac-n-droid/issues/new?template=bug_report.yml); it helps a lot.
+
 A WinUI 3 app (Windows App SDK) with Fluent design (Mica, the navigation pane, Settings-style cards), so it
 looks like Windows 11's own apps. Windows 10 (version 2004) and later, on Intel/AMD (x64) and ARM PCs.
 

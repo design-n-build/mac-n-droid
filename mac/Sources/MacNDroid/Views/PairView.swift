@@ -4,9 +4,63 @@ struct PairView: View {
     @EnvironmentObject private var state: AppState
     @State private var confirmReset = false
     @State private var copied = false
+    /// Once a phone is paired, the code is only shown when you choose to pair a different one.
+    @State private var pairAnother = false
 
     var body: some View {
         Form {
+            if state.hasPairedBefore && !pairAnother {
+                pairedCard
+            } else {
+                codeSection
+            }
+            connectionAndActions
+        }
+        .formStyle(.grouped)
+        .navigationTitle("Pair a Phone")
+        .confirmationDialog("Reset pairing?", isPresented: $confirmReset) {
+            Button("Reset Pairing", role: .destructive) {
+                UserDefaults.standard.set(true, forKey: "pairLater")   // stay on this page, not the first-launch screen
+                state.resetPairing()
+            }
+        } message: {
+            Text("All paired phones will need to scan the new QR code.")
+        }
+        // The new phone connected: back to the card.
+        .onChange(of: state.isConnected) { _, on in if on { pairAnother = false } }
+    }
+
+    private var phoneName: String { state.phone?.name ?? state.lastPhoneName ?? "your phone" }
+
+    /// The paired phone, with the way to pair a different one.
+    private var pairedCard: some View {
+        Section {
+            HStack(spacing: 16) {
+                Image(systemName: "smartphone")
+                    .font(.system(size: 28, weight: .regular))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 56, height: 56)
+                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(state.isConnected ? "Connected to \(phoneName)" : "Paired with \(phoneName)")
+                        .font(.title3.weight(.semibold))
+                    HStack(spacing: 6) {
+                        Circle().fill(state.isConnected ? Color.green : Color.secondary.opacity(0.5)).frame(width: 7, height: 7)
+                        Text(state.isConnected ? "Notifications, clipboard and files are syncing." : "Not connected right now. Open Mac n Droid on the phone, on the same Wi-Fi.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 12)
+                Button("Pair a Different Phone…") { withAnimation { pairAnother = true } }
+            }
+            .padding(.vertical, 6)
+        } footer: {
+            Text("Mac n Droid works with one phone at a time. Pairing a different phone replaces \(phoneName).")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var codeSection: some View {
             Section {
                 HStack(alignment: .top, spacing: 28) {
                     qr
@@ -22,8 +76,19 @@ struct PairView: View {
                     }
                 }
                 .padding(.vertical, 8)
+            } footer: {
+                if pairAnother {
+                    HStack {
+                        Text("The phone that scans this code replaces \(phoneName).")
+                        Spacer()
+                        Button("Cancel") { withAnimation { pairAnother = false } }
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
+                }
             }
+    }
 
+    @ViewBuilder private var connectionAndActions: some View {
             Section("Connection") {
                 LabeledContent("This Mac", value: Net.computerName)
                 LabeledContent("Address", value: state.addresses.isEmpty ? "No network" : state.addresses.joined(separator: ", "))
@@ -50,14 +115,6 @@ struct PairView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-        }
-        .formStyle(.grouped)
-        .navigationTitle("Pair a Phone")
-        .confirmationDialog("Reset pairing?", isPresented: $confirmReset) {
-            Button("Reset Pairing", role: .destructive) { state.resetPairing() }
-        } message: {
-            Text("All paired phones will need to scan the new QR code.")
-        }
     }
 
     /// The code is a Google Play link, so a phone without the app goes to its store page. The pairing details
@@ -65,8 +122,20 @@ struct PairView: View {
     static let playLink = "https://play.google.com/store/apps/details?id=app.macndroid#"
 
     private var qr: some View {
+        PairingQR(size: 220)
+            .modifier(WaitingRings(active: !state.isConnected && !state.pairingURI.isEmpty))
+            .padding(14)   // room for the rings
+    }
+}
+
+/// The pairing QR code. It's a Google Play link, so a phone without the app goes to its store page.
+struct PairingQR: View {
+    @EnvironmentObject private var state: AppState
+    var size: CGFloat
+
+    var body: some View {
         Group {
-            if let img = QRCode.image(for: Self.playLink + state.pairingURI), !state.pairingURI.isEmpty {
+            if let img = QRCode.image(for: PairView.playLink + state.pairingURI), !state.pairingURI.isEmpty {
                 Image(nsImage: img)
                     .interpolation(.none)
                     .resizable()
@@ -77,8 +146,9 @@ struct PairView: View {
                 ProgressView()
             }
         }
-        .frame(width: 220, height: 220)
+        .frame(width: size, height: size)
         .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+        .accessibilityLabel("Pairing QR code")
     }
 }
 

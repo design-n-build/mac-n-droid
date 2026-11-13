@@ -1,91 +1,56 @@
 <!doctype html>
-<!-- The background of the DMG window (660 × 420). Rendered to background.tiff by mac/scripts/render-dmg-background.mjs.
-     Finder places the real icons on top: the app at (170, 178), Applications at (490, 178). -->
+<!-- The background of the DMG window (660 × 440). Rendered to background.tiff by scripts/render-dmg-background.mjs.
+     Icons are SF Symbols from scripts/render-dmg-symbols.swift. Finder places the real icons on top:
+     the app at (170, 172), Applications at (490, 172) (see settings.py).
+     Vertical rhythm: 22px between groups, 12px inside a group. -->
 <html><head><meta charset="utf-8">
 <style>
-  html,body{margin:0;width:660px;height:420px;overflow:hidden}
-  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",sans-serif;color:#1d1d1f;
-    background:
-      radial-gradient(420px 260px at 8% 0%, rgba(13,164,87,.16), transparent 70%),
-      radial-gradient(420px 260px at 100% 100%, rgba(0,113,227,.13), transparent 70%),
-      #fbfbfd;position:relative}
-  .dots{position:absolute;inset:0;background-image:radial-gradient(rgba(0,0,0,.07) 1px,transparent 1.2px);background-size:18px 18px;
-    -webkit-mask-image:radial-gradient(ellipse at 50% 45%,#000 30%,transparent 75%)}
-  h1{position:absolute;top:22px;left:0;right:0;margin:0;text-align:center;font-size:21px;font-weight:650;letter-spacing:-.02em}
-  h1 .g{background:linear-gradient(90deg,#0DA457,#1fb5a0 50%,#0071e3);-webkit-background-clip:text;color:transparent}
-  .sub{position:absolute;top:52px;left:0;right:0;text-align:center;font-size:12.5px;color:#6e6e73}
-  /* Spots under the two icons */
-  .spot{position:absolute;top:96px;width:156px;height:168px;border-radius:34px;background:rgba(255,255,255,.55);
-    box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 10px 30px rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.05)}
-  .spot.a{left:92px}.spot.b{left:412px;border:1.5px dashed rgba(0,113,227,.35);background:rgba(0,113,227,.04)}
-  svg{position:absolute;inset:0}
-  .foot{position:absolute;left:0;right:0;bottom:16px;text-align:center;font-size:11px;color:#86868b}
+  html,body{margin:0;width:660px;height:440px;overflow:hidden}
+  body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",sans-serif;color:#1d1d1f;background:#fbfbfd;position:relative}
+  .abs{position:absolute}
+  h1{top:22px;left:0;right:0;margin:0;text-align:center;font-size:21px;line-height:26px;font-weight:650;letter-spacing:-.02em}
+  h1 span{color:#0DA457}
+  .sub{top:52px;left:0;right:0;text-align:center;font-size:12.5px;line-height:16px;color:#6e6e73}
+
+  /* Tiles behind the two Finder icons: icon centre (170|490, 172), label centre y ≈ 254 */
+  .tile{top:90px;width:172px;height:190px;border-radius:30px;box-sizing:border-box}
+  .tile.app{left:84px;background:#fff;border:1px solid rgba(0,0,0,.06);box-shadow:0 8px 24px rgba(0,0,0,.05)}
+  .tile.dest{left:404px;border:1.5px dashed #c7c7cc}
+
+  /* Drag arrow: one stroke, one colour, from the dashes to the head */
+  .drag{top:160px;left:276px}
+
+  /* Phone ↔ Mac, with what travels between them */
+  .phone{top:302px;left:192px;height:52px}
+  .mac{top:306px;left:408px;height:44px}
+  .line{top:327px;left:240px;width:160px;border-top:1.5px solid #d2d2d7}
+  .chip{top:314px;width:28px;height:28px;border-radius:50%;background:#fff;border:1px solid #e5e5ea;
+        display:flex;align-items:center;justify-content:center;box-sizing:border-box}
+  /* optically matched: the photo is wide, the clipboard tall */
+  .chip img{height:14px}
+  .chip img.wide{height:12.5px}
+  .chip img.tall{height:15px}
+  .cap{top:366px;left:0;right:0;text-align:center;font-size:12px;line-height:15px;color:#6e6e73}
+
+  .foot{top:403px;left:0;right:0;text-align:center;font-size:11px;line-height:14px;color:#86868b}
   .foot b{color:#515154;font-weight:600}
 </style></head><body>
-<div class="dots"></div>
-<h1>Drag <span class="g">Mac n Droid</span> to Applications</h1>
-<div class="sub">Your Android phone and your Mac, together.</div>
-<div class="spot a"></div><div class="spot b"></div>
+<h1 class="abs">Drag <span>Mac n Droid</span> to Applications</h1>
+<div class="abs sub">Your Android phone and your Mac, together.</div>
 
-<svg width="660" height="420" viewBox="0 0 660 420">
-  <defs>
-    <linearGradient id="arc" x1="0" x2="1"><stop offset="0" stop-color="#0DA457"/><stop offset="1" stop-color="#0071e3"/></linearGradient>
-    <linearGradient id="scr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#18c26a"/><stop offset="1" stop-color="#0a8a48"/></linearGradient>
-    <linearGradient id="mac" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4aa3ff"/><stop offset="1" stop-color="#7a5cff"/></linearGradient>
-    <filter id="sh" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity=".16"/></filter>
-    <marker id="head" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-      <path d="M1 1 L8 5 L1 9" fill="none" stroke="#0071e3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </marker>
-  </defs>
-
-  <!-- Drag arrow between the icons: a dashed arc with things riding along it -->
-  <path d="M258 168 C 300 118, 360 118, 402 168" fill="none" stroke="url(#arc)" stroke-width="2.2" stroke-dasharray="1 7"
-        stroke-linecap="round" marker-end="url(#head)"/>
-  <!-- motion trail + chips: bell, photo, clipboard -->
-  <g opacity=".35"><circle cx="276" cy="148" r="2.4" fill="#0DA457"/><circle cx="284" cy="142" r="3" fill="#0DA457"/></g>
-  <g transform="translate(297 134)" filter="url(#sh)"><circle r="13" fill="#fff"/>
-    <path d="M-4.6 3.2h9.2l-1.3-1.7v-3.4a3.3 3.3 0 0 0-6.6 0v3.4z M-1.4 4.6a1.5 1.5 0 0 0 2.8 0" fill="none" stroke="#0DA457" stroke-width="1.5" stroke-linejoin="round"/></g>
-  <g opacity=".35"><circle cx="318" cy="128" r="2.4" fill="#1fb5a0"/></g>
-  <g transform="translate(336 126)" filter="url(#sh)"><circle r="12" fill="#fff"/>
-    <rect x="-5.5" y="-4.5" width="11" height="9" rx="2" fill="none" stroke="#1fb5a0" stroke-width="1.5"/>
-    <path d="M-4.5 3l3-3 2 2 1.5-1.5 2.5 2.5" fill="none" stroke="#1fb5a0" stroke-width="1.3" stroke-linejoin="round"/>
-    <circle cx="2" cy="-1.5" r="1.1" fill="#1fb5a0"/></g>
-  <g opacity=".35"><circle cx="356" cy="130" r="2.4" fill="#0071e3"/></g>
-  <g transform="translate(373 138)" filter="url(#sh)"><circle r="11" fill="#fff"/>
-    <rect x="-4" y="-4.5" width="8" height="10" rx="1.6" fill="none" stroke="#0071e3" stroke-width="1.4"/>
-    <rect x="-2" y="-6" width="4" height="2.6" rx="1" fill="#0071e3"/></g>
-
-  <text x="334" y="376" text-anchor="middle" font-size="11.5" fill="#6e6e73" font-family="-apple-system,sans-serif">then open it and pair your phone</text>
-  <!-- Bottom scene: an Android phone talking to a Mac over Wi-Fi -->
-  <g transform="translate(196 290) scale(.74)">
-    <!-- phone -->
-    <g filter="url(#sh)">
-      <rect x="0" y="0" width="46" height="88" rx="9" fill="#1d1d1f"/>
-      <rect x="3" y="3" width="40" height="82" rx="7" fill="url(#scr)"/>
-      <circle cx="23" cy="8.5" r="1.6" fill="#1d1d1f"/>
-      <rect x="7" y="17" width="32" height="12" rx="3.5" fill="rgba(255,255,255,.92)"/>
-      <rect x="10" y="20.5" width="5" height="5" rx="1.5" fill="#0DA457"/>
-      <rect x="17" y="20.5" width="18" height="2" rx="1" fill="#c7c7cc"/><rect x="17" y="24" width="12" height="2" rx="1" fill="#e5e5ea"/>
-      <rect x="7" y="32" width="32" height="12" rx="3.5" fill="rgba(255,255,255,.55)"/>
-    </g>
-    <!-- signal from phone to Mac -->
-    <path d="M58 40 C 100 8, 168 8, 210 40" fill="none" stroke="url(#arc)" stroke-width="1.8" stroke-dasharray="3 5" stroke-linecap="round"/>
-    <g transform="translate(134 16)" fill="none" stroke="#1fb5a0" stroke-width="1.6" stroke-linecap="round">
-      <path d="M-9 0a12.7 12.7 0 0 1 18 0"/><path d="M-5.2 3.8a7.3 7.3 0 0 1 10.4 0"/><circle cx="0" cy="7.6" r="1.3" fill="#1fb5a0" stroke="none"/>
-    </g>
-    <!-- Mac -->
-    <g transform="translate(222 22)" filter="url(#sh)">
-      <rect x="10" y="0" width="118" height="74" rx="6" fill="#1d1d1f"/>
-      <rect x="14" y="4" width="110" height="66" rx="3" fill="url(#mac)"/>
-      <rect x="57" y="4" width="24" height="5" rx="2.5" fill="#1d1d1f"/>
-      <!-- a notification arriving on the Mac -->
-      <rect x="78" y="13" width="42" height="13" rx="4" fill="rgba(255,255,255,.95)"/>
-      <rect x="81" y="16.5" width="6" height="6" rx="1.6" fill="#0DA457"/>
-      <rect x="90" y="16.5" width="26" height="2" rx="1" fill="#c7c7cc"/><rect x="90" y="20.5" width="18" height="2" rx="1" fill="#e5e5ea"/>
-      <path d="M0 74 h138 l-6 7 h-126z" fill="#d1d1d6"/>
-    </g>
-  </g>
+<div class="abs tile app"></div>
+<div class="abs tile dest"></div>
+<svg class="abs drag" width="108" height="24" viewBox="0 0 108 24" fill="none" stroke="#aeaeb2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M2 12 H98" stroke-dasharray="5 6"/><path d="M92 5 L100 12 L92 19"/>
 </svg>
 
-<div class="foot">First time? If macOS won't open it: <b>System Settings → Privacy &amp; Security → Open Anyway</b></div>
+<img class="abs phone" src="symbols/smartphone.png">
+<div class="abs line"></div>
+<div class="abs chip" style="left:262px"><img src="symbols/bell.fill.png"></div>
+<div class="abs chip" style="left:306px"><img class="wide" src="symbols/photo.fill.png"></div>
+<div class="abs chip" style="left:350px"><img class="tall" src="symbols/list.clipboard.fill.png"></div>
+<img class="abs mac" src="symbols/laptopcomputer.png">
+<div class="abs cap">Then open it and pair your phone.</div>
+
+<div class="abs foot">First time? If macOS won't open it: <b>System Settings → Privacy &amp; Security → Open Anyway</b></div>
 </body></html>

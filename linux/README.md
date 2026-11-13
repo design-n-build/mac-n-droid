@@ -1,5 +1,8 @@
 # Mac n Droid for Linux (beta)
 
+> **Beta:** Mac n Droid for Linux is new, so you may run into a few bugs. We're working on it. If something
+> doesn't work, please [report it](https://github.com/santosh-mudragada-1/mac-n-droid/issues/new?template=bug_report.yml); it helps a lot.
+
 A GNOME app (GTK 4 + libadwaita), so it looks and behaves like GNOME's own apps. It works on other desktops
 too (KDE, Cinnamon, Xfce…). Same pages as the Mac app: Overview, Notifications, Messages, Phone Screen,
 Clipboard, Files and Pair a Phone, and it keeps running after you close the window.

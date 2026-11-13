@@ -44,7 +44,8 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.MacNDroid">
+        android:theme="@style/Theme.MacNDroid"
+        android:enableOnBackInvokedCallback="true">
 
         <activity
             android:name=".ui.MainActivity"
@@ -56,6 +57,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+            <!-- Long-pressing the Quick Settings tile opens the app. -->
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
             <!-- Tapping a pairing link copied from the Mac opens the app. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -172,6 +177,18 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/copy_watcher" />
+        </service>
+
+        <!-- Quick Settings tile: shows the connection, tap to reconnect. -->
+        <service
+            android:name=".service.LinkTile"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_logo"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
         </service>
 
         <!-- Shares images copied on the Mac with whichever app you paste into. -->

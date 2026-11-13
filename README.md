@@ -76,6 +76,9 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
    - On Xiaomi/Samsung/Oppo/OnePlus also set battery to **Unrestricted** and enable autostart (see dontkillmyapp.com).
 
 ### Windows and Linux (beta)
+The Windows and Linux apps are new, so there may be a few bugs; we're working on them. Please
+[report anything that doesn't work](https://github.com/santosh-mudragada-1/mac-n-droid/issues/new?template=bug_report.yml).
+
 Download the Windows installer (`-x64.exe` for most PCs, `-arm64.exe` for ARM laptops) or the Linux Flatpak from
 [Releases](https://github.com/santosh-mudragada-1/mac-n-droid/releases/latest). The Windows app isn't signed yet, so
 Windows shows "Windows protected your PC": click **More info → Run anyway**. Then follow [windows/README.md](windows/README.md) or [linux/README.md](linux/README.md). Testers: see
@@ -92,7 +95,7 @@ Developers can load it from source instead: open the browser's Extensions page (
 
 ```bash
 # Mac app → mac/dist/Mac n Droid.app + .dmg (needs only Command Line Tools)
-cd mac && ./scripts/build-app.sh 0.13.0
+cd mac && ./scripts/build-app.sh 0.13.1
 
 # Android APK → android/app/build/outputs/apk/release/app-release.apk
 cd android

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds one zip per store from browser-extension/ (same code, each with only the manifest keys that store reads):
-#   tools/package-extension.sh 0.13.0  →  release/MacNDroid-extension-{chrome,edge,firefox}-0.13.0.zip
+#   tools/package-extension.sh 0.13.1  →  release/MacNDroid-extension-{chrome,edge,firefox}-0.13.1.zip
 # Chrome and Edge run the background as a service worker; Firefox runs it as a background script and needs its
 # add-on id. Upload chrome to the Chrome Web Store, edge to Edge Add-ons, firefox to addons.mozilla.org.
 set -e
