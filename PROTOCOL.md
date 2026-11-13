@@ -144,7 +144,7 @@ The Mac's Photos pane browses the phone's photos and videos. Nothing is sent unl
 | `gallery_ask` | Mac → phone | — | The phone shows a notification that asks for photo and video access. |
 | `gallery_access` | phone → Mac | `access` | Access changed; the Mac loads the library again. |
 
-## v0.13.2 additions: Pause sharing
+## v0.14 additions: Pause sharing
 
 | Type | Dir | Fields |
 |---|---|---|

@@ -14,7 +14,7 @@ body:
     attributes:
       label: Computer
       description: Mac n Droid version (Settings → About), and macOS, Windows or Linux version
-      placeholder: "0.13.1 on macOS 26.1, MacBook Air M3 — or 0.13.1 on Windows 11 / Ubuntu 25.10"
+      placeholder: "0.14.0 on macOS 26.1, MacBook Air M3 — or 0.14.0 on Windows 11 / Ubuntu 25.10"
     validations:
       required: true
   - type: input
@@ -22,7 +22,7 @@ body:
     attributes:
       label: Phone
       description: Mac n Droid version, phone model and Android version
-      placeholder: "0.13.1 on a Pixel phone, Android 16"
+      placeholder: "0.14.0 on a Pixel phone, Android 16"
     validations:
       required: true
   - type: textarea

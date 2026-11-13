@@ -1,6 +1,6 @@
 # What's new
 
-## Unreleased (next: 0.13.2)
+## 0.14.0 (Mac, Android, browser extension; Windows and Linux beta)
 - **Pause sharing (Android):** stay connected but share nothing for 1 hour, 3 hours, or until you resume.
   The switches you had on are turned off and come back exactly as they were. Pause from Home, the status
   notification, or three new Quick Settings tiles (Pause 1 hour, Pause 3 hours, Pause sharing). While
@@ -10,13 +10,16 @@
 - **Pairing codes work once:** after your phone pairs, it gets its own secret key and the computer makes a new
   QR code, so a screenshot or copied pairing link of the old one is useless.
 - **New phones need your OK:** if a different phone scans the code, it waits until you allow it on the computer
-  or on the phone that's already paired. Lost your phone? Just click **Allow** on the computer.
+  or on the phone that's already paired. Allowing asks for Touch ID or your Mac's password, or your phone's
+  fingerprint, face or screen lock. Lost your phone? Just click **Allow** on the Mac.
 - **Forward secrecy:** every connection adds a one-time key exchange, so even a leaked key can't unlock traffic
   recorded earlier. Works with older versions too (they connect the old way until they update).
 - **Safer file receiving:** received files are marked as downloaded (macOS and Windows check apps and scripts
   before they first run), and names from the other device can't point outside Downloads.
 - **New messages in an ongoing chat** now show in the notch again; a run of messages in one chat alerts once,
   and again after 30 seconds of quiet. Progress-style updates (downloads) alert only the first time.
+- **A new home:** Mac n Droid now lives at [github.com/design-n-build/mac-n-droid](https://github.com/design-n-build/mac-n-droid).
+  Old links still work.
 
 ## 0.13.1 (Mac, Android, browser extension; Windows and Linux beta)
 - **A welcome on the Mac:** the first time you open Mac n Droid, your phone and Mac appear linked by a live
