@@ -24,6 +24,9 @@ made. "now" and "4 min ago" labels count from the real time, and the date is tod
 
 ## Live recordings (for anything that moves)
 
+`tools/video/recording-kit.sh` puts a recording build of the Mac app, the demo phone (`demo-phone.sh`), the demo
+files and the take list in `/Users/Shared/mac-n-droid-recording/`, where another macOS account can reach them.
+
 Record in the separate, clean macOS account described in STORY.md. The demo phone pairs like a phone scanning
 the QR code for the first time, so that account's Mac n Droid must not be paired with another phone.
 
