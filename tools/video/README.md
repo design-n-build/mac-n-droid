@@ -13,14 +13,14 @@ dinner-menu.jpg, Q4-deck.pdf, holiday-photos, "Golden Hour Drive" by Lumen Field
 | `python3 tools/video/gallery.py` | `video/series/captures/index.html`, one page to look through them (both scripts run it) |
 
 Options: `mac-shots.sh --only notch/07` (one capture; `--only messages,files` for several), `--scale 2`,
-`--time 18:40` (the story's clock, the default); `android-shots.sh -Ppalette=green`,
+`--date 2026-11-12 --time 18:40` (the story's clock, the default); `android-shots.sh -Ppalette=green`,
 `-PallFrames=true` (animation frames in dark too).
 
 `video/series/captures/` is not in git: run the scripts to make it again. `video/series/demo/` (the invented
 menu photo, deck, holiday photos and album cover) is in git, so all three tools use the same files.
 
-Clock times in the Mac windows (texts, files) come from `--time`, so they read the same whenever the stills are
-made. "now" and "4 min ago" labels count from the real time, and the date is today's.
+The Mac stills run on a fixed clock (`--date 2026-11-12 --time 18:40` by default: a Thursday evening), so dates,
+times and "4 min ago" labels come out the same whenever they are made.
 
 ## Live recordings (for anything that moves)
 
@@ -43,6 +43,9 @@ the conversations, the music buttons work, Ring and dropped files are printed in
 - `tools/video/left-behind.sh` shows the real "Did you leave Pixel 8 behind?" alert (needs a debug build of
   the Mac app running: `cd mac && swift build`, in an app bundle). The alert is a macOS notification, so
   it can't be a still.
+- `tools/video/phone-notifications.sh install`, then `story`, posts the story's notifications on the phone from three
+  invented apps (Messages, Northwind Bank, Files) with their own names and icons. They are debug-only props in
+  `tools/video/demo-apps/`, a separate project from the real app.
 - `tools/video/phone-demo.sh on` cleans the phone's status bar (18:42, 82%); `record take.mp4` records with
   scrcpy; `off` puts it back.
 

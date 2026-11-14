@@ -1,7 +1,7 @@
 #!/bin/bash
 # Stills of the real Mac app for the video series (video/series/STORY.md, section 5B).
-#   tools/video/mac-shots.sh [output folder] [--scale 3] [--only <part of a name>[,<another>]] [--time 18:40]
-# --time is the story's clock: texts and files in the windows are dated from it, whenever this runs.
+#   tools/video/mac-shots.sh [output folder] [--scale 3] [--only <part of a name>[,<another>]] [--date 2026-11-12] [--time 18:40]
+# --date and --time are the story's clock (default: Thursday 12 November 2026, 6:40 PM).
 # Default output: video/series/captures/mac/
 #
 # Builds the debug app into a throwaway bundle with its own app id (app.macndroid.mac.shots), so the
@@ -37,8 +37,18 @@ if [ ! -f "$DEMO/dinner-menu.jpg" ]; then
   MACNDROID_CONFIG="$WORK/config" "$APP/Contents/MacOS/MacNDroid" --video-demo-files "$DEMO"
 fi
 
-echo "▸ Capturing"
+# The story's clock: the capture app believes it is this date and time (tools/video/fixed-clock.c), so dates,
+# times and "4 min ago" labels come out the same whenever this runs.
+DATE="2026-11-12"; TIME="18:40"; ARGS=("$@")
+for ((i = 0; i < ${#ARGS[@]}; i++)); do
+  [ "${ARGS[$i]}" = "--date" ] && DATE="${ARGS[$((i + 1))]:-$DATE}"
+  [ "${ARGS[$i]}" = "--time" ] && TIME="${ARGS[$((i + 1))]:-$TIME}"
+done
+clang -dynamiclib -O2 -include stdint.h -o "$WORK/fixed-clock.dylib" "$ROOT/tools/video/fixed-clock.c"
+
+echo "▸ Capturing (clock: $DATE $TIME)"
 mkdir -p "$OUT"
+MND_CLOCK="${DATE}T${TIME}:00" DYLD_INSERT_LIBRARIES="$WORK/fixed-clock.dylib" \
 MACNDROID_CONFIG="$WORK/config" "$APP/Contents/MacOS/MacNDroid" --video-shots "$OUT" --demo-files "$DEMO" "$@" 2>&1 \
   | grep -E "^(✓|!|Run this)" || true
 defaults delete app.macndroid.mac.shots >/dev/null 2>&1 || true

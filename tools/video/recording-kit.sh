@@ -30,7 +30,10 @@ xattr -cr "$APP"
 codesign --force --sign - "$APP/Contents/Frameworks/Sparkle.framework" >/dev/null 2>&1 || true
 codesign --force --sign - "$APP" >/dev/null 2>&1 || true
 
-cp "$ROOT/tools/FakePhone.java" "$ROOT/tools/video/left-behind.sh" "$ROOT/tools/video/phone-demo.sh" "$KIT/"
+echo "▸ Building the phone's demo notification apps"
+"$ROOT/tools/video/phone-notifications.sh" build >/dev/null
+cp -R "$ROOT/tools/video/demo-apks" "$KIT/demo-apks"
+cp "$ROOT/tools/FakePhone.java" "$ROOT/tools/video/left-behind.sh" "$ROOT/tools/video/phone-demo.sh" "$ROOT/tools/video/phone-notifications.sh" "$KIT/"
 cp -R "$ROOT/video/series/demo" "$KIT/demo"
 [ -f "$ROOT/video/series/hero/LIVE-TAKES.md" ] && cp "$ROOT/video/series/hero/LIVE-TAKES.md" "$KIT/"
 [ -d "$ROOT/video/series/hero/props" ] && cp -R "$ROOT/video/series/hero/props" "$KIT/props"
