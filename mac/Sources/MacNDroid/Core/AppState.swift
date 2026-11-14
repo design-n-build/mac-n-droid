@@ -169,6 +169,11 @@ final class AppState: ObservableObject {
         }
         leftBehind.isConnected = { [weak self] in self?.isConnected ?? false }
         leftBehind.phoneName = { [weak self] in self?.phone?.name ?? self?.lastPhoneName ?? "your phone" }
+        #if DEBUG
+        DistributedNotificationCenter.default().addObserver(forName: Notification.Name("app.macndroid.demo.leftBehind"), object: nil, queue: .main) { [weak self] _ in
+            self?.leftBehind.demoAlert()
+        }
+        #endif
         let ws = NSWorkspace.shared.notificationCenter
         ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.refreshAddresses()
@@ -1504,6 +1509,132 @@ extension AppState {
     func storeDemoShowSent() {
         let sent = transfers.filter { $0.direction == .toPhone }
         transfers = sent + transfers.filter { $0.direction == .fromPhone }
+    }
+
+    // MARK: Demo data for the video series (video/series/STORY.md, section 2; see Debug/VideoShots.swift)
+
+    /// The series' world: Pixel 8 at 82%, Priya, Sam, Mum, Northwind Bank 482913, Osteria Lucca,
+    /// dinner-menu.jpg, Q4-deck.pdf, holiday-photos and "Golden Hour Drive". `files` are real files
+    /// (made by VideoShots) so the Files page and the notch show their own thumbnails.
+    /// `clock`: the story's time of day. Everything that shows a clock time (texts, files) is dated from it, so the
+    /// windows read the same whenever the stills are made. "now" and "4 min ago" labels still count from the real time.
+    func loadVideoDemo(files: [String: URL], clock: Date) {
+        loadStoreDemo()
+        justPaired = false
+        let now = Date()
+        func ago(_ m: Double) -> Date { now.addingTimeInterval(-m * 60) }
+        func ms(_ d: Date) -> Double { d.timeIntervalSince1970 * 1000 }
+        func at(_ m: Double) -> Date { clock.addingTimeInterval(-m * 60) }
+        videoClock = clock
+        phone = PhoneInfo(name: "Pixel 8", model: "Google Pixel 8", os: "Android 16")
+        lastPhoneName = "Pixel 8"
+        battery = 82
+        charging = false
+        live = []
+        notifications = [Self.videoPriya(at: now), Self.videoCode(at: ago(4)),
+                         PhoneNotification(id: "v-mum", pkg: "demo.messages", app: "Messages", title: "Mum",
+                                           text: "Call me when you're free ❤️", time: ago(35), isCall: false,
+                                           actions: [NotifAction(id: 0, title: "Reply", isReply: true),
+                                                     NotifAction(id: 1, title: "Mark as read", isReply: false)],
+                                           otp: nil, category: .messages)]
+        knownApps = ["demo.messages": KnownApp(pkg: "demo.messages", name: "Messages", category: .messages),
+                     "demo.phone": KnownApp(pkg: "demo.phone", name: "Phone", category: .calls),
+                     "demo.music": KnownApp(pkg: "demo.music", name: "Music", category: .media)]
+        clipHistory = [
+            ClipItem(id: "c1", kind: .text, text: "Osteria Lucca, 42 Elm Street", fromPhone: false, time: ago(1)),
+            ClipItem(id: "c2", kind: .text, text: "482913", fromPhone: true, time: ago(4)),
+            ClipItem(id: "c3", kind: .text, text: "Sounds good, see you there!", fromPhone: false, time: ago(9)),
+            ClipItem(id: "c4", kind: .text, text: "Table for four at 8, under Priya", fromPhone: true, time: ago(26)),
+            ClipItem(id: "c5", kind: .text, text: "Q4 deck: numbers are final, slides 6 to 9 changed", fromPhone: false, time: ago(52)),
+            ClipItem(id: "c6", kind: .text, text: "https://osteria-lucca.example/menu", fromPhone: true, time: ago(88)),
+        ]
+        func size(_ name: String, _ fallback: Int64) -> Int64 {
+            guard let url = files[name], let n = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize else { return fallback }
+            return Int64(n)
+        }
+        transfers = [
+            Transfer(id: "v1", name: "dinner-menu.jpg", size: size("dinner-menu.jpg", 2_400_000), direction: .fromPhone,
+                     bytes: size("dinner-menu.jpg", 2_400_000), state: .done, localURL: files["dinner-menu.jpg"], peer: "Pixel 8", date: at(2)),
+            Transfer(id: "v2", name: "Q4-deck.pdf", size: 3_800_000, direction: .fromPhone, bytes: 3_800_000, state: .done,
+                     localURL: files["Q4-deck.pdf"], peer: "Pixel 8", date: at(14)),
+            Transfer(id: "v3", name: "holiday-photos", size: 186_000_000, direction: .toPhone, bytes: 186_000_000, state: .done,
+                     localURL: files["holiday-photos"], peer: "Pixel 8", date: at(21)),
+        ]
+        players = [NowPlaying(["active": true, "pkg": "demo.music", "id": "p1", "app": "Music", "title": "Golden Hour Drive",
+                               "artist": "Lumen Field", "album": "Golden Hour Drive", "duration": 214_000.0, "playing": true,
+                               "position": 81_000.0, "since": ms(ago(3)), "canPrev": true, "canNext": true, "canSeek": true])].compactMap { $0 }
+        smsState = .ready
+        smsThreads = [
+            ["id": "s1", "address": "+1 555 0142", "name": "Priya", "snippet": "Dinner at 8? 🍝", "date": ms(clock), "unread": 1],
+            ["id": "s2", "address": "+1 555 0178", "name": "Sam", "snippet": "Q4 deck is ready when you are", "date": ms(at(47))],
+            ["id": "s3", "address": "+1 555 0109", "name": "Mum", "snippet": "Call me when you're free ❤️", "date": ms(at(35))],
+        ].compactMap { SmsThread($0) }.sorted { $0.date > $1.date }
+        smsMessages = ["s1": [
+            SmsMessage(id: "m1", body: "Found the place: Osteria Lucca, 42 Elm Street", date: at(12), outgoing: false),
+            SmsMessage(id: "m2", body: "Oh nice, I've wanted to try it", date: at(11), outgoing: true),
+            SmsMessage(id: "m3", body: "Dinner at 8? 🍝", date: clock, outgoing: false),
+        ]]
+        smsSelectAddress = "+1 555 0142"
+        contactResults = []
+        icons["demo.phone"] = Self.demoIcon("phone.fill", .systemGreen, .systemMint)
+        if let cover = files["golden-hour-drive.jpg"].flatMap(NSImage.init(contentsOf:)) { playerArt["p1"] = cover }
+    }
+
+    private static var videoClock = Date()
+    private var videoClock: Date { get { Self.videoClock } set { Self.videoClock = newValue } }
+
+    static func videoPriya(at time: Date) -> PhoneNotification {
+        PhoneNotification(id: "v-priya", pkg: "demo.messages", app: "Messages", title: "Priya", text: "Dinner at 8? 🍝",
+                          time: time, isCall: false,
+                          actions: [NotifAction(id: 0, title: "Reply", isReply: true), NotifAction(id: 1, title: "Mark as read", isReply: false)],
+                          otp: nil, category: .messages)
+    }
+
+    /// The code is found by the app's own detector, exactly as for a real text.
+    static func videoCode(at time: Date) -> PhoneNotification {
+        let text = "482913 is your sign-in code. Never share it with anyone."
+        return PhoneNotification(id: "v-code", pkg: "demo.messages", app: "Messages", title: "Northwind Bank", text: text,
+                                 time: time, isCall: false, actions: [], otp: OTP.detect("Northwind Bank " + text), category: .messages)
+    }
+
+    static func videoCall(at time: Date) -> PhoneNotification {
+        PhoneNotification(id: "v-call", pkg: "demo.phone", app: "Phone", title: "Sam", text: "Mobile +1 555 0178", time: time,
+                          isCall: true,
+                          actions: [NotifAction(id: 0, title: "Answer", isReply: false), NotifAction(id: 1, title: "Decline", isReply: false)],
+                          otp: nil, category: .calls)
+    }
+
+    /// The reply typed on the Mac has gone out: it's in the conversation and Priya's notification is gone.
+    func videoDemoReplied() {
+        let sent = videoClock.addingTimeInterval(60)
+        smsMessages["s1"]?.append(SmsMessage(id: "m4", body: "Sounds good, see you there!", date: sent, outgoing: true))
+        if let i = smsThreads.firstIndex(where: { $0.id == "s1" }) {
+            smsThreads[i] = SmsThread(["id": "s1", "address": "+1 555 0142", "name": "Priya", "snippet": "Sounds good, see you there!",
+                                       "date": sent.timeIntervalSince1970 * 1000, "out": true])!
+        }
+        notifications.removeAll { $0.id == "v-priya" }
+    }
+
+    func videoDemoContacts(_ list: [PhoneContact]) { contactResults = list }
+
+    /// The Phone Screen window as it is while mirroring. The picture itself comes from a phone capture.
+    func videoDemoMirror(_ size: CGSize) {
+        mirror = .live
+        mirrorSize = size
+        controlUnavailable = false
+    }
+
+    /// Makes the Messages page open Priya's conversation (it selects when the list changes). Her row stays
+    /// in the list throughout, so the selection holds.
+    func videoDemoReselectThread() {
+        let t = smsThreads
+        smsSelectAddress = "+1 555 0142"
+        smsThreads = t.reversed()
+        // Selected again when the list settles in its real order, so a reshuffled list can't drop it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.smsSelectAddress = "+1 555 0142"
+            self.smsThreads = t
+        }
     }
 
     private static func demoIcon(_ symbol: String, _ a: NSColor, _ b: NSColor) -> NSImage {
