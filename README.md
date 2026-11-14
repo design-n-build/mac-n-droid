@@ -164,3 +164,6 @@ and logo so people don't confuse it with the official app. Using the name to ref
 ## Next up (from RESEARCH.md roadmap)
 Call audio through the Mac, browsing phone photos from the Mac, Do Not Disturb sync, hotspot in one click,
 the browser extension in the Chrome Web Store, and a Play Store listing.
+
+For file sharing: a free-space check before sending (so a file that won't fit says so up front instead of
+failing partway), and transfers that pick up where they stopped if the Wi-Fi drops.

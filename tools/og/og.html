@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- Source of site/assets/og.png (1200×630) and site/assets/apple-touch-icon.png. Render: node tools/og/render.mjs -->
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@500&display=swap">
+<style>
+  *{box-sizing:border-box;margin:0}
+  body{font-family:Geist,sans-serif;-webkit-font-smoothing:antialiased}
+  .og{width:1200px;height:630px;background:#fff;color:#0b0b0c;position:relative;overflow:hidden;padding:72px 80px}
+  .og::before{content:"";position:absolute;inset:0;background:radial-gradient(50% 70% at 85% 110%,rgba(26,109,255,.08),transparent 70%),radial-gradient(40% 60% at 55% 120%,rgba(28,154,85,.07),transparent 70%)}
+  .brand{display:flex;align-items:center;gap:14px;font-size:26px;font-weight:600;letter-spacing:-.02em;position:relative}
+  .mark{width:48px;height:48px;border-radius:14px;background:#0b0b0c;color:#fff;display:grid;place-items:center}
+  .mark svg{width:34px;height:34px}
+  h1{position:relative;font-size:76px;line-height:.98;letter-spacing:-.05em;font-weight:600;margin-top:60px;max-width:560px}
+  .sub{position:relative;margin-top:30px;font:500 18px 'Geist Mono',monospace;color:#55555c;letter-spacing:.01em;display:flex;gap:22px}
+  .sub span{display:flex;align-items:center;gap:9px}
+  .sub i{width:9px;height:9px;border-radius:50%;background:#8b8b93}
+  .devices{position:absolute;right:72px;bottom:150px;display:flex;align-items:center}
+  .ph{width:100px;height:200px;border-radius:26px;border:3px solid #0b0b0c;position:relative;background:#fff}
+  .ph::before{content:"";position:absolute;top:12px;left:50%;width:9px;height:9px;margin-left:-4.5px;border-radius:50%;background:#0b0b0c}
+  .ph::after,.mac .scr::after{content:"";position:absolute;bottom:18px;left:50%;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:#1c9a55}
+  .link{width:64px;height:3px;background:linear-gradient(90deg,#1c9a55,#1a6dff);-webkit-mask:repeating-linear-gradient(90deg,#000 0 8px,transparent 8px 15px);margin:0 14px}
+  .mac{position:relative}
+  .mac .scr{width:220px;height:142px;border-radius:14px;border:3px solid #0b0b0c;position:relative;background:#fff}
+  .mac .scr::after{background:#1a6dff}
+  .mac .scr::before{content:"";position:absolute;top:-3px;left:50%;width:54px;height:12px;margin-left:-27px;background:#0b0b0c;border-radius:0 0 7px 7px}
+  .mac .base{width:262px;height:13px;margin-left:-21px;border:3px solid #0b0b0c;border-radius:0 0 14px 14px;border-top:0;background:#fff}
+  .touch{width:180px;height:180px;background:#0b0b0c;display:grid;place-items:center;color:#fff}
+  .touch svg{width:124px;height:124px}
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute"><symbol id="mark" viewBox="118 96 360 360"><path fill="currentColor" d="M373.097 287.848C374.916 287.848 376.31 289.453 376.17 291.267C376.056 292.75 375.998 294.247 375.998 295.754C375.998 321.005 392.293 343.097 416.629 355.178C417.977 355.847 418.667 357.382 418.151 358.795C416.341 363.755 412.739 372.245 409.022 379.052C387.985 417.578 375.998 431.748 347.695 438.021C325.878 442.855 323.32 425.534 291.872 425.44C271.429 425.38 257.681 441.223 235.263 438.021C218.751 435.662 212.048 426.004 201.455 413.646C155.7 360.266 156.401 303.218 157.207 290.47C157.303 288.955 158.567 287.848 160.085 287.848H373.097ZM198.327 114.072C202.153 111.863 207.047 113.174 209.256 117L230.637 154.033C231.416 155.383 233.097 155.907 234.522 155.275C235.51 154.835 236.505 154.408 237.505 153.994C253.244 147.475 270.114 144.119 287.15 144.119C301.513 144.119 315.757 146.506 329.305 151.161C330.683 151.634 332.212 151.082 332.941 149.82L351.891 117C354.1 113.174 358.992 111.864 362.818 114.072C366.644 116.281 367.956 121.174 365.747 125L348.005 155.728C347.148 157.213 347.709 159.11 349.215 159.931C360.093 165.857 370.09 173.322 378.883 182.115C390.929 194.162 400.485 208.464 407.005 224.203C407.096 224.424 407.187 224.645 407.277 224.866C407.813 226.182 407.316 227.682 406.146 228.488C390.793 239.067 380.086 254.133 376.947 271.264C376.677 272.739 375.416 273.849 373.916 273.849H160.421C158.764 273.849 157.417 272.505 157.456 270.849C157.826 254.835 161.159 239.018 167.296 224.203C173.815 208.464 183.372 194.162 195.418 182.115C201.576 175.957 208.323 170.451 215.551 165.667C216.895 164.778 217.338 162.998 216.532 161.602L195.399 125C193.191 121.174 194.502 116.282 198.327 114.072ZM307.295 212.255C298.618 212.255 291.584 219.289 291.584 227.966C291.584 236.643 298.618 243.677 307.295 243.677C315.972 243.677 323.006 236.643 323.006 227.966C323.006 219.289 315.972 212.255 307.295 212.255ZM217.72 211.572C209.043 211.572 202.009 218.606 202.009 227.283C202.009 235.96 209.043 242.994 217.72 242.994C226.397 242.994 233.43 235.96 233.431 227.283C233.431 218.606 226.397 211.572 217.72 211.572Z"/><path fill="currentColor" d="M409.695 249.9C412.483 247.564 416.519 247.564 419.307 249.9C431.346 259.989 439.001 275.136 439.001 292.072C439.001 309.008 431.346 324.155 419.307 334.244C416.519 336.581 412.483 336.581 409.695 334.244C397.656 324.155 390.001 309.008 390.001 292.072C390.001 275.136 397.656 259.989 409.695 249.9Z"/></symbol></svg>
+<div class="og" id="og">
+  <div class="brand"><span class="mark"><svg><use href="#mark"/></svg></span>Mac n Droid</div>
+  <h1>Connect your Android phone to your Mac.</h1>
+  <div class="sub"><span><i style="background:#1c9a55"></i>Free</span><span><i style="background:#1a6dff"></i>Open source</span><span><i></i>No account</span></div>
+  <div class="devices"><div class="ph"></div><div class="link"></div><div class="mac"><div class="scr"></div><div class="base"></div></div></div>
+</div>
+<div class="touch" id="touch"><svg><use href="#mark"/></svg></div>
+</body></html>
