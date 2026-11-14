@@ -92,6 +92,30 @@ For P3, put the deck on the phone first: `adb push demo/Q4-deck.pdf /sdcard/Down
 | C6 | 1:24–1:26 | The phone alone on the desk, golden hour, locked-off | 5 s |
 | C7 | 1:26–1:28 | Hands rush in and grab the phone | 4 s |
 
+## Devices: official bezels
+
+Save them as `assets/devices/bezels/macbook-air.png` and `assets/devices/bezels/pixel-8.png`, then edit the block
+at the top of `assets/devices/devices.css` (the file path, `--mac-drawn: none`, and where the screen sits).
+
+**MacBook Air.** developer.apple.com/design/resources → Product Bezels → **MacBook Air M5** (Photoshop, PNG). Use
+the straight-on PNG in the darkest colour offered (Midnight if it is there).
+Read developer.apple.com/app-store/marketing/guidelines before using it. As written today they are a problem for
+this film:
+
+- the product images are licensed for apps on the App Store, to Apple Developer Program members (Mac n Droid is a
+  direct download);
+- no animating, tilting, cropping, or adding shadows, reflections or highlights to the image;
+- no graphics that "appear to enter or come out of the product screen" (the green→blue line does exactly that);
+- no competing product beside an Apple product (every beat has a Pixel next to the Mac).
+
+The same page allows your own photography and video of real Apple devices, which is what the camera plates are.
+
+**Pixel 8.** Google's official Pixel imagery lives on the Partner Marketing Hub, which needs a partner sign-in; I
+could not open it or confirm its terms. The public Device Art Generator
+(developer.android.com/distribute/marketing-tools/device-art-generator) is Google's other official source; check
+in a browser whether Pixel 8 is on its list (the list did not load for me). Check that the terms allow
+marketing video, animation and showing it beside another maker's product.
+
 ## Not needed for the hero film
 
 The menu bar popover (and so its glass panel) doesn't appear in the hero film. Short S7 will need it.
