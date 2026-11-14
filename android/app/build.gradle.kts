@@ -56,10 +56,22 @@ android {
 
 tasks.withType<Test>().configureEach {
     systemProperty("roborazzi.test.record", "true")
-    systemProperty("storeShots.out", rootProject.file("../store/screens/android").absolutePath)
+    systemProperty("storeShots.out", (project.findProperty("shotsOut") as String?) ?: rootProject.file("../store/screens/android").absolutePath)
+    systemProperty("storeShots.palette", (project.findProperty("palette") as String?) ?: "green")
     systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+    // Screens for the video series (./gradlew videoShots, see tools/video/android-shots.sh). Each task renders only its own.
+    val video = gradle.startParameter.taskNames.any { it.endsWith("videoShots") }
+    systemProperty("videoShots.out", (project.findProperty("shotsOut") as String?) ?: rootProject.file("../video/series/captures/android").absolutePath)
+    systemProperty("videoShots.palette", (project.findProperty("palette") as String?) ?: "mono")
+    systemProperty("videoShots.allFrames", (project.findProperty("allFrames") as String?) ?: "false")
+    filter {
+        if (video) includeTestsMatching("app.macndroid.VideoShots") else excludeTestsMatching("app.macndroid.VideoShots")
+        isFailOnNoMatchingTests = false
+    }
+    if (video) outputs.upToDateWhen { false }
 }
 tasks.register("storeShots") { dependsOn("testDebugUnitTest") }
+tasks.register("videoShots") { dependsOn("testDebugUnitTest") }
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")

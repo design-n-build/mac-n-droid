@@ -5,7 +5,7 @@ import SwiftUI
 /// Renders the real app screens with sample data into PNGs, offscreen, for store listings.
 ///   .build/debug/MacNDroid --store-shots <folder> [light|dark]
 /// Nothing is shown on screen and no network is started.
-private final class KeyWindow: NSWindow {
+final class KeyWindow: NSWindow {
     override var isKeyWindow: Bool { true }
     override var isMainWindow: Bool { true }
     override var canBecomeKey: Bool { true }
@@ -29,14 +29,8 @@ enum StoreShots {
         return f(.null, 8, UInt32(id), 1 | 8)?.takeRetainedValue()
     }
 
-    static func runIfRequested() {
-        let args = CommandLine.arguments
-        guard let i = args.firstIndex(of: "--store-shots"), i + 1 < args.count else { return }
-        let out = URL(fileURLWithPath: args[i + 1], isDirectory: true)
-        let dark = args.dropFirst(i + 2).first == "dark"
-        try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
-        NSApp.setActivationPolicy(CommandLine.arguments.contains("--accessory") ? .accessory : .prohibited)
-        // Draw controls in their active (coloured) state without activating the app.
+    /// Draw controls in their active (coloured) state without activating the app.
+    static func drawAsActive() {
         if !CommandLine.arguments.contains("--noswizzle"), let m = class_getInstanceMethod(NSApplication.self, #selector(getter: NSApplication.isActive)) {
             let block: @convention(block) (AnyObject) -> Bool = { _ in true }
             method_setImplementation(m, imp_implementationWithBlock(block))
@@ -53,6 +47,16 @@ enum StoreShots {
                 method_setImplementation(m, imp_implementationWithBlock(block))
             }
         }
+    }
+
+    static func runIfRequested() {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--store-shots"), i + 1 < args.count else { return }
+        let out = URL(fileURLWithPath: args[i + 1], isDirectory: true)
+        let dark = args.dropFirst(i + 2).first == "dark"
+        try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        NSApp.setActivationPolicy(CommandLine.arguments.contains("--accessory") ? .accessory : .prohibited)
+        drawAsActive()
         NSApp.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         UserDefaults.standard.set(true, forKey: Prefs.browserTipDismissed)
         UserDefaults.standard.set(true, forKey: Prefs.browserExtensionSeen)
