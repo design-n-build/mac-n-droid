@@ -1,5 +1,10 @@
 # What's new
 
+## 0.14.1 (Mac, Android, browser extension; Windows and Linux beta)
+- **Copying on your phone reaches your Mac every time:** with Clipboard and controls on, a copy could be missed
+  if you tapped Copy right after tapping into the text, or if the app hadn't finished copying yet. Copying the
+  same text again after your Mac's clipboard changed now sends it again too.
+
 ## 0.14.0 (Mac, Android, browser extension; Windows and Linux beta)
 - **Pause sharing (Android):** stay connected but share nothing for 1 hour, 3 hours, or until you resume.
   The switches you had on are turned off and come back exactly as they were. Pause from Home, the status
