@@ -36,9 +36,9 @@ import app.macndroid.core.Computer
  */
 class CopyWatcher : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
-    private var lastTrigger = 0L
     private var probe: View? = null
     private val grab = Runnable { grabClipboard() }
+    private val grabAgain = Runnable { grabClipboard() }
 
     override fun onServiceConnected() {
         instance = this
@@ -73,9 +73,11 @@ class CopyWatcher : AccessibilityService() {
         }.trim().lowercase()
 
         val isCopy = when (e.eventType) {
-            AccessibilityEvent.TYPE_VIEW_CLICKED ->
-                COPY_LABEL.containsMatchIn(words) ||
-                    e.source?.viewIdResourceName?.lowercase()?.let { it.contains("copy") } == true
+            // A tap into a text field or on a message reports its whole text, which may well contain "copy":
+            // that's not a Copy button, whose label is short.
+            AccessibilityEvent.TYPE_VIEW_CLICKED -> e.className?.contains("EditText") != true && (
+                (words.length <= 40 && COPY_LABEL.containsMatchIn(words)) ||
+                    e.source?.viewIdResourceName?.lowercase()?.let { it.contains("copy") } == true)
             // Android 13+ shows a "Copied" preview from System UI after every copy.
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
                 pkg == "com.android.systemui" && (words.contains("copied") || e.className?.contains("Clipboard", true) == true)
@@ -85,11 +87,13 @@ class CopyWatcher : AccessibilityService() {
             else -> false
         }
         if (!isCopy) return
-        val now = System.currentTimeMillis()
-        if (now - lastTrigger < 700) return
-        lastTrigger = now
+        // A Copy tap can arrive before the app has written the clipboard, and Android's "Copied" preview
+        // follows it. Read the clipboard shortly after the last of these, and once more a little later, so a
+        // copy is never missed; reading the same text twice is ignored as a repeat.
         handler.removeCallbacks(grab)
-        handler.postDelayed(grab, 200)   // let the app finish writing the clipboard
+        handler.postDelayed(grab, 300)
+        handler.removeCallbacks(grabAgain)
+        handler.postDelayed(grabAgain, 1200)
     }
 
     private fun grabClipboard() {

@@ -19,8 +19,8 @@ android {
         applicationId = "app.macndroid"
         minSdk = 29          // Android 10
         targetSdk = 36
-        versionCode = 34
-        versionName = "0.14.0"
+        versionCode = 35
+        versionName = "0.14.1"
     }
 
     signingConfigs {

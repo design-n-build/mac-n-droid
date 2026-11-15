@@ -24,8 +24,10 @@ import java.io.File
 
 /** Phone-side clipboard logic shared by the tile, share sheet and automatic sync. */
 object ClipboardSync {
+    /** What the Mac's clipboard holds as far as the phone knows: the last text it sent us, or the last we sent it. */
     @Volatile private var lastFromMac: String? = null
     @Volatile private var lastSent: String? = null
+    @Volatile private var lastSentAt = 0L
     /** A copy made while the Mac was unreachable, sent on reconnect (if still fresh). */
     @Volatile private var pending: Pair<Long, () -> Unit>? = null
 
@@ -44,8 +46,8 @@ object ClipboardSync {
         val mime = uri?.let { ctx.contentResolver.getType(it) } ?: clip.description.takeIf { it.mimeTypeCount > 0 }?.getMimeType(0)
         if (uri != null && mime?.startsWith("image/") == true) {
             val signature = "img:$uri"
-            if (auto && (signature == lastSent || uri.authority == AUTHORITY)) return Result.Duplicate
-            lastSent = signature
+            if (auto && (uri.authority == AUTHORITY || isRepeat(signature))) return Result.Duplicate
+            markSent(signature)
             val sendIt = { SyncService.instance?.files?.send(listOf(uri), clip = true); Unit }
             if (!Link.isConnected) { pending = System.currentTimeMillis() to sendIt; return Result.NotConnected }
             sendIt()
@@ -53,13 +55,24 @@ object ClipboardSync {
         }
         val text = item.text?.toString() ?: item.coerceToText(ctx)?.toString()
         if (text.isNullOrEmpty()) return Result.Empty
-        if (auto && (text == lastSent || text == lastFromMac)) return Result.Duplicate
-        lastSent = text
+        // Skip echoes of what the Mac just sent us, and the same copy reported twice in a row. A copy of
+        // text sent earlier still goes out if the Mac's clipboard has changed since.
+        if (auto && (text == lastFromMac || isRepeat(text))) return Result.Duplicate
+        markSent(text)
         val msg = JSONObject().put("t", "clip").put("text", text).put("explicit", !auto)
         if (!Link.isConnected) { pending = System.currentTimeMillis() to { Link.post(msg) }; return Result.NotConnected }
         Link.post(msg)
         app.macndroid.core.Haptics.play(app.macndroid.core.Haptics.Kind.Tick)
         return Result.SentText
+    }
+
+    /** The same copy reported again moments later (a Copy button plus Android's "Copied" preview, or a refocus). */
+    private fun isRepeat(signature: String) = signature == lastSent && System.currentTimeMillis() - lastSentAt < 5_000
+
+    private fun markSent(signature: String) {
+        lastSent = signature
+        lastSentAt = System.currentTimeMillis()
+        lastFromMac = null   // the Mac now holds what we sent, not what it sent us before
     }
 
     /** Called when the link comes up: deliver a copy made in the last 10 minutes while offline. */
@@ -71,6 +84,7 @@ object ClipboardSync {
 
     fun receiveText(ctx: Context, text: String) {
         lastFromMac = text
+        lastSent = null      // the Mac's clipboard changed: copying our earlier text again must send it again
         app.macndroid.core.Haptics.play(app.macndroid.core.Haptics.Kind.Tick)
         main.post {
             ctx.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("From ${Computer.word}", text))
@@ -81,6 +95,8 @@ object ClipboardSync {
     fun receiveImage(ctx: Context, file: File) {
         val uri = FileProvider.getUriForFile(ctx, AUTHORITY, file)
         lastSent = "img:$uri"
+        lastSentAt = System.currentTimeMillis()
+        lastFromMac = null
         main.post {
             ctx.getSystemService(ClipboardManager::class.java)
                 .setPrimaryClip(ClipData.newUri(ctx.contentResolver, "Image from ${Computer.word}", uri))
