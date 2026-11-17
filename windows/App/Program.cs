@@ -6,9 +6,24 @@ namespace MacNDroid;
 
 public static class Program
 {
+    /// <summary>Where a crash is written down: %APPDATA%\Mac n Droid\crash.log (the newest at the end).</summary>
+    public static string CrashLog => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Mac n Droid", "crash.log");
+
+    public static void WriteCrash(Exception e)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(CrashLog)!);
+            File.AppendAllText(CrashLog, $"{DateTime.Now:O}  Mac n Droid {typeof(Program).Assembly.GetName().Version}\n{e}\n\n");
+        }
+        catch { }
+    }
+
     [STAThread]
     static int Main(string[] args)
     {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => { if (e.ExceptionObject is Exception x) WriteCrash(x); };
         WinRT.ComWrappersSupport.InitializeComWrappers();
         // One copy at a time: opening the app again brings the running one forward.
         var main = AppInstance.FindOrRegisterForKey("main");

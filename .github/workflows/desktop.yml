@@ -92,6 +92,7 @@ jobs:
           if ($p.HasExited) {
             Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-2)} |
               Where-Object { $_.Message -match 'MacNDroid' } | Format-List TimeCreated, ProviderName, Message
+            Get-Content "$env:APPDATA\Mac n Droid\crash.log" -ErrorAction SilentlyContinue
             Write-Error "Mac n Droid quit on launch (exit code $($p.ExitCode))"; exit 1
           }
           Stop-Process -Id $p.Id -Force

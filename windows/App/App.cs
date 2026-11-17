@@ -4,6 +4,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.Windows.AppLifecycle;
 using Microsoft.Windows.AppNotifications;
@@ -12,8 +13,15 @@ namespace MacNDroid;
 
 /// <summary>Keeps running in the notification area (system tray) after the window is closed, like the Mac app
 /// in the menu bar, so notifications and files keep arriving.</summary>
-public sealed class App : Application
+public sealed class App : Application, IXamlMetadataProvider
 {
+    // The UI is built in C# with no App.xaml, so nothing generates this: without it WinUI can't find the types
+    // behind its own controls and styles (XamlControlsResources) and the app crashes before its window opens.
+    readonly Lazy<Microsoft.UI.Xaml.XamlTypeInfo.XamlControlsXamlMetaDataProvider> _controlTypes = new(() => new());
+    public IXamlType GetXamlType(Type type) => _controlTypes.Value.GetXamlType(type);
+    public IXamlType GetXamlType(string fullName) => _controlTypes.Value.GetXamlType(fullName);
+    public XmlnsDefinition[] GetXmlnsDefinitions() => _controlTypes.Value.GetXmlnsDefinitions();
+
     public static new App Current { get; private set; } = null!;
     readonly bool _startHidden;
     DispatcherQueue _dispatcher = null!;
@@ -29,9 +37,16 @@ public sealed class App : Application
     {
         Current = this;
         _startHidden = startHidden;
+        UnhandledException += (_, e) => Program.WriteCrash(e.Exception);
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
+    {
+        try { Launch(); }
+        catch (Exception e) { Program.WriteCrash(e); throw; }
+    }
+
+    void Launch()
     {
         Resources.MergedDictionaries.Add(new XamlControlsResources());
         _dispatcher = DispatcherQueue.GetForCurrentThread();
