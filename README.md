@@ -1,13 +1,13 @@
 # Mac n Droid
 
-Free, private continuity between an Android phone and a Mac (or, in beta, a Windows or Linux PC), with no
+Free, private continuity between an Android phone and a Mac (or a Windows PC, or in beta a Linux computer), with no
 account and no cloud.
 
 | | |
 |---|---|
 | **Mac app** | Native SwiftUI. Follows your Mac's appearance (light/dark, accent color, Liquid Glass) automatically. macOS 14+, Apple silicon and Intel. |
 | **Android app** | Jetpack Compose + Material 3 with Material You dynamic color. Android 10+. |
-| **Windows app** (beta) | WinUI 3 with Fluent design (Mica, Settings-style cards). Windows 10 2004+ and 11, x64 and ARM. See [windows/](windows/README.md). |
+| **Windows app** | WinUI 3 with Fluent design (Mica, Settings-style cards). Windows 10 2004+ and 11, x64 and ARM. See [windows/](windows/README.md). |
 | **Linux app** (beta) | GTK 4 + libadwaita (GNOME design). Flatpak for x86_64 and ARM, or from source. See [linux/](linux/README.md). |
 | **Link** | Local Wi-Fi only, QR-code pairing, AES-256-GCM end-to-end encryption. See [PROTOCOL.md](PROTOCOL.md). |
 
@@ -75,14 +75,22 @@ What changed in each version: [CHANGELOG.md](CHANGELOG.md).
    - **Notification access greyed out?** Sideloaded apps on Android 13+ need: Settings → Apps → Mac n Droid → ⋮ → **Allow restricted settings**, then try again.
    - On Xiaomi/Samsung/Oppo/OnePlus also set battery to **Unrestricted** and enable autostart (see dontkillmyapp.com).
 
-### Windows and Linux (beta)
-The Windows and Linux apps are new, so there may be a few bugs; we're working on them. Please
-[report anything that doesn't work](https://github.com/design-n-build/mac-n-droid/issues/new?template=bug_report.yml).
+### Windows
+1. Download the installer from [Releases](https://github.com/design-n-build/mac-n-droid/releases/latest):
+   `-x64.exe` for most PCs, `-arm64.exe` for ARM laptops (Settings → System → About → System type tells you which).
+2. Open it. Windows doesn't know new apps yet and may show "Windows protected your PC": click **More info → Run anyway**.
+3. Leave **Open Mac n Droid when I sign in** ticked and click **Install** (no administrator password needed).
+4. Mac n Droid opens with a welcome. Click **Get started**, allow it on **Private networks** if Windows Firewall
+   asks, and scan the QR code with the phone app.
+5. If the phone can't find the PC, set your Wi-Fi to **Private network** (Settings → Network & internet → Wi-Fi).
 
-Download the Windows installer (`-x64.exe` for most PCs, `-arm64.exe` for ARM laptops) or the Linux Flatpak from
-[Releases](https://github.com/design-n-build/mac-n-droid/releases/latest). The Windows app isn't signed yet, so
-Windows shows "Windows protected your PC": click **More info → Run anyway**. Then follow [windows/README.md](windows/README.md) or [linux/README.md](linux/README.md). Testers: see
-[docs/TESTING-WINDOWS-LINUX.md](docs/TESTING-WINDOWS-LINUX.md).
+Closing the window keeps it running next to the clock; right-click its icon there to quit. More in [windows/README.md](windows/README.md).
+
+### Linux (beta)
+The Linux app is new, so there may be a few bugs. Please
+[report anything that doesn't work](https://github.com/design-n-build/mac-n-droid/issues/new?template=bug_report.yml).
+Download the Flatpak from [Releases](https://github.com/design-n-build/mac-n-droid/releases/latest) and follow
+[linux/README.md](linux/README.md). Testers: see [docs/TESTING-WINDOWS-LINUX.md](docs/TESTING-WINDOWS-LINUX.md).
 
 ### Browser extension (optional)
 Works in Chrome, Edge, Firefox, Brave, Arc and other Chrome-based browsers, with the Mac, Windows or Linux app.
@@ -95,7 +103,7 @@ Developers can load it from source instead: open the browser's Extensions page (
 
 ```bash
 # Mac app → mac/dist/Mac n Droid.app + .dmg (needs only Command Line Tools)
-cd mac && ./scripts/build-app.sh 0.14.1
+cd mac && ./scripts/build-app.sh 0.14.2
 
 # Android APK → android/app/build/outputs/apk/release/app-release.apk
 cd android
@@ -129,6 +137,14 @@ openssl pkcs12 -export -legacy -out id.p12 -inkey key.pem -in cert.pem -passout 
 security import id.p12 -k ~/Library/Keychains/login.keychain-db -P macndroid -T /usr/bin/codesign
 ```
 `build-app.sh` then picks it up automatically. To undo it, delete "Mac n Droid Local Signing" in Keychain Access.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- The Windows app is built from this repository's source by GitHub Actions ([desktop.yml](.github/workflows/desktop.yml)). Each release is approved by hand before it's signed.
+- Authors, reviewers and approvers: Design n Build Studio ([@santosh-mudragada-1](https://github.com/santosh-mudragada-1)).
+- Privacy: Mac n Droid doesn't send information to any other networked system unless you ask it to. It talks only to your own paired devices. See the [privacy policy](https://design-n-build.github.io/mac-n-droid/privacy.html).
 
 ## Hosting the download
 `site/index.html` is a simple download page. Upload the DMG and APK to a GitHub Release, update the two links in the page, and publish `site/` with GitHub Pages (or any static host).

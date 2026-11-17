@@ -81,7 +81,7 @@
         <li><a href="#android">Install on Android</a></li>
         <li><a href="#pair">Pair your phone</a></li>
         <li><a href="#connect">If they don't connect</a></li>
-        <li><a href="#windows">Windows (beta)</a></li>
+        <li><a href="#windows">Install on Windows</a></li>
         <li><a href="#linux">Linux (beta)</a></li>
         <li><a href="#extension">Browser extension</a></li>
         <li><a href="#help">Still stuck?</a></li>
@@ -92,7 +92,7 @@
       <section id="before">
         <h2>Before you start</h2>
         <ul>
-          <li>A Mac with <b>macOS 14 Sonoma or later</b> (Apple silicon or Intel). A Windows 10 or 11 PC, or a Linux computer, works too, in beta.</li>
+          <li>A Mac with <b>macOS 14 Sonoma or later</b> (Apple silicon or Intel). A Windows 10 or 11 PC works too, and a Linux computer, in beta.</li>
           <li>An Android phone with <b>Android 10 or later</b>, any brand.</li>
           <li>Both on the <b>same Wi‑Fi network</b>. No account and no internet connection between them is needed.</li>
         </ul>
@@ -126,7 +126,7 @@
       <section id="pair">
         <h2>Pair your phone</h2>
         <ol class="steps-list">
-          <li>On the Mac, open Mac n Droid. The first time, it shows a QR code. Later you'll find it under <b>Pair a Phone</b>.</li>
+          <li>On the Mac or PC, open Mac n Droid. The first time, it shows a QR code. Later you'll find it under <b>Pair a Phone</b>.</li>
           <li>On the phone, open Mac n Droid and tap <b>Scan QR code</b>, then point the camera at the code.</li>
           <li>That's it. Both devices say they're connected, and from then on they find each other by themselves.</li>
         </ol>
@@ -144,12 +144,16 @@
       </section>
 
       <section id="windows">
-        <h2>Windows (beta)</h2>
+        <h2>Install on Windows</h2>
         <ol class="steps-list">
-          <li>Download the installer from <a href="https://github.com/design-n-build/mac-n-droid/releases/latest">GitHub Releases</a>: <b>-x64.exe</b> for most PCs, or <b>-arm64.exe</b> for ARM laptops. A portable zip without an installer is there too.</li>
-          <li>Windows isn't sure about new apps yet and shows "Windows protected your PC". Click <b>More info → Run anyway</b>.</li>
-          <li>The first time it starts, allow it on <b>Private networks</b> when Windows Firewall asks. Then pair your phone the same way as on a Mac.</li>
+          <li>Download the installer from the <a href="./#download">download section</a>. <b>Download for x64</b> is right for most PCs. Choose the <b>ARM64</b> version only for ARM laptops (such as Snapdragon). Not sure? Open <b>Settings → System → About</b> and look at <b>System type</b>.</li>
+          <li>Open the downloaded file. Windows doesn't know new apps yet, so it may show <b>"Windows protected your PC"</b>. Click <b>More info</b>, then <b>Run anyway</b>. You only do this once.</li>
+          <li>Leave <b>Open Mac n Droid when I sign in</b> ticked and click <b>Install</b>. It installs for your account only, so it doesn't ask for an administrator password.</li>
+          <li>Mac n Droid opens with a welcome. Click <b>Get started</b> to show the QR code.</li>
+          <li>If Windows Firewall asks, allow Mac n Droid on <b>Private networks</b>. Then <a href="#pair">pair your phone</a>.</li>
         </ol>
+        <p>Closing the window keeps Mac n Droid running in the notification area next to the clock, so notifications and files keep arriving. To quit, right-click its icon there and choose <b>Quit</b>. To uninstall, open <b>Settings → Apps → Installed apps</b>, find Mac n Droid and choose <b>Uninstall</b>.</p>
+        <div class="fix"><span class="tag">Windows</span><b>The phone can't find the PC</b><p>Windows blocks incoming connections on networks it treats as public. Open <b>Settings → Network &amp; internet → Wi‑Fi</b>, choose your network and set <b>Network profile type</b> to <b>Private network</b>. Then restart Mac n Droid.</p></div>
       </section>
 
       <section id="linux">
