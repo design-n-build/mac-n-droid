@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Add the installers to this existing release (e.g. v0.14.1). Leave empty to only build."
+        description: "Add the installers to this existing release (e.g. v0.14.2). Leave empty to only build."
         required: false
   push:
     tags: ["v*"]
@@ -97,6 +97,32 @@ jobs:
             Write-Error "Mac n Droid quit on launch (exit code $($p.ExitCode))"; exit 1
           }
           Stop-Process -Id $p.Id -Force
+      - name: Screenshots (every page, paired with the fake phone)
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          # The app's CI screenshot mode (windows/App/Screenshots.cs) opens each page at two window sizes and quits.
+          $cfg = "$env:RUNNER_TEMP\shots-cfg"; New-Item -ItemType Directory -Force $cfg, "$cfg\dl" | Out-Null
+          $env:MACNDROID_CONFIG = $cfg; $env:MACNDROID_PORT = "47902"; $env:MACNDROID_DOWNLOADS = "$cfg\dl"
+          $env:MACNDROID_BRIDGE_PORT = "47829"; $env:MACNDROID_SHOTS = "$PWD\shots"
+          $app = Start-Process publish/x64/MacNDroid.exe -PassThru
+          for ($i = 0; $i -lt 120 -and -not (Test-Path "$cfg\identity.json"); $i++) { Start-Sleep -Milliseconds 500 }
+          # The fake phone uses OpenSSL through ctypes; Git for Windows ships it.
+          $dll = Get-ChildItem "C:\Program Files\Git\mingw64\bin\libcrypto-*.dll", "C:\Program Files\OpenSSL*\bin\libcrypto-*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $env:MACNDROID_LIBCRYPTO = $dll.FullName
+          $phone = Start-Process python -ArgumentList "tools/fake_phone.py", "--identity", "$cfg\identity.json", "--port", "47902", "--seconds", "150" `
+            -PassThru -NoNewWindow -RedirectStandardOutput phone.log -RedirectStandardError phone.err
+          if (-not $app.WaitForExit(200000)) { Stop-Process -Id $app.Id -Force }
+          Stop-Process -Id $phone.Id -Force -ErrorAction SilentlyContinue
+          Get-Content phone.log, phone.err -ErrorAction SilentlyContinue | Select-Object -Last 20
+          Get-Content "$env:APPDATA\Mac n Droid\crash.log" -ErrorAction SilentlyContinue | Select-Object -Last 40
+          Get-ChildItem shots -ErrorAction SilentlyContinue | Format-Table Name, Length
+          if (-not (Get-ChildItem shots -Filter *.png -ErrorAction SilentlyContinue)) { Write-Error "No screenshots were saved"; exit 1 }
+      - uses: actions/upload-artifact@v4
+        if: matrix.arch == 'x64'
+        with:
+          name: windows-screenshots
+          path: shots/
       - name: Installer
         shell: pwsh
         run: |

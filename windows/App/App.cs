@@ -82,6 +82,7 @@ public sealed partial class App : Application
         CreateTray();
         _window = new MainWindow(State);
         if (!_startHidden) ShowWindow();
+        if (Environment.GetEnvironmentVariable("MACNDROID_SHOTS") is { Length: > 0 } shots) Screenshots.Run(this, _window, shots);
     }
 
     public void ShowWindow(string? page = null)
