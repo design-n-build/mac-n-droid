@@ -79,6 +79,20 @@ jobs:
             /p:Platform=$platform /p:RuntimeIdentifier=win-${{ matrix.arch }} `
             "/p:PublishDir=$((Resolve-Path .).Path)\publish\${{ matrix.arch }}\"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Opens without crashing
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          # The protocol test above never opens the window; a missing UI file only shows up when the app starts.
+          if (-not (Test-Path publish/x64/MacNDroid.pri)) { Write-Error "MacNDroid.pri is missing from the build"; exit 1 }
+          $p = Start-Process publish/x64/MacNDroid.exe -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) {
+            Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-2)} |
+              Where-Object { $_.Message -match 'MacNDroid' } | Format-List TimeCreated, ProviderName, Message
+            Write-Error "Mac n Droid quit on launch (exit code $($p.ExitCode))"; exit 1
+          }
+          Stop-Process -Id $p.Id -Force
       - name: Installer
         shell: pwsh
         run: |
