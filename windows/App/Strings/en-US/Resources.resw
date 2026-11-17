@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Not used by the code. It makes the build create MacNDroid.pri, which the app needs at launch to find the
+<!-- Not used by the code. It makes the build create resources.pri, which the app needs at launch to find the
      Windows UI styles (WinUI). The UI is built in C#, so without a resource file no .pri is made and the app
      crashes before its window opens. -->
 <root>
