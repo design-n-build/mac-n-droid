@@ -17,13 +17,14 @@ namespace MacNDroid;
 /// <summary>The main window, built from stock WinUI 3 parts (NavigationView, Mica, Settings-style cards) so it looks
 /// like Windows 11's own apps. Same pages as the Mac app: Overview, Notifications, Messages, Phone screen, Clipboard,
 /// Files, Pair a phone and Settings.</summary>
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     readonly AppState _state;
     readonly NavigationView _nav = new();
     readonly Grid _content = new();
     readonly Dictionary<string, FrameworkElement> _pages = new();
     readonly InfoBadge _badge = new() { Visibility = Visibility.Collapsed };
+    readonly InfoBar _pausedBar = new() { IsClosable = false, Severity = InfoBarSeverity.Warning, Margin = new Thickness(24, 8, 24, 0) };
     bool _quitting;
     string _current = "overview";
 
@@ -60,6 +61,7 @@ public sealed class MainWindow : Window
         notifications.InfoBadge = _badge;
         _nav.MenuItems.Add(notifications);
         _nav.MenuItems.Add(NavItem("Messages", "\uE8BD", "messages"));
+        _nav.MenuItems.Add(NavItem("Photos", "\uE91B", "photos"));
         _nav.MenuItems.Add(NavItem("Phone screen", "\uE7F4", "screen"));
         _nav.MenuItems.Add(NavItem("Clipboard", "", "clipboard"));
         _nav.MenuItems.Add(NavItem("Files", "", "files"));
@@ -71,7 +73,15 @@ public sealed class MainWindow : Window
             var tag = e.IsSettingsSelected ? "settings" : (e.SelectedItem as NavigationViewItem)?.Tag as string;
             if (tag != null) Show(tag);
         };
-        _nav.Content = _content;
+        // The "Sharing paused" banner sits above every page, as on the Mac.
+        var main = new Grid();
+        main.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        main.RowDefinitions.Add(new RowDefinition());
+        main.Children.Add(_pausedBar);
+        Grid.SetRow(_content, 1);
+        main.Children.Add(_content);
+        _nav.Content = main;
+        BuildSidebar();
 
         var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -99,8 +109,9 @@ public sealed class MainWindow : Window
                      h => state.StatusChanged += h, h => state.NotificationsChanged += h, h => state.ClipsChanged += h,
                      h => state.TransfersChanged += h, h => state.PairingChanged += h })
             change(Refresh);
-        state.MediaChanged += () => { if (_current == "overview") Refresh(); };
-        state.LiveChanged += () => { if (_current == "overview") Refresh(); };
+        // Music and live activities are in the menu's sidebar, updated in place (no page rebuild, no flicker).
+        state.MediaChanged += UpdateSidebar;
+        state.LiveChanged += UpdateSidebar;
         state.SmsChanged += () => { if (_current == "messages") UpdateMessages(); };
         state.ContactsChanged += UpdateContacts;
         state.MirrorChanged += () => { if (_current == "screen") UpdateScreen(); };
@@ -110,7 +121,7 @@ public sealed class MainWindow : Window
         // Addresses change when the network does.
         var timer = DispatcherQueue.CreateTimer();
         timer.Interval = TimeSpan.FromSeconds(30);
-        timer.Tick += (_, _) => Refresh();
+        timer.Tick += (_, _) => { if (_current == "pair") Refresh(); };
         timer.Start();
 
         Navigate(string.IsNullOrEmpty(state.LastPhoneName) ? "pair" : "overview");
@@ -159,20 +170,24 @@ public sealed class MainWindow : Window
 
     static FontIcon Glyph(string glyph) => new() { Glyph = glyph };
 
-    static IconElement AppIcon(byte[]? png)
+    // Decoded once per picture and reused: decoding again on every update made icons and art blink.
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<byte[], BitmapImage> Bitmaps = new();
+
+    static BitmapImage Bitmap(byte[] png) => Bitmaps.GetValue(png, bytes =>
     {
-        if (png == null) return Glyph("");
         var bitmap = new BitmapImage();
         var stream = new InMemoryRandomAccessStream();
         using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
         {
-            writer.WriteBytes(png);
+            writer.WriteBytes(bytes);
             writer.StoreAsync().AsTask().Wait();
             writer.DetachStream();
         }
         bitmap.SetSource(stream);
-        return new ImageIcon { Source = bitmap };
-    }
+        return bitmap;
+    });
+
+    static IconElement AppIcon(byte[]? png) => png == null ? Glyph("\uECAA") : new ImageIcon { Source = Bitmap(png) };
 
     static string Ago(DateTimeOffset t)
     {
@@ -214,8 +229,13 @@ public sealed class MainWindow : Window
         return b;
     }
 
+    string? _scrollPage;
+
     void SetPage(UIElement element, bool scroll = true)
     {
+        // The same page rebuilt (new data): keep where you had scrolled to.
+        double? keep = _scrollPage == _current && _content.Children.Count == 1 && _content.Children[0] is ScrollViewer old ? old.VerticalOffset : null;
+        _scrollPage = scroll ? _current : null;
         _content.Children.Clear();
         // Scroll up and down only, so a page is always laid out to the window's width and never runs off the right.
         // Pages fill the width up to 1000 and start next to the menu, like Windows Settings (left, not centred).
@@ -234,6 +254,8 @@ public sealed class MainWindow : Window
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
         } : element);
+        if (keep is { } offset && _content.Children[0] is ScrollViewer sv)
+            sv.Loaded += (_, _) => sv.ChangeView(null, offset, null, disableAnimation: true);
     }
 
     // MARK: Pages
@@ -243,8 +265,18 @@ public sealed class MainWindow : Window
         var count = _state.Notifications.Count;
         _badge.Value = count;
         _badge.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        UpdateSidebar();
+        _pausedBar.IsOpen = _state.Connected && _state.SharingPaused;
+        _pausedBar.Title = $"Sharing paused on {_state.PhoneName}";
+        _pausedBar.Message = _state.PausedUntil is { } until ? $"Until {until:t}. Resume on your phone." : "Resume on your phone to share again.";
+        // Rebuild a page only when what it shows has changed: rebuilding redraws everything (a flicker).
+        var sig = PageSignature();
+        if (sig != null && _current == _shownPage && sig == _shownSignature) return;
+        _shownPage = _current;
+        _shownSignature = sig;
         switch (_current)
         {
+            case "photos": ShowPhotos(); break;
             case "overview": BuildOverview(); break;
             case "notifications": BuildNotifications(); break;
             case "messages": ShowMessages(); break;
@@ -255,6 +287,26 @@ public sealed class MainWindow : Window
             case "extension": BuildExtension(); break;
             case "settings": BuildSettings(); break;
         }
+    }
+
+    string? _shownPage, _shownSignature;
+
+    /// <summary>What the current page shows, as text; null for pages that update themselves.</summary>
+    string? PageSignature()
+    {
+        var st = _state;
+        var minute = DateTime.Now.Ticks / TimeSpan.TicksPerMinute;   // "2 min ago" moves on
+        return _current switch
+        {
+            "overview" => $"{st.Connected}|{st.PhoneName}|{st.Phone?["model"]}|{st.Battery}|{st.Charging}|{st.Ringing}|{st.LastError}|{minute}|" +
+                          string.Join(",", st.Notifications.Take(5).Select(n => n.Key + n.Time.Ticks + n.Title + n.Text)),
+            "notifications" => $"{st.Connected}|{minute}|" + string.Join(",", st.Notifications.Select(n => n.Key + n.Time.Ticks + n.Title + n.Text)),
+            "clipboard" => $"{st.Connected}|{minute}|" + string.Join(",", st.Clips.Select(c => c.Id)),
+            "files" => $"{st.Connected}|{minute}|" + string.Join(",", st.Transfers.Select(t => $"{t.Id}{t.State}{t.Bytes}{t.Name}")),
+            "pair" => $"{st.Connected}|{st.PhoneName}|{st.QrText}|{st.LastError}|{string.Join(",", st.Addresses)}",
+            "settings" or "extension" => "static",
+            _ => null,
+        };
     }
 
     void BuildOverview()
@@ -286,9 +338,9 @@ public sealed class MainWindow : Window
             (_state.Ringing ? "Stop ringing" : "Ring phone", _state.Ringing ? "" : "", _state.Ring),
             ("Send files", "", ChooseFiles),
             ("Send clipboard", "", SendClipboard),
-            ("Open link on phone", "", OpenLinkDialog),
             ("Messages", "\uE8BD", () => Navigate("messages")),
             ("Phone screen", "\uE7F4", () => Navigate("screen")),
+            ("Webcam", "\uE8B8", WebcamHelp),
         };
         for (int c = 0; c < 3; c++) actions.ColumnDefinitions.Add(new ColumnDefinition());
         for (int r = 0; r < (quick.Length + 2) / 3; r++) actions.RowDefinitions.Add(new RowDefinition());
@@ -305,7 +357,6 @@ public sealed class MainWindow : Window
             actions.Children.Add(b);
         }
         body.Children.Add(actions);
-        AddOnYourPhone(body);
 
         var header = new Grid { Margin = new Thickness(0, 24, 0, 8) };
         header.Children.Add(new TextBlock { Text = "Recent notifications", Style = Style("BodyStrongTextBlockStyle"), VerticalAlignment = VerticalAlignment.Center });
@@ -550,19 +601,43 @@ public sealed class MainWindow : Window
             body.Children.Add(new SettingsCard { Header = header, Description = description, HeaderIcon = Glyph(glyph) });
 
         body.Children.Add(SectionHeader("Add it to your browser"));
-        foreach (var (header, description, store, url) in new[]
+        // Until the stores have approved it, say so instead of linking to an empty search.
+        body.Children.Add(new SettingsCard
         {
-            ("Microsoft Edge", "From Edge Add-ons.", "Open Edge Add-ons", "https://microsoftedge.microsoft.com/addons/search/Mac%20n%20Droid"),
-            ("Chrome, Brave, Arc and other Chrome-based browsers", "From the Chrome Web Store.", "Open Chrome Web Store",
-             "https://chromewebstore.google.com/search/Mac%20n%20Droid"),
-            ("Firefox", "From Firefox Add-ons.", "Open Firefox Add-ons", "https://addons.mozilla.org/firefox/search/?q=Mac%20n%20Droid"),
-        })
-            body.Children.Add(new SettingsCard
-            {
-                Header = header, Description = description, HeaderIcon = Glyph("\uE774"),
-                Content = new HyperlinkButton { Content = store, NavigateUri = new Uri(url) },
-            });
+            Header = "Coming soon", HeaderIcon = Glyph("\uE774"),
+            Description = "The extension is being reviewed by the Edge, Chrome and Firefox stores. When it's approved, you'll add it from here.",
+        });
         SetPage(page);
+    }
+
+    /// <summary>Android 14+ phones can be a plain USB webcam, which Windows supports with no extra software.</summary>
+    async void WebcamHelp()
+    {
+        var text = new StackPanel { Spacing = 10, MaxWidth = 460 };
+        foreach (var line in new[]
+        {
+            "1. Connect your phone to this PC with a USB cable.",
+            "2. On your phone, tap the \u201CCharging this device via USB\u201D notification and choose Webcam.",
+            "3. In the Camera app, Teams, Zoom or Google Meet, choose your phone as the camera.",
+        })
+            text.Children.Add(new TextBlock { Text = line, TextWrapping = TextWrapping.Wrap });
+        text.Children.Add(new TextBlock
+        {
+            Text = "Works on Android 14 and later (Pixel 6 and newer, and many others). The phone's camera app controls which lens is used. It works over the cable, not over Wi-Fi.",
+            TextWrapping = TextWrapping.Wrap, Foreground = Brush("TextFillColorSecondaryBrush"), Margin = new Thickness(0, 6, 0, 0),
+        });
+        var d = new ContentDialog
+        {
+            Title = $"Use {_state.PhoneName} as a webcam", Content = text, PrimaryButtonText = "Open Camera", CloseButtonText = "Done",
+            DefaultButton = ContentDialogButton.Close, XamlRoot = Content.XamlRoot,
+        };
+        if (await d.ShowAsync() == ContentDialogResult.Primary) OpenUri("microsoft.windows.camera:");
+    }
+
+    static void OpenUri(string uri)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri) { UseShellExecute = true }); }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { }
     }
 
     static SettingsCard Toggle(string header, string? description, bool value, Action<bool> changed)
@@ -591,50 +666,6 @@ public sealed class MainWindow : Window
 
     // MARK: On your phone (music and live activities)
 
-    void AddOnYourPhone(StackPanel body)
-    {
-        if (_state.Players.Count == 0 && _state.Live.Count == 0) return;
-        body.Children.Add(SectionHeader("On your phone"));
-        foreach (var p in _state.Players.Take(3))
-        {
-            var controls = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-            var id = p.Id;
-            controls.Children.Add(IconButton("\uE892", "Previous", () => _state.MediaCommand("prev", id), p.CanPrev));
-            controls.Children.Add(IconButton(p.Playing ? "\uE769" : "\uE768", p.Playing ? "Pause" : "Play", () => _state.MediaCommand("toggle", id), true));
-            controls.Children.Add(IconButton("\uE893", "Next", () => _state.MediaCommand("next", id), p.CanNext));
-            body.Children.Add(new SettingsCard
-            {
-                Header = p.Title,
-                Description = string.Join(" · ", new[] { p.Artist, p.App }.Where(x => x.Length > 0)),
-                HeaderIcon = AppIcon(_state.PlayerArt.GetValueOrDefault(p.Id) ?? _state.Icons.GetValueOrDefault(p.Pkg)),
-                Content = controls,
-            });
-        }
-        foreach (var a in _state.Live.Values.Take(4))
-        {
-            var kind = (string?)a["kind"] ?? "";
-            var card = new SettingsCard
-            {
-                Header = (string?)a["title"] is { Length: > 0 } t ? t : (string?)a["app"] ?? "",
-                Description = (string?)a["text"] is { Length: > 0 } x ? x : (string?)a["short"] ?? "",
-                HeaderIcon = AppIcon(_state.Icons.GetValueOrDefault((string?)a["pkg"] ?? "")),
-            };
-            double max = (double?)a["max"] ?? 0, progress = (double?)a["progress"] ?? 0;
-            if (kind == "progress" && max > 0) card.Content = new ProgressBar { Value = 100 * progress / max, Width = 160 };
-            else if (kind is "call" or "timer" or "stopwatch" && (double?)a["when"] is { } when)
-                card.Content = new TextBlock { Text = Chrono(when, kind == "timer", (double?)a["paused"]), Foreground = Brush("TextFillColorSecondaryBrush") };
-            body.Children.Add(card);
-        }
-    }
-
-    static string Chrono(double whenMs, bool countdown, double? pausedMs)
-    {
-        double nowMs = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-        double secs = pausedMs is >= 0 ? pausedMs.Value / 1000 : (countdown ? whenMs - nowMs : nowMs - whenMs) / 1000;
-        var t = TimeSpan.FromSeconds(Math.Max(0, (int)secs));
-        return t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
-    }
-
     static Button IconButton(string glyph, string tip, Action click, bool enabled)
     {
         var b = new Button { Content = new FontIcon { Glyph = glyph, FontSize = 14 }, Style = Style("SubtleButtonStyle"), IsEnabled = enabled };
@@ -655,6 +686,7 @@ public sealed class MainWindow : Window
     readonly Grid _convo = new();
     readonly ContentControl _messagesStatus = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
     bool _fillingThreads;
+    readonly Border _noThread = new();
 
     void BuildMessagesOnce()
     {
@@ -701,6 +733,9 @@ public sealed class MainWindow : Window
         _convo.Children.Add(bottom);
         Grid.SetColumn(_convo, 1);
         _messages.Children.Add(_convo);
+        Grid.SetColumn(_noThread, 1);
+        _noThread.Child = Empty("\uE8BD", "Choose a conversation", "Or start a new one with the + button.");
+        _messages.Children.Add(_noThread);
     }
 
     void ShowMessages()
@@ -732,6 +767,10 @@ public sealed class MainWindow : Window
             st.SmsSelectAddress = "";
             st.OpenSmsThread(selected);
         }
+        // Rebuild the list only when a conversation changed: clearing it on every update made it flash.
+        var listSig = selected + "|" + string.Join(",", st.SmsThreads.Select(x => $"{x.Id}{x.Snippet}{x.Date.Ticks}{x.Unread}{x.DisplayName}"));
+        if (listSig == _threadsSig) { ShowThread(st.FindSmsThread(selected) != null ? selected : null); return; }
+        _threadsSig = listSig;
         _fillingThreads = true;
         _threadList.Items.Clear();
         foreach (var t in st.SmsThreads)
@@ -768,13 +807,20 @@ public sealed class MainWindow : Window
         return t.ToString("d MMM");
     }
 
+    string? _threadsSig, _bubblesSig;
+
     void ShowThread(string? id)
     {
         var t = _state.FindSmsThread(id);
         _convo.Visibility = t == null ? Visibility.Collapsed : Visibility.Visible;
-        if (t == null) return;
+        _noThread.Visibility = t == null ? Visibility.Visible : Visibility.Collapsed;
+        if (t == null) { _bubblesSig = null; return; }
         _smsBar.Visibility = t.CanReply ? Visibility.Visible : Visibility.Collapsed;
         _cantReply.Visibility = t.CanReply ? Visibility.Collapsed : Visibility.Visible;
+        var list = _state.SmsMessages.GetValueOrDefault(t.Id) ?? new();
+        var sig = t.Id + "|" + string.Join(",", list.Select(m => $"{m.Id}{m.Failed}{m.Pending}"));
+        if (sig == _bubblesSig) return;
+        _bubblesSig = sig;
         _bubbles.Children.Clear();
         foreach (var m in _state.SmsMessages.GetValueOrDefault(t.Id) ?? new())
         {
@@ -1021,18 +1067,4 @@ public sealed class MainWindow : Window
         if (await d.ShowAsync() == ContentDialogResult.Primary && box.Text.Trim().Length > 0) _state.Action(key, index, box.Text.Trim());
     }
 
-    async void OpenLinkDialog()
-    {
-        var box = new TextBox { PlaceholderText = "https://" };
-        var d = new ContentDialog
-        {
-            Title = "Open link on phone", Content = box, PrimaryButtonText = "Open", CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary, XamlRoot = Content.XamlRoot,
-        };
-        if (await d.ShowAsync() != ContentDialogResult.Primary) return;
-        var url = box.Text.Trim();
-        if (url.Length == 0) return;
-        if (!url.Contains("://")) url = "https://" + url;
-        if (url.StartsWith("http://") || url.StartsWith("https://")) _state.OpenOnPhone(url);
-    }
 }

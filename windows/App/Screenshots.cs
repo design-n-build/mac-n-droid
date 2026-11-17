@@ -11,7 +11,7 @@ namespace MacNDroid;
 /// artifact, so layout can be checked without a Windows PC.</summary>
 static class Screenshots
 {
-    static readonly string[] Pages = ["overview", "notifications", "messages", "screen", "clipboard", "files", "pair", "extension", "settings"];
+    static readonly string[] Pages = ["overview", "notifications", "messages", "photos", "screen", "clipboard", "files", "pair", "extension", "settings"];
     static readonly (string name, int w, int h)[] Sizes = [("normal", 1100, 760), ("wide", 1600, 900)];
 
     public static async void Run(App app, MainWindow window, string folder)

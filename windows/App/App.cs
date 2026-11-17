@@ -51,6 +51,12 @@ public sealed partial class App : Application
             MirrorNotifications = Settings.MirrorNotifications,
             LeftBehindAlerts = Settings.LeftBehind,
             ComputerMedia = media,
+            ComputerVolume = new WindowsVolume(_dispatcher),
+        };
+        State.Gallery.Opened += path =>
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+            catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         };
         Platform.State = State;
         Platform.Sounds = Settings.Sounds;
