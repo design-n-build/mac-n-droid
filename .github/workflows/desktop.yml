@@ -53,6 +53,27 @@ jobs:
           python3 tools/fake_phone.py --identity $MACNDROID_CONFIG/identity.json --port 47901 --video $RUNNER_TEMP/clip.h264 \
             --seconds 10 --expect clip_history,sms_threads,sms_thread,contacts_search,sms_send,mirror_start,media_cmd,notif_action,open_url,file_ok,folder_ok,mac_media
           wait $APP
+      - name: Linux screenshots (every page, paired with the fake phone)
+        continue-on-error: true   # pictures for checking layout; never blocks a release
+        run: |
+          # The app's CI screenshot mode (linux/macndroid/shots.py) opens each page at two window sizes and quits.
+          sudo apt-get install -y -qq gir1.2-adw-1 xvfb > /dev/null
+          export MACNDROID_CONFIG=$RUNNER_TEMP/lxs MACNDROID_PORT=47903 MACNDROID_DOWNLOADS=$RUNNER_TEMP/lxs/dl
+          export MACNDROID_BRIDGE_PORT=47839 MACNDROID_SHOTS=$PWD/linux-shots GSK_RENDERER=cairo
+          mkdir -p $MACNDROID_DOWNLOADS
+          (cd linux && timeout 240 dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m macndroid) &
+          APP=$!
+          for i in $(seq 120); do [ -f $MACNDROID_CONFIG/identity.json ] && ss -ltn | grep -q ":$MACNDROID_PORT " && break; sleep 0.5; done
+          timeout 200 python3 tools/fake_phone.py --identity $MACNDROID_CONFIG/identity.json --port 47903 --seconds 150 > phone.log 2>&1 &
+          wait $APP || true
+          tail -5 phone.log; ls -l linux-shots || true
+          ls linux-shots/*.png > /dev/null
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-screenshots
+          path: linux-shots/
+          if-no-files-found: ignore
 
   windows:
     name: Windows (${{ matrix.arch }})
@@ -99,6 +120,7 @@ jobs:
           Stop-Process -Id $p.Id -Force
       - name: Screenshots (every page, paired with the fake phone)
         if: matrix.arch == 'x64'
+        continue-on-error: true   # pictures for checking layout; never blocks a release
         shell: pwsh
         run: |
           # The app's CI screenshot mode (windows/App/Screenshots.cs) opens each page at two window sizes and quits.
@@ -119,9 +141,10 @@ jobs:
           Get-ChildItem shots -ErrorAction SilentlyContinue | Format-Table Name, Length
           if (-not (Get-ChildItem shots -Filter *.png -ErrorAction SilentlyContinue)) { Write-Error "No screenshots were saved"; exit 1 }
       - uses: actions/upload-artifact@v4
-        if: matrix.arch == 'x64'
+        if: always() && matrix.arch == 'x64'
         with:
           name: windows-screenshots
+          if-no-files-found: ignore
           path: shots/
       - name: Installer
         shell: pwsh

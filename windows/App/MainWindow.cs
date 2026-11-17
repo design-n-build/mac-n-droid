@@ -125,8 +125,9 @@ public sealed class MainWindow : Window
     static NavigationViewItem NavItem(string text, string glyph, string tag) =>
         new() { Content = text, Icon = new FontIcon { Glyph = glyph }, Tag = tag };
 
-    static Style Style(string key) => (Style)Application.Current.Resources[key];
-    static Brush Brush(string key) => (Brush)Application.Current.Resources[key];
+    // A missing key falls back to the default look instead of crashing the page (and the app).
+    static Style? Style(string key) => Application.Current.Resources.TryGetValue(key, out var v) ? v as Style : null;
+    static Brush? Brush(string key) => Application.Current.Resources.TryGetValue(key, out var v) ? v as Brush : null;
 
     public void Navigate(string page)
     {

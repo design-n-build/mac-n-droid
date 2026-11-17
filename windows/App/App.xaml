@@ -11,6 +11,13 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
+            <!-- A borderless icon button (WinUI 1.6 has no SubtleButtonStyle of its own): clear until hovered. -->
+            <Style x:Key="SubtleButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
+                <Setter Property="Background" Value="{ThemeResource SubtleFillColorTransparentBrush}" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="8" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

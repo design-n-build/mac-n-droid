@@ -82,6 +82,9 @@ class Application(Adw.Application):
             self.start_hidden = False
             return
         self.window.present()
+        if os.environ.get("MACNDROID_SHOTS"):
+            from . import shots
+            shots.run(self, self.window, os.environ["MACNDROID_SHOTS"])
 
     def _quit(self):
         # Tell the phone first, so it doesn't think it was left behind.
