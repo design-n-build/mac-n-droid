@@ -60,11 +60,13 @@ for i, (version, platforms, items) in enumerate(releases):
     lis = "\n".join(f"          <li>{inline(x)}</li>" for x in items)
     latest = '<span class="latest">Latest</span>' if i == 0 else ""
     rows.append(f"""      <section class="rel rv" id="v{version}" aria-labelledby="h{version}">
+        <div class="rel-side">
         <div class="rel-head">
           <h2 id="h{version}"><a href="#v{version}">{html.escape(version)}</a>{latest}</h2>
           <a class="rel-link" href="https://github.com/design-n-build/mac-n-droid/releases/tag/v{version.split('·')[0].strip()}">Downloads</a>
         </div>
         <div class="rel-tags">{tags(platforms)}</div>
+        </div>
         <ul class="rel-list">
 {lis}
         </ul>
