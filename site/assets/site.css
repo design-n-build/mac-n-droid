@@ -708,13 +708,16 @@ img{-webkit-user-drag:none;user-select:none;-webkit-user-select:none}
   .toc-m a.on{background:var(--surface);color:var(--ink);font-weight:500}
 }
 
-/* what's new: the version stays on screen while you read its notes */
-.rel{grid-template-areas:"head list" "tags list";grid-template-rows:auto 1fr}
-.rel-head{grid-area:head}
-.rel-tags{grid-area:tags;display:flex;flex-wrap:wrap;gap:6px;align-self:start;position:sticky;top:172px}
-.rel-list{grid-area:list}
+/* what's new: the version and its tags stay on screen together while you read its notes */
+.rel-side{position:sticky;top:100px;align-self:start}
+.rel-head{position:static}
+.rel-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:20px}
 .rel-head .rel-link{margin-top:14px}
 @media (max-width:860px){
+  .rel-side{display:contents}
+  .rel-head{grid-area:head}
+  .rel-tags{grid-area:tags}
+  .rel-list{grid-area:list}
   .rel{grid-template-areas:"head" "tags" "list";grid-template-rows:none;gap:14px;padding:0 0 32px;border-top:0}
   .rel-head{position:sticky;top:68px;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 -24px;padding:14px 24px;
     background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
