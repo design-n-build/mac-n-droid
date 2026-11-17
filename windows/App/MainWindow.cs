@@ -189,6 +189,19 @@ public sealed partial class MainWindow : Window
 
     static IconElement AppIcon(byte[]? png) => png == null ? Glyph("\uECAA") : new ImageIcon { Source = Bitmap(png) };
 
+    /// <summary>Long notifications (emails, long chats) stop after a few lines with "…", so the icon and buttons
+    /// stay in line with the text; the whole text is in the tooltip.</summary>
+    static TextBlock Clamp(string text, int lines)
+    {
+        var t = new TextBlock
+        {
+            Text = text.ReplaceLineEndings(lines == 1 ? " " : "\n"), TextWrapping = lines == 1 ? TextWrapping.NoWrap : TextWrapping.Wrap,
+            MaxLines = lines, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        if (text.Length > 60) ToolTipService.SetToolTip(t, text.Length > 1200 ? text[..1200] + "…" : text);
+        return t;
+    }
+
     static string Ago(DateTimeOffset t)
     {
         var s = DateTimeOffset.Now - t;
@@ -372,7 +385,7 @@ public sealed partial class MainWindow : Window
         foreach (var n in _state.Notifications.Take(5))
             body.Children.Add(new SettingsCard
             {
-                Header = string.IsNullOrEmpty(n.Title) ? n.App : n.Title, Description = n.Text,
+                Header = Clamp(string.IsNullOrEmpty(n.Title) ? n.App : n.Title, 1), Description = Clamp(n.Text, 2),
                 HeaderIcon = AppIcon(_state.Icons.GetValueOrDefault(n.Pkg)),
                 Content = new TextBlock { Text = Ago(n.Time), Foreground = Brush("TextFillColorSecondaryBrush") },
             });
@@ -406,8 +419,8 @@ public sealed partial class MainWindow : Window
             buttons.Children.Add(dismiss);
             body.Children.Add(new SettingsCard
             {
-                Header = string.IsNullOrEmpty(n.Title) ? n.App : n.Title,
-                Description = $"{n.Text}\n{n.App} · {Ago(n.Time)}",
+                Header = Clamp(string.IsNullOrEmpty(n.Title) ? n.App : n.Title, 1),
+                Description = new StackPanel { Children = { Clamp(n.Text, 3), Clamp($"{n.App} · {Ago(n.Time)}", 1) } },
                 HeaderIcon = AppIcon(_state.Icons.GetValueOrDefault(n.Pkg)),
                 Content = buttons,
             });
