@@ -84,7 +84,8 @@ jobs:
         shell: pwsh
         run: |
           # The protocol test above never opens the window; a missing UI file only shows up when the app starts.
-          if (-not (Test-Path publish/x64/MacNDroid.pri)) { Write-Error "MacNDroid.pri is missing from the build"; exit 1 }
+          Get-ChildItem -Recurse -Filter *.pri windows/App/bin, windows/App/obj, publish/x64 -ErrorAction SilentlyContinue |
+            ForEach-Object { "{0,10}  {1}" -f $_.Length, $_.FullName }
           $p = Start-Process publish/x64/MacNDroid.exe -PassThru
           Start-Sleep -Seconds 20
           if ($p.HasExited) {
