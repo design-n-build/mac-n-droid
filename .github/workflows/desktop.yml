@@ -57,7 +57,7 @@ jobs:
         continue-on-error: true   # pictures for checking layout; never blocks a release
         run: |
           # The app's CI screenshot mode (linux/macndroid/shots.py) opens each page at two window sizes and quits.
-          sudo apt-get install -y -qq gir1.2-adw-1 xvfb > /dev/null
+          sudo apt-get install -y -qq gir1.2-adw-1 xvfb python3-qrcode > /dev/null
           export MACNDROID_CONFIG=$RUNNER_TEMP/lxs MACNDROID_PORT=47903 MACNDROID_DOWNLOADS=$RUNNER_TEMP/lxs/dl
           export MACNDROID_BRIDGE_PORT=47839 MACNDROID_SHOTS=$PWD/linux-shots GSK_RENDERER=cairo
           mkdir -p $MACNDROID_DOWNLOADS
@@ -124,6 +124,29 @@ jobs:
         shell: pwsh
         run: |
           # The app's CI screenshot mode (windows/App/Screenshots.cs) opens each page at two window sizes and quits.
+          # The runner's screen is 1024 × 768, smaller than the window; make it 1920 × 1080 so both sizes fit.
+          Add-Type -TypeDefinition @"
+          using System; using System.Runtime.InteropServices;
+          public static class Display {
+            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+            public struct DEVMODE {
+              [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+              public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra; public int dmFields, dmPositionX, dmPositionY,
+              dmDisplayOrientation, dmDisplayFixedOutput; public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+              [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+              public short dmLogPixels; public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency,
+              dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+            }
+            [DllImport("user32.dll")] static extern bool EnumDisplaySettings(string d, int mode, ref DEVMODE dm);
+            [DllImport("user32.dll")] static extern int ChangeDisplaySettings(ref DEVMODE dm, int flags);
+            public static int Set(int w, int h) {
+              var dm = new DEVMODE(); dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+              EnumDisplaySettings(null, -1, ref dm); dm.dmPelsWidth = w; dm.dmPelsHeight = h; dm.dmFields = 0x80000 | 0x100000;
+              return ChangeDisplaySettings(ref dm, 0);
+            }
+          }
+          "@
+          "Screen 1920 x 1080: result $([Display]::Set(1920, 1080)) (0 = done)"
           $cfg = "$env:RUNNER_TEMP\shots-cfg"; New-Item -ItemType Directory -Force $cfg, "$cfg\dl" | Out-Null
           $env:MACNDROID_CONFIG = $cfg; $env:MACNDROID_PORT = "47902"; $env:MACNDROID_DOWNLOADS = "$cfg\dl"
           $env:MACNDROID_BRIDGE_PORT = "47829"; $env:MACNDROID_SHOTS = "$PWD\shots"
@@ -131,7 +154,7 @@ jobs:
           for ($i = 0; $i -lt 120 -and -not (Test-Path "$cfg\identity.json"); $i++) { Start-Sleep -Milliseconds 500 }
           # The fake phone uses OpenSSL through ctypes; Git for Windows ships it.
           $dll = Get-ChildItem "C:\Program Files\Git\mingw64\bin\libcrypto-*.dll", "C:\Program Files\OpenSSL*\bin\libcrypto-*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
-          $env:MACNDROID_LIBCRYPTO = $dll.FullName
+          $env:MACNDROID_LIBCRYPTO = $dll.FullName; $env:PYTHONUTF8 = "1"   # its log has arrows the Windows console can't print
           $phone = Start-Process python -ArgumentList "tools/fake_phone.py", "--identity", "$cfg\identity.json", "--port", "47902", "--seconds", "150" `
             -PassThru -NoNewWindow -RedirectStandardOutput phone.log -RedirectStandardError phone.err
           if (-not $app.WaitForExit(200000)) { Stop-Process -Id $app.Id -Force }
