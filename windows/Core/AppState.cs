@@ -72,6 +72,17 @@ public interface IComputerMedia
     void Command(string cmd);
 }
 
+/// <summary>This computer's output volume, which the phone can show and set ("Music on your PC").</summary>
+public interface IComputerVolume
+{
+    /// <summary>0–100.</summary>
+    int Volume { get; set; }
+    bool Muted { get; }
+    /// <summary>False when the output can't be changed (or there is no output device).</summary>
+    bool Adjustable { get; }
+    event Action? Changed;
+}
+
 /// <summary>Decodes and shows the phone's screen (mirror_cfg / mirror_frame).</summary>
 public interface IMirrorSink
 {
@@ -133,7 +144,7 @@ public sealed class AppState
     const int Chunk = 256 * 1024;
     const int HistoryLimit = 20;
     readonly IPlatform _platform;
-    readonly Dictionary<string, (FileStream file, string path, bool clip, string? folder)> _incoming = new();
+    readonly Dictionary<string, (FileStream file, string path, bool clip, string? folder, string? gallery)> _incoming = new();
     readonly List<string> _received = new();
     CancellationTokenSource? _receivedTimer;
 
@@ -172,6 +183,13 @@ public sealed class AppState
 
     // Music on this computer, for the phone
     public bool PhoneWantsMedia { get; private set; }
+    /// <summary>The phone's media volume (0–100), or null until the phone reports it.</summary>
+    public int? PhoneVolume { get; private set; }
+    /// <summary>The phone has paused sharing (it stays connected but sends nothing).</summary>
+    public bool SharingPaused { get; private set; }
+    public DateTimeOffset? PausedUntil { get; private set; }
+    public GalleryModel Gallery { get; }
+    public IComputerVolume? ComputerVolume { get; set; }
     public IComputerMedia? ComputerMedia { get; set; }
     readonly Dictionary<(int, int), ComputerTrack> _browserTracks = new();
     (string, bool, string, string)? _sentTrack;
@@ -192,6 +210,7 @@ public sealed class AppState
         Server.Authenticated += OnConnected;
         Server.Message += OnMessage;
         Server.SessionClosed += OnClosed;
+        Gallery = new GalleryModel(Send, dispatch);
         Bridge = new BrowserBridge(dispatch);
         Bridge.Message += OnBridgeMessage;
         Bridge.Closed += OnBridgeClosed;
@@ -204,6 +223,7 @@ public sealed class AppState
         Server.Start();
         Bridge.Start();
         if (ComputerMedia != null) ComputerMedia.Changed += () => PushComputerMedia();
+        if (ComputerVolume != null) ComputerVolume.Changed += PushComputerVolume;
         _ = MediaTickAsync();
     }
 
@@ -343,6 +363,7 @@ public sealed class AppState
         Bridge.SetStatus(true, PhoneName);
         LeftBehind.Linked();
         if (SmsState != "unknown") RefreshSms();
+        Gallery.PhoneConnected();
     }
 
     void OnClosed(Session s, string? reason)
@@ -361,6 +382,11 @@ public sealed class AppState
         Live.Clear();
         PhoneWantsMedia = false;
         _sentTrack = null;
+        _sentVolume = null;
+        PhoneVolume = null;
+        SharingPaused = false;
+        PausedUntil = null;
+        Gallery.PhoneDisconnected();
         if (Mirror != "idle") { Mirror = "stopped"; MirrorSink?.Reset(); MirrorChanged?.Invoke(); }
         Bridge.SetStatus(false, "");
         if (!_byeSent) LeftBehind.Lost();
@@ -411,6 +437,32 @@ public sealed class AppState
                 break;
             case "approve":
                 ResolveApproval((string?)m["id"] ?? "", (bool?)m["allow"] == true);
+                break;
+            case "paused":
+                SharingPaused = (bool?)m["on"] == true;
+                double until = Num(m["until"]);
+                PausedUntil = SharingPaused && until > 0 ? DateTimeOffset.FromUnixTimeMilliseconds((long)until).ToLocalTime() : null;
+                StatusChanged?.Invoke();
+                break;
+            case "volume":
+                PhoneVolume = Math.Clamp((int)Num(m["vol"], 50), 0, 100);
+                MediaChanged?.Invoke();
+                break;
+            case "mac_volume_set":
+                if (ComputerVolume is { Adjustable: true } cv) cv.Volume = Math.Clamp((int)Num(m["vol"], 50), 0, 100);
+                break;
+            case "media_limited":
+                // Android 17 mutes music started from here on a locked phone unless Mac n Droid may act in the
+                // background there (its "clipboard and controls" accessibility service).
+                if (DateTimeOffset.Now - _lastMediaLimitedNote > TimeSpan.FromMinutes(3))
+                {
+                    _lastMediaLimitedNote = DateTimeOffset.Now;
+                    _platform.ShowNotification($"{PhoneName} may play this silently",
+                        "Android only lets Mac n Droid start music on a locked phone while Mac n Droid clipboard and controls is on. Turn it on in the phone's Accessibility settings, or press play on the phone.", null);
+                }
+                break;
+            case "gallery" or "gallery_thumb" or "gallery_access":
+                Gallery.Handle(m);
                 break;
             case "battery":
                 Battery = (int?)m["level"];
@@ -618,6 +670,35 @@ public sealed class AppState
 
     public void Volume(bool up) => SendInput(new JsonObject { ["key"] = up ? "volume_up" : "volume_down" });
 
+    /// <summary>Sets the phone's media volume (the phone reports the new level back).</summary>
+    public void SetPhoneVolume(int v)
+    {
+        PhoneVolume = Math.Clamp(v, 0, 100);
+        Send(new JsonObject { ["t"] = "volume_set", ["vol"] = PhoneVolume });
+    }
+
+    int? _volumeBeforeMute;
+    DateTimeOffset _lastMediaLimitedNote = DateTimeOffset.MinValue;
+    /// <summary>The speaker button next to the slider: mutes the phone, and the next click brings the sound back.</summary>
+    public void TogglePhoneMute()
+    {
+        if (PhoneVolume is not { } v) return;
+        if (v > 0) { _volumeBeforeMute = v; SetPhoneVolume(0); }
+        else { SetPhoneVolume(_volumeBeforeMute ?? 50); _volumeBeforeMute = null; }
+        MediaChanged?.Invoke();
+    }
+
+    (int vol, bool muted)? _sentVolume;
+    /// <summary>This PC's own volume, for the phone's "Music on your PC" controls.</summary>
+    void PushComputerVolume()
+    {
+        if (!PhoneWantsMedia || Active == null || ComputerVolume is not { } cv || CurrentComputerTrack() == null) return;
+        var now = (cv.Volume, cv.Muted);
+        if (_sentVolume == now) return;
+        _sentVolume = now;
+        Send(new JsonObject { ["t"] = "mac_volume", ["vol"] = now.Item1, ["muted"] = now.Item2, ["fixed"] = !cv.Adjustable });
+    }
+
     // MARK: Music on this computer, for the phone
 
     void OnBridgeMessage(int client, JsonObject m)
@@ -683,6 +764,11 @@ public sealed class AppState
             ["t"] = "mac_media", ["app"] = t.App, ["title"] = t.Title, ["artist"] = t.Artist, ["album"] = t.Album,
             ["playing"] = t.Playing, ["dur"] = t.Duration, ["pos"] = t.Position,
         };
+        if (ComputerVolume is { } cv)
+        {
+            m["vol"] = cv.Volume; m["muted"] = cv.Muted; m["fixed"] = !cv.Adjustable;
+            _sentVolume = (cv.Volume, cv.Muted);
+        }
         var artKey = t.Key + (t.Art != null ? "+art" : "");
         if (t.Art is { Length: > 0 } art && artKey != _pushedArtKey)
         {
@@ -1023,10 +1109,17 @@ public sealed class AppState
                 bool clip = (bool?)m["clip"] == true;
                 bool isFolder = (bool?)m["folder"] == true && !clip;
                 var name = (string?)m["name"] ?? "file";
+                // A photo opened from Photos goes to its cache and opens when it arrives, not to Downloads.
+                if ((string?)m["gallery"] is { } galleryId && (bool?)m["view"] == true && !clip && !isFolder)
+                {
+                    var cachePath = System.IO.Path.Combine(GalleryModel.CacheDir, GalleryModel.CacheFileName(galleryId, name));
+                    _incoming[id] = (File.Create(cachePath), cachePath, false, null, galleryId);
+                    break;
+                }
                 var dir = clip || isFolder ? System.IO.Path.GetTempPath() : _platform.DownloadsFolder;
                 Directory.CreateDirectory(dir);
                 var path = UniquePath(dir, clip ? $"macndroid-clip-{id}.png" : isFolder ? $"macndroid-folder-{id}.zip" : name);
-                _incoming[id] = (File.Create(path), path, clip, isFolder ? name : null);
+                _incoming[id] = (File.Create(path), path, clip, isFolder ? name : null, null);
                 if (!clip)
                 {
                     var shown = isFolder ? (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name) : System.IO.Path.GetFileName(path);
@@ -1043,6 +1136,7 @@ public sealed class AppState
             case "file_end":
                 if (!_incoming.Remove(id, out var done)) return;
                 done.file.Dispose();
+                if (done.gallery is { } gid) { Gallery.Arrived(gid, done.path); return; }
                 if (done.clip)
                 {
                     var png = File.ReadAllBytes(done.path);

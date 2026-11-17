@@ -1,5 +1,26 @@
 # What's new
 
+## 0.14.2 (Windows; Mac, Android, browser extension; Linux beta)
+- **Windows is out of beta.** Mac n Droid for Windows 10 and 11 now does everything the Mac app does, and the
+  website has step-by-step install help.
+- **Windows: the app opens.** Mac n Droid for Windows closed straight after starting, before its window
+  appeared. It now opens, and every Windows build is checked by starting the app before release.
+- **Windows: a welcome, as on the Mac.** The first time you open it, your phone and PC appear linked by a live
+  electric current with the app's features circling them, then a pairing screen with rings pulsing around the
+  QR code, and confetti when your phone connects.
+- **Windows: Photos.** Browse your phone's photos and videos, filter by album, open them or save them to
+  Downloads, as on the Mac.
+- **Windows: music and live activities in the menu.** What's playing on your phone sits at the bottom of the
+  menu, with play, pause, skip and your phone's volume. Timers, rides and directions from your phone show
+  there too, updating live.
+- **Windows: volume both ways.** Your phone's "Music on your PC" card now shows and sets your PC's volume.
+- **Windows: Pause sharing.** When you pause sharing on your phone, the PC shows a "Sharing paused" bar.
+- **Windows: smoother.** Pages fit the window, and Overview, Messages and the music controls no longer flicker
+  when something changes. Long notifications stop after a few lines; hover to read the rest.
+- **Windows: webcam help.** The Webcam quick action explains how to use your phone as a webcam.
+- **Browser extension: coming soon.** The extension is being reviewed by the Chrome, Edge and Firefox stores,
+  so the Browser extension page on the Mac and Windows says so until it's approved.
+
 ## 0.14.1 (Mac, Android, browser extension; Windows and Linux beta)
 - **Copying on your phone reaches your Mac every time:** with Clipboard and controls on, a copy could be missed
   if you tapped Copy right after tapping into the text, or if the app hadn't finished copying yet. Copying the

@@ -12,7 +12,7 @@ namespace MacNDroid;
 
 /// <summary>Keeps running in the notification area (system tray) after the window is closed, like the Mac app
 /// in the menu bar, so notifications and files keep arriving.</summary>
-public sealed class App : Application
+public sealed partial class App : Application
 {
     public static new App Current { get; private set; } = null!;
     readonly bool _startHidden;
@@ -29,11 +29,18 @@ public sealed class App : Application
     {
         Current = this;
         _startHidden = startHidden;
+        UnhandledException += (_, e) => Program.WriteCrash(e.Exception);
+        InitializeComponent();
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        Resources.MergedDictionaries.Add(new XamlControlsResources());
+        try { Launch(); }
+        catch (Exception e) { Program.WriteCrash(e); throw; }
+    }
+
+    void Launch()
+    {
         _dispatcher = DispatcherQueue.GetForCurrentThread();
 
         Action<Action> dispatch = work => _dispatcher.TryEnqueue(() => work());
@@ -44,6 +51,12 @@ public sealed class App : Application
             MirrorNotifications = Settings.MirrorNotifications,
             LeftBehindAlerts = Settings.LeftBehind,
             ComputerMedia = media,
+            ComputerVolume = new WindowsVolume(_dispatcher),
+        };
+        State.Gallery.Opened += path =>
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+            catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         };
         Platform.State = State;
         Platform.Sounds = Settings.Sounds;
@@ -75,6 +88,7 @@ public sealed class App : Application
         CreateTray();
         _window = new MainWindow(State);
         if (!_startHidden) ShowWindow();
+        if (Environment.GetEnvironmentVariable("MACNDROID_SHOTS") is { Length: > 0 } shots) Screenshots.Run(this, _window, shots);
     }
 
     public void ShowWindow(string? page = null)

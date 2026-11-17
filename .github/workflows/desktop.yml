@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Add the installers to this existing release (e.g. v0.14.1). Leave empty to only build."
+        description: "Add the installers to this existing release (e.g. v0.14.2). Leave empty to only build."
         required: false
   push:
     tags: ["v*"]
@@ -53,6 +53,27 @@ jobs:
           python3 tools/fake_phone.py --identity $MACNDROID_CONFIG/identity.json --port 47901 --video $RUNNER_TEMP/clip.h264 \
             --seconds 10 --expect clip_history,sms_threads,sms_thread,contacts_search,sms_send,mirror_start,media_cmd,notif_action,open_url,file_ok,folder_ok,mac_media
           wait $APP
+      - name: Linux screenshots (every page, paired with the fake phone)
+        continue-on-error: true   # pictures for checking layout; never blocks a release
+        run: |
+          # The app's CI screenshot mode (linux/macndroid/shots.py) opens each page at two window sizes and quits.
+          sudo apt-get install -y -qq gir1.2-adw-1 xvfb python3-qrcode > /dev/null
+          export MACNDROID_CONFIG=$RUNNER_TEMP/lxs MACNDROID_PORT=47903 MACNDROID_DOWNLOADS=$RUNNER_TEMP/lxs/dl
+          export MACNDROID_BRIDGE_PORT=47839 MACNDROID_SHOTS=$PWD/linux-shots GSK_RENDERER=cairo
+          mkdir -p $MACNDROID_DOWNLOADS
+          (cd linux && timeout 240 dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" python3 -m macndroid) &
+          APP=$!
+          for i in $(seq 120); do [ -f $MACNDROID_CONFIG/identity.json ] && ss -ltn | grep -q ":$MACNDROID_PORT " && break; sleep 0.5; done
+          timeout 200 python3 tools/fake_phone.py --identity $MACNDROID_CONFIG/identity.json --port 47903 --seconds 150 > phone.log 2>&1 &
+          wait $APP || true
+          tail -5 phone.log; ls -l linux-shots || true
+          ls linux-shots/*.png > /dev/null
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-screenshots
+          path: linux-shots/
+          if-no-files-found: ignore
 
   windows:
     name: Windows (${{ matrix.arch }})
@@ -79,6 +100,75 @@ jobs:
             /p:Platform=$platform /p:RuntimeIdentifier=win-${{ matrix.arch }} `
             "/p:PublishDir=$((Resolve-Path .).Path)\publish\${{ matrix.arch }}\"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Opens without crashing
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          # The protocol test above never opens the window; a missing UI file only shows up when the app starts.
+          Get-ChildItem -Recurse -Filter *.pri windows/App/bin, windows/App/obj, publish/x64 -ErrorAction SilentlyContinue |
+            ForEach-Object { "{0,10}  {1}" -f $_.Length, $_.FullName }
+          if (-not (Test-Path publish/x64/resources.pri)) { Write-Error "resources.pri is missing from the build"; exit 1 }
+          $env:MACNDROID_TRACE = "1"
+          $p = Start-Process publish/x64/MacNDroid.exe -PassThru
+          Start-Sleep -Seconds 20
+          if ($p.HasExited) {
+            Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-2)} |
+              Where-Object { $_.Message -match 'MacNDroid' } | Format-List TimeCreated, ProviderName, Message
+            Get-Content "$env:APPDATA\Mac n Droid\crash.log" -ErrorAction SilentlyContinue
+            Write-Error "Mac n Droid quit on launch (exit code $($p.ExitCode))"; exit 1
+          }
+          Stop-Process -Id $p.Id -Force
+      - name: Screenshots (every page, paired with the fake phone)
+        if: matrix.arch == 'x64'
+        continue-on-error: true   # pictures for checking layout; never blocks a release
+        shell: pwsh
+        run: |
+          # The app's CI screenshot mode (windows/App/Screenshots.cs) opens each page at two window sizes and quits.
+          # The runner's screen is 1024 × 768, smaller than the window; make it 1920 × 1080 so both sizes fit.
+          Add-Type -TypeDefinition @"
+          using System; using System.Runtime.InteropServices;
+          public static class Display {
+            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+            public struct DEVMODE {
+              [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmDeviceName;
+              public short dmSpecVersion, dmDriverVersion, dmSize, dmDriverExtra; public int dmFields, dmPositionX, dmPositionY,
+              dmDisplayOrientation, dmDisplayFixedOutput; public short dmColor, dmDuplex, dmYResolution, dmTTOption, dmCollate;
+              [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string dmFormName;
+              public short dmLogPixels; public int dmBitsPerPel, dmPelsWidth, dmPelsHeight, dmDisplayFlags, dmDisplayFrequency,
+              dmICMMethod, dmICMIntent, dmMediaType, dmDitherType, dmReserved1, dmReserved2, dmPanningWidth, dmPanningHeight;
+            }
+            [DllImport("user32.dll")] static extern bool EnumDisplaySettings(string d, int mode, ref DEVMODE dm);
+            [DllImport("user32.dll")] static extern int ChangeDisplaySettings(ref DEVMODE dm, int flags);
+            public static int Set(int w, int h) {
+              var dm = new DEVMODE(); dm.dmSize = (short)Marshal.SizeOf(typeof(DEVMODE));
+              EnumDisplaySettings(null, -1, ref dm); dm.dmPelsWidth = w; dm.dmPelsHeight = h; dm.dmFields = 0x80000 | 0x100000;
+              return ChangeDisplaySettings(ref dm, 0);
+            }
+          }
+          "@
+          "Screen 1920 x 1080: result $([Display]::Set(1920, 1080)) (0 = done)"
+          $cfg = "$env:RUNNER_TEMP\shots-cfg"; New-Item -ItemType Directory -Force $cfg, "$cfg\dl" | Out-Null
+          $env:MACNDROID_CONFIG = $cfg; $env:MACNDROID_PORT = "47902"; $env:MACNDROID_DOWNLOADS = "$cfg\dl"
+          $env:MACNDROID_BRIDGE_PORT = "47829"; $env:MACNDROID_SHOTS = "$PWD\shots"
+          $app = Start-Process publish/x64/MacNDroid.exe -PassThru
+          for ($i = 0; $i -lt 120 -and -not (Test-Path "$cfg\identity.json"); $i++) { Start-Sleep -Milliseconds 500 }
+          # The fake phone uses OpenSSL through ctypes; Git for Windows ships it.
+          $dll = Get-ChildItem "C:\Program Files\Git\mingw64\bin\libcrypto-*.dll", "C:\Program Files\OpenSSL*\bin\libcrypto-*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          $env:MACNDROID_LIBCRYPTO = $dll.FullName; $env:PYTHONUTF8 = "1"   # its log has arrows the Windows console can't print
+          $phone = Start-Process python -ArgumentList "tools/fake_phone.py", "--identity", "$cfg\identity.json", "--port", "47902", "--seconds", "150" `
+            -PassThru -NoNewWindow -RedirectStandardOutput phone.log -RedirectStandardError phone.err
+          if (-not $app.WaitForExit(200000)) { Stop-Process -Id $app.Id -Force }
+          Stop-Process -Id $phone.Id -Force -ErrorAction SilentlyContinue
+          Get-Content phone.log, phone.err -ErrorAction SilentlyContinue | Select-Object -Last 20
+          Get-Content "$env:APPDATA\Mac n Droid\crash.log" -ErrorAction SilentlyContinue | Select-Object -Last 40
+          Get-ChildItem shots -ErrorAction SilentlyContinue | Format-Table Name, Length
+          if (-not (Get-ChildItem shots -Filter *.png -ErrorAction SilentlyContinue)) { Write-Error "No screenshots were saved"; exit 1 }
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.arch == 'x64'
+        with:
+          name: windows-screenshots
+          if-no-files-found: ignore
+          path: shots/
       - name: Installer
         shell: pwsh
         run: |
