@@ -65,6 +65,7 @@ public sealed class MainWindow : Window
         _nav.MenuItems.Add(NavItem("Files", "", "files"));
         _nav.MenuItems.Add(new NavigationViewItemHeader { Content = "Setup" });
         _nav.MenuItems.Add(NavItem("Pair a phone", "", "pair"));
+        _nav.MenuItems.Add(NavItem("Browser extension", "\uE774", "extension"));
         _nav.SelectionChanged += (_, e) =>
         {
             var tag = e.IsSettingsSelected ? "settings" : (e.SelectedItem as NavigationViewItem)?.Tag as string;
@@ -145,7 +146,7 @@ public sealed class MainWindow : Window
 
     static StackPanel PagePanel(string title, out StackPanel body)
     {
-        var outer = new StackPanel { Padding = new Thickness(36, 12, 36, 36), MaxWidth = 1000, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var outer = new StackPanel { Padding = new Thickness(36, 12, 36, 36) };
         outer.Children.Add(new TextBlock { Text = title, Style = Style("TitleTextBlockStyle"), Margin = new Thickness(0, 0, 0, 20) });
         body = new StackPanel { Spacing = 4 };
         outer.Children.Add(body);
@@ -215,7 +216,23 @@ public sealed class MainWindow : Window
     void SetPage(UIElement element, bool scroll = true)
     {
         _content.Children.Clear();
-        _content.Children.Add(scroll ? new ScrollViewer { Content = element } : element);
+        // Scroll up and down only, so a page is always laid out to the window's width and never runs off the right.
+        // Pages fill the width up to 1000 and start next to the menu, like Windows Settings (left, not centred).
+        if (scroll)
+        {
+            var column = new Grid();
+            column.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 1000 });
+            column.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0, GridUnitType.Auto) });
+            column.Children.Add(element);
+            element = column;
+        }
+        _content.Children.Add(scroll ? new ScrollViewer
+        {
+            Content = element,
+            HorizontalScrollMode = ScrollMode.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        } : element);
     }
 
     // MARK: Pages
@@ -234,6 +251,7 @@ public sealed class MainWindow : Window
             case "clipboard": BuildClipboard(); break;
             case "files": BuildFiles(); break;
             case "pair": BuildPair(); break;
+            case "extension": BuildExtension(); break;
             case "settings": BuildSettings(); break;
         }
     }
@@ -505,6 +523,44 @@ public sealed class MainWindow : Window
             HeaderIcon = new ImageIcon { Source = new BitmapImage(new Uri(Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.png"))) },
             Content = new HyperlinkButton { Content = "GitHub", NavigateUri = new Uri("https://github.com/design-n-build/mac-n-droid") },
         });
+        SetPage(page);
+    }
+
+    // The same page as the Mac app's Browser Extension sheet: what it does, then the browser's own store.
+    void BuildExtension()
+    {
+        var page = PagePanel("Browser extension", out var body);
+        body.Children.Add(new TextBlock
+        {
+            Text = "A small, free extension that lets your browser and your phone work together. Once it's added, it connects by itself.",
+            TextWrapping = TextWrapping.Wrap, Foreground = Brush("TextFillColorSecondaryBrush"), Margin = new Thickness(0, 0, 0, 8),
+        });
+        body.Children.Add(SectionHeader("What it does"));
+        foreach (var (glyph, header, description) in new[]
+        {
+            ("\uE768", "Control browser music and videos from your phone",
+             "YouTube, web players and podcasts appear in your phone's media controls. Pause, play and skip without walking back to your PC."),
+            ("\uE8EA", "Open the page you're reading on your phone",
+             "Click the toolbar button and the page opens on your phone, ready to keep reading on the go."),
+            ("\uE71B", "Open any link on your phone", "Right-click a link and choose Open Link on Your Phone."),
+            ("\uE72E", "Stays on this PC",
+             "The extension talks only to Mac n Droid on this computer. It doesn't track what you browse and sends nothing to the internet."),
+        })
+            body.Children.Add(new SettingsCard { Header = header, Description = description, HeaderIcon = Glyph(glyph) });
+
+        body.Children.Add(SectionHeader("Add it to your browser"));
+        foreach (var (header, description, store, url) in new[]
+        {
+            ("Microsoft Edge", "From Edge Add-ons.", "Open Edge Add-ons", "https://microsoftedge.microsoft.com/addons/search/Mac%20n%20Droid"),
+            ("Chrome, Brave, Arc and other Chrome-based browsers", "From the Chrome Web Store.", "Open Chrome Web Store",
+             "https://chromewebstore.google.com/search/Mac%20n%20Droid"),
+            ("Firefox", "From Firefox Add-ons.", "Open Firefox Add-ons", "https://addons.mozilla.org/firefox/search/?q=Mac%20n%20Droid"),
+        })
+            body.Children.Add(new SettingsCard
+            {
+                Header = header, Description = description, HeaderIcon = Glyph("\uE774"),
+                Content = new HyperlinkButton { Content = store, NavigateUri = new Uri(url) },
+            });
         SetPage(page);
     }
 
