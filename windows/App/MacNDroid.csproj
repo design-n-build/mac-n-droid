@@ -17,7 +17,7 @@
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <!-- Unpackaged apps still need MacNDroid.pri: it indexes the Windows UI styles the app loads at launch.
-         Without it the app crashes before its window opens. -->
+         Without it the app crashes before its window opens. Strings/en-US/Resources.resw makes the build create it. -->
     <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
