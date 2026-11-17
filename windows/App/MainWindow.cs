@@ -104,6 +104,7 @@ public sealed partial class MainWindow : Window
             SendFiles(items.Select(i => i.Path));
         };
         Content = root;
+        SetUpWelcome(root);
 
         foreach (var change in new Action<Action>[] {
                      h => state.StatusChanged += h, h => state.NotificationsChanged += h, h => state.ClipsChanged += h,
@@ -125,6 +126,9 @@ public sealed partial class MainWindow : Window
         timer.Start();
 
         Navigate(string.IsNullOrEmpty(state.LastPhoneName) ? "pair" : "overview");
+        // First launch (never paired): the welcome screens, as on the Mac. --welcome shows them again for testing.
+        var replay = Environment.GetCommandLineArgs().Contains("--welcome");
+        if (string.IsNullOrEmpty(state.LastPhoneName) || replay) ShowWelcome(0, preview: replay);
     }
 
     public void CloseForReal()
@@ -142,6 +146,7 @@ public sealed partial class MainWindow : Window
 
     public void Navigate(string page)
     {
+        if (_welcomeStep >= 0) { CloseWelcome(page); return; }
         if (page == "settings") _nav.SelectedItem = _nav.SettingsItem;
         else _nav.SelectedItem = _nav.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => (string)i.Tag == page);
         Show(page);

@@ -31,6 +31,15 @@ static class Screenshots
                     await Task.Delay(1200);
                     await Save((UIElement)window.Content, Path.Combine(folder, $"{name}-{n++:00}-{page}.png"));
                 }
+                // The first-run screens, at their end state.
+                MainWindow.InstantMotion = true;
+                foreach (var (step, label) in new[] { (0, "welcome"), (1, "welcome-pair"), (2, "welcome-connected") })
+                {
+                    window.ShowWelcome(step, preview: false);
+                    await Task.Delay(1200);
+                    await Save((UIElement)window.Content, Path.Combine(folder, $"{name}-{n++:00}-{label}.png"));
+                }
+                MainWindow.InstantMotion = false;
             }
         }
         catch (Exception e) { Program.WriteCrash(e); }
