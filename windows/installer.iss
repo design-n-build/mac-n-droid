@@ -30,7 +30,8 @@ ArchitecturesInstallIn64BitMode=arm64
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 #endif
-CloseApplications=yes
+; The app keeps running in the notification area, which Windows can't close for us, so [Code] quits it instead.
+CloseApplications=no
 
 [Files]
 Source: "{#Source}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
@@ -53,3 +54,25 @@ Filename: "{app}\MacNDroid.exe"; Description: "Open Mac n Droid"; Flags: nowait 
 
 [UninstallRun]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Mac n Droid"""; Flags: runhidden; RunOnceId: "fw"
+
+[Code]
+// Mac n Droid stays running next to the clock after its window closes. Quit it before files are replaced or
+// removed, so updating never stops on "Setup was unable to close all applications".
+procedure QuitMacNDroid();
+var Code: Integer;
+begin
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM MacNDroid.exe /F', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Sleep(800);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  QuitMacNDroid();
+  Result := '';
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  QuitMacNDroid();
+  Result := True;
+end;

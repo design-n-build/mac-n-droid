@@ -244,5 +244,7 @@ jobs:
         run: |
           # The Flatpak action also saves an unversioned copy of each bundle; only the versioned ones are published.
           rm -f out/MacNDroid-Linux-*.flatpak
+          # CI screenshots are for checking layout, not for the release.
+          rm -f out/*.png
           ls -la out
           gh release upload "$TAG" out/* --clobber --repo "${{ github.repository }}"
