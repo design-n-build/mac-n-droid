@@ -34,3 +34,7 @@ __pycache__/
 .flatpak-builder/
 build-dir/
 *.flatpak
+
+# Video series captures: made by tools/video/*-shots.sh, never edited by hand
+video/series/captures/
+tools/video/demo-apks/

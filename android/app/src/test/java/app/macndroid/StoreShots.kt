@@ -93,7 +93,8 @@ class StoreShots {
         // One fixed time zone, so pause times read like "Until 6:30 PM" rather than a full date.
         java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("GMT"))
         Prefs.init(app)
-        previewColors = { dark -> if (dark) greenDark else greenLight }
+        val mono = System.getProperty("storeShots.palette") == "mono"
+        previewColors = { dark -> if (mono) (if (dark) monoDark else monoLight) else if (dark) greenDark else greenLight }
         Prefs.setSmsOnMac(true)
         Prefs.savePairing(Pairing("demo", ByteArray(32), listOf("192.168.1.24"), 47800, "MacBook Air"))
         @Suppress("UNCHECKED_CAST")
@@ -228,26 +229,4 @@ class StoreShots {
 
     @Test fun light() = all("")
     @Test @Config(qualifiers = "+night") fun dark() = all("-dark")
-
-    // Material You from a green wallpaper (seed #0DA457, the brand green), tonal-spot roles.
-    private val greenLight = lightColorScheme(
-        primary = Color(0xFF006D3D), onPrimary = Color.White, primaryContainer = Color(0xFF98F7B5), onPrimaryContainer = Color(0xFF00210F),
-        secondary = Color(0xFF4F6354), onSecondary = Color.White, secondaryContainer = Color(0xFFD1E8D5), onSecondaryContainer = Color(0xFF0C1F13),
-        tertiary = Color(0xFF3B6470), tertiaryContainer = Color(0xFFBEEAF7), onTertiaryContainer = Color(0xFF001F27),
-        background = Color(0xFFF6FBF4), onBackground = Color(0xFF171D19), surface = Color(0xFFF6FBF4), onSurface = Color(0xFF171D19),
-        surfaceVariant = Color(0xFFDCE5DC), onSurfaceVariant = Color(0xFF414942), outline = Color(0xFF717971), outlineVariant = Color(0xFFC0C9C0),
-        surfaceBright = Color(0xFFF6FBF4), surfaceDim = Color(0xFFD6DBD5), surfaceContainerLowest = Color.White,
-        surfaceContainerLow = Color(0xFFF0F5EE), surfaceContainer = Color(0xFFEAEFE8), surfaceContainerHigh = Color(0xFFE5EAE3),
-        surfaceContainerHighest = Color(0xFFDFE4DD), inverseSurface = Color(0xFF2C322D), inverseOnSurface = Color(0xFFEDF2EB),
-    )
-    private val greenDark = darkColorScheme(
-        primary = Color(0xFF7CDA9B), onPrimary = Color(0xFF00391D), primaryContainer = Color(0xFF00522C), onPrimaryContainer = Color(0xFF98F7B5),
-        secondary = Color(0xFFB5CCBA), onSecondary = Color(0xFF213527), secondaryContainer = Color(0xFF374B3D), onSecondaryContainer = Color(0xFFD1E8D5),
-        tertiary = Color(0xFFA3CDDB), tertiaryContainer = Color(0xFF214C57), onTertiaryContainer = Color(0xFFBEEAF7),
-        background = Color(0xFF0F1511), onBackground = Color(0xFFDFE4DD), surface = Color(0xFF0F1511), onSurface = Color(0xFFDFE4DD),
-        surfaceVariant = Color(0xFF414942), onSurfaceVariant = Color(0xFFC0C9C0), outline = Color(0xFF8A938B), outlineVariant = Color(0xFF414942),
-        surfaceBright = Color(0xFF353B36), surfaceDim = Color(0xFF0F1511), surfaceContainerLowest = Color(0xFF0A0F0C),
-        surfaceContainerLow = Color(0xFF171D19), surfaceContainer = Color(0xFF1B211D), surfaceContainerHigh = Color(0xFF252B27),
-        surfaceContainerHighest = Color(0xFF303632), inverseSurface = Color(0xFFDFE4DD), inverseOnSurface = Color(0xFF2C322D),
-    )
 }
