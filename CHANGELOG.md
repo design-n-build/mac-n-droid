@@ -4,8 +4,10 @@
 - **The browser extension is here.** Mac n Droid is now in the Chrome Web Store, Microsoft Edge Add-ons and
   Firefox Add-ons. Add it to control browser music and videos from your phone, and to open the page you're
   reading, or any link, on your phone.
-- **Add it in one click:** the Browser extension page on the Mac and on Windows now opens Mac n Droid's own
-  page in your browser's store. If you haven't added it yet, the app asks you once after this update.
+- **One button for your browser:** the Browser extension page on the Mac and on Windows shows **Add to Chrome**,
+  **Add to Edge**, **Add to Firefox** (or whichever browser you use) and opens Mac n Droid's page in that
+  browser's store. Use another browser? A small link lists every store. If you haven't added the extension yet,
+  the app asks you once after this update.
 - **Windows: updating just works.** The installer closes Mac n Droid before updating, instead of stopping
   because the app is still running next to the clock.
 - Android: no changes in this version; 0.14.2 is still the latest.

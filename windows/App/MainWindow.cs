@@ -624,31 +624,34 @@ public sealed partial class MainWindow : Window
             body.Children.Add(new SettingsCard
             {
                 Header = "Installed", HeaderIcon = Glyph("\uE73E"),
-                Description = "The extension has connected to this PC. To add it to another browser, use its store below.",
+                Description = "The extension has connected to this PC. To add it to another browser, use the link below.",
             });
-        foreach (var (header, description, store, edge) in new[]
+        // One button, for the browser this PC opens links in; the other stores are one click away.
+        var browser = Browser.Preferred;
+        var add = new Button { Content = $"Add to {browser.Name}", Style = Style("AccentButtonStyle") };
+        add.Click += (_, _) => browser.Open();
+        body.Children.Add(new SettingsCard
         {
-            ("Microsoft Edge", "From Microsoft Edge Add-ons.", EdgeAddOns, true),
-            ("Chrome, Brave, Opera, Vivaldi and other Chrome-based browsers", "From the Chrome Web Store. Open the link in the browser you use.", ChromeWebStore, false),
-            ("Firefox and Firefox-based browsers", "From Firefox Add-ons. Open the link in the browser you use.", FirefoxAddOns, false),
+            Header = $"Add to {browser.Name}", HeaderIcon = Glyph("\uE774"), Content = add,
+            Description = Browser.Default == null
+                ? $"Your default browser isn't supported yet, so this adds it to {browser.Name}. Once it's added, it connects by itself."
+                : "Once it's added, it connects by itself.",
+        });
+        var others = new MenuFlyout();
+        foreach (var (text, url) in new[]
+        {
+            ("Chrome Web Store (Chrome, Brave, Opera and other Chrome-based browsers)", Browser.ChromeWebStore),
+            ("Microsoft Edge Add-ons", Browser.EdgeAddOns),
+            ("Firefox Add-ons (Firefox and Firefox-based browsers)", Browser.FirefoxAddOns),
         })
         {
-            var add = new Button { Content = "Add to browser" };
-            // Edge's store only installs into Edge, so open it there whatever the default browser is.
-            add.Click += (_, _) => OpenUri(edge ? "microsoft-edge:" + store : store);
-            body.Children.Add(new SettingsCard { Header = header, Description = description, HeaderIcon = Glyph("\uE774"), Content = add });
+            var item = new MenuFlyoutItem { Text = text };
+            item.Click += (_, _) => OpenUri(url);
+            others.Items.Add(item);
         }
-        body.Children.Add(new TextBlock
-        {
-            Text = "Once it's added, it connects by itself.",
-            TextWrapping = TextWrapping.Wrap, Foreground = Brush("TextFillColorSecondaryBrush"), Margin = new Thickness(0, 4, 0, 0),
-        });
+        body.Children.Add(new HyperlinkButton { Content = "Using another browser?", Flyout = others, Margin = new Thickness(0, 2, 0, 0) });
         SetPage(page);
     }
-
-    const string ChromeWebStore = "https://chromewebstore.google.com/detail/mac-n-droid/ddiakkecgnhdkmfcagclppckfbchmbga";
-    const string EdgeAddOns = "https://microsoftedge.microsoft.com/addons/detail/apnollpkjjokneagmeopfjpmoaodpkab";
-    const string FirefoxAddOns = "https://addons.mozilla.org/firefox/addon/mac-n-droid/";
 
     /// <summary>Once, after updating: the extension is in the stores now, so ask people who don't have it yet
     /// to add it. Not on first launch (the welcome screens come first).</summary>
@@ -668,10 +671,10 @@ public sealed partial class MainWindow : Window
                 Text = "The free Mac n Droid extension is now in the Edge, Chrome and Firefox stores. Control browser music and videos from your phone, and open pages and links on it.",
                 TextWrapping = TextWrapping.Wrap, MaxWidth = 460,
             },
-            PrimaryButtonText = "Add to browser", CloseButtonText = "Not now",
+            PrimaryButtonText = $"Add to {Browser.Preferred.Name}", CloseButtonText = "Not now",
             DefaultButton = ContentDialogButton.Primary, XamlRoot = Content.XamlRoot,
         };
-        try { if (await d.ShowAsync() == ContentDialogResult.Primary) Navigate("extension"); }
+        try { if (await d.ShowAsync() == ContentDialogResult.Primary) Browser.Preferred.Open(); }
         catch (Exception e) when (e is InvalidOperationException or System.Runtime.InteropServices.COMException) { }   // another dialog is open
     }
 

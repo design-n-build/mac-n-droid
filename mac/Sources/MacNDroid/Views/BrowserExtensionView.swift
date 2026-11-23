@@ -7,7 +7,7 @@ struct BrowserExtensionSheet: View {
     @Environment(\.dismiss) private var dismiss
     /// Shown once after updating, to tell people the extension is now in the stores.
     var announcing = false
-    private let preferFirefox = BrowserExtension.defaultFamily == .firefox
+    private let browser = BrowserExtension.preferred
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -41,34 +41,40 @@ struct BrowserExtensionSheet: View {
                         detail: "The extension talks only to Mac n Droid on this computer. It doesn't track what you browse and sends nothing to the internet.")
             }
 
-            Text("Chrome, Brave, Arc and other Chrome-based browsers get it from the Chrome Web Store, Microsoft Edge from Edge Add-ons, and Firefox and Firefox-based browsers from Firefox Add-ons. Once it's added, it connects by itself. Safari isn't supported yet.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if browser != nil && !BrowserExtension.defaultIsSupported {
+                Text("Your default browser isn't supported yet (Safari isn't), so this adds it to \(browser!.name).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             HStack {
+                // Quiet, for people who use a browser other than the one picked.
+                Menu("Using another browser?") {
+                    ForEach(BrowserExtension.stores, id: \.url) { store in
+                        Button(store.name) {
+                            NSWorkspace.shared.open(store.url)
+                            dismiss()
+                        }
+                    }
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .font(.callout)
                 Spacer()
                 Button("Not Now") { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                if preferFirefox {
-                    Button("Add to Chrome-Based Browser") { open(.chrome) }
-                    Button("Add to Firefox-Based Browser") { open(.firefox) }
-                        .keyboardShortcut(.defaultAction)
-                } else {
-                    Button("Add to Firefox-Based Browser") { open(.firefox) }
-                    Button("Add to Chrome-Based Browser") { open(.chrome) }
-                        .keyboardShortcut(.defaultAction)
+                if let browser {
+                    Button("Add to \(browser.name)") {
+                        BrowserExtension.open(browser)
+                        dismiss()
+                    }
+                    .keyboardShortcut(.defaultAction)
                 }
             }
             .controlSize(.large)
         }
         .padding(24)
         .frame(width: 560)
-    }
-
-    private func open(_ family: BrowserExtension.Family) {
-        BrowserExtension.open(family)
-        dismiss()
     }
 
     private struct Feature: View {
