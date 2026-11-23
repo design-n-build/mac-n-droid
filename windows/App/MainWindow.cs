@@ -649,7 +649,9 @@ public sealed partial class MainWindow : Window
             item.Click += (_, _) => OpenUri(url);
             others.Items.Add(item);
         }
-        body.Children.Add(new HyperlinkButton { Content = "Using another browser?", Flyout = others, Margin = new Thickness(0, 2, 0, 0) });
+        var another = new HyperlinkButton { Content = "Using another browser?", Margin = new Thickness(0, 2, 0, 0) };
+        another.Click += (_, _) => others.ShowAt(another);
+        body.Children.Add(another);
         SetPage(page);
     }
 
