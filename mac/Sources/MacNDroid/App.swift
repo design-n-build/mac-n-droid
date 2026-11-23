@@ -64,6 +64,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static var noNap: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        if VideoShots.active { return }
+        #endif
         DockVisibility.apply()
         // Opt out of App Nap for good (see NSAppSleepDisabled in Info.plist): a napping app handles the phone's
         // messages late and its notch animations may not draw at all while its own windows are hidden.
@@ -87,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         #if DEBUG
         StoreShots.runIfRequested()
+        VideoShots.runIfRequested()
         #endif
         keyObserver = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { _ in
             WindowPin.apply()

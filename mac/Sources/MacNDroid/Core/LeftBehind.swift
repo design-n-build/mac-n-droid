@@ -66,6 +66,11 @@ final class LeftBehindMonitor {
         }
     }
 
+    #if DEBUG
+    /// The real alert and chime, on demand, for recording the video series (tools/video/left-behind.sh).
+    func demoAlert() { alert() }
+    #endif
+
     private func alert() {
         let name = phoneName()
         AppState.shared.postLeftBehindAlert(

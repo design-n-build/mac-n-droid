@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><title>Northwind Bank: sign in</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Prop for the hero film and S2: an invented bank's sign-in page. Paste 482913 into the first box. -->
+<style>
+html,body{height:100%;margin:0}
+body{display:grid;place-items:center;background:#f3f4f6;font:16px -apple-system,system-ui,sans-serif;color:#111827}
+main{width:420px;padding:44px 44px 40px;background:#fff;border-radius:20px;box-shadow:0 1px 2px #0001,0 20px 50px #0000000f;text-align:center}
+.mark{width:44px;height:44px;margin:0 auto 18px;border-radius:12px;background:#111827;color:#fff;display:grid;place-items:center;font-weight:700;font-size:20px}
+h1{font-size:22px;margin:0 0 6px}p{margin:0 0 26px;color:#6b7280;font-size:15px}
+.code{display:flex;gap:10px;justify-content:center;margin-bottom:26px}
+.code input{width:52px;height:62px;border:1.5px solid #d1d5db;border-radius:12px;font:600 28px ui-monospace,Menlo,monospace;text-align:center;outline:0}
+.code input:focus{border-color:#111827;box-shadow:0 0 0 4px #1118271a}
+button{width:100%;height:50px;border:0;border-radius:12px;background:#111827;color:#fff;font:600 16px inherit;opacity:.35}
+body.ok button{opacity:1}.ok .code input{border-color:#0da457}
+small{display:block;margin-top:16px;color:#9ca3af}
+</style>
+<main><div class="mark">N</div><h1>Enter your sign-in code</h1><p>We sent a 6-digit code to your phone.</p>
+<div class="code"><input inputmode="numeric" maxlength="1" autofocus><input maxlength="1"><input maxlength="1"><input maxlength="1"><input maxlength="1"><input maxlength="1"></div>
+<button>Sign in</button><small>Northwind Bank is an invented name for this film.</small></main>
+<script>
+const boxes=[...document.querySelectorAll('input')];
+function fill(s){s=s.replace(/\D/g,'').slice(0,6);boxes.forEach((b,i)=>b.value=s[i]||'');(boxes[Math.min(s.length,5)]).focus();document.body.classList.toggle('ok',s.length===6)}
+boxes.forEach((b,i)=>{b.addEventListener('paste',e=>{e.preventDefault();fill(e.clipboardData.getData('text'))});
+b.addEventListener('input',()=>{fill(boxes.map(x=>x.value).join(''))});
+b.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!b.value&&i){boxes[i-1].value='';boxes[i-1].focus();document.body.classList.remove('ok')}})});
+const pre=new URLSearchParams(location.search).get('code');if(pre)fill(pre);
+</script>
