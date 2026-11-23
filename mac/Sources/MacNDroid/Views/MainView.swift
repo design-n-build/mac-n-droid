@@ -35,6 +35,9 @@ struct MainView: View {
     @State private var selection: Pane?
     @State private var dropTargeted = false
     @State private var showBrowserSheet = false
+    @State private var announcingExtension = false
+    @AppStorage(Prefs.browserExtensionSeen) private var browserSeen = false
+    @AppStorage(Prefs.browserExtensionAnnounced) private var browserAnnounced = false
     @AppStorage("welcomeSeen") private var welcomeSeen = false
     /// `open -a "Mac n Droid" --args --preview-first-run` plays Welcome → Connected without changing anything.
     /// 1 Welcome, 2 Connected, 3 pairing.
@@ -54,6 +57,15 @@ struct MainView: View {
                     .transition(.opacity)
             } else {
                 appLayout.transition(.opacity)
+                    .task {
+                        // Once, after updating: the extension is in the stores now, so ask people who don't
+                        // have it yet to add it. Not on first launch (the Overview suggests it there).
+                        guard state.hasPairedBefore, !browserSeen, !browserAnnounced else { return }
+                        try? await Task.sleep(for: .seconds(1))
+                        browserAnnounced = true
+                        announcingExtension = true
+                        showBrowserSheet = true
+                    }
             }
         }
         .animation(.easeInOut(duration: 0.35), value: firstRunStep)
@@ -64,6 +76,8 @@ struct MainView: View {
             return true
         }
         .onAppear {
+            // New here: the first-run screens, then the Overview's suggestion, introduce the extension instead.
+            if firstRunStep != nil && preview == 0 { browserAnnounced = true }
             if !state.hasPairedBefore { selection = .pair }
             if let p = state.requestedPane { selection = p; state.requestedPane = nil }
         }
@@ -105,7 +119,9 @@ struct MainView: View {
                 }
                 .padding(12)
             }
-            .sheet(isPresented: $showBrowserSheet) { BrowserExtensionSheet() }
+            .sheet(isPresented: $showBrowserSheet, onDismiss: { announcingExtension = false }) {
+                BrowserExtensionSheet(announcing: announcingExtension)
+            }
         } detail: {
             Group {
                 switch selection ?? .overview {

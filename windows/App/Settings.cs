@@ -12,6 +12,10 @@ public sealed class Settings
     public bool Sounds { get; set; } = true;
     public bool LeftBehind { get; set; } = true;
     public string LastPhoneName { get; set; } = "";
+    /// <summary>A browser extension has connected at least once.</summary>
+    public bool BrowserExtensionSeen { get; set; }
+    /// <summary>The one-time "the extension is in the stores" prompt has been shown (0.14.3).</summary>
+    public bool BrowserExtensionAnnounced { get; set; }
 
     static string FilePath => Path.Combine(Identity.Folder, "settings.json");
 

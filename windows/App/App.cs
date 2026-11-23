@@ -53,6 +53,12 @@ public sealed partial class App : Application
             ComputerMedia = media,
             ComputerVolume = new WindowsVolume(_dispatcher),
         };
+        State.Bridge.Connected += () =>
+        {
+            if (Settings.BrowserExtensionSeen) return;
+            Settings.BrowserExtensionSeen = true;
+            Settings.Save();
+        };
         State.Gallery.Opened += path =>
         {
             try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }

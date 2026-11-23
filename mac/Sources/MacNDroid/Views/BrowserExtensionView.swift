@@ -5,6 +5,9 @@ import SwiftUI
 /// Shown from Settings → Sync → Browser and from the Overview until an extension has connected.
 struct BrowserExtensionSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// Shown once after updating, to tell people the extension is now in the stores.
+    var announcing = false
+    private let preferFirefox = BrowserExtension.defaultFamily == .firefox
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -15,7 +18,9 @@ struct BrowserExtensionSheet: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Add Mac n Droid to Your Browser")
                         .font(.title2.weight(.semibold))
-                    Text("A small, free extension that lets your browser and your phone work together.")
+                    Text(announcing
+                         ? "New: the free Mac n Droid extension is now in the Chrome, Edge and Firefox stores."
+                         : "A small, free extension that lets your browser and your phone work together.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -36,22 +41,34 @@ struct BrowserExtensionSheet: View {
                         detail: "The extension talks only to Mac n Droid on this computer. It doesn't track what you browse and sends nothing to the internet.")
             }
 
-            // Until the stores have approved it, say so instead of opening an empty store search.
-            Label("Coming soon. The extension is being reviewed by the Chrome, Edge and Firefox stores. When it's approved, you'll add it from here.",
-                  systemImage: "clock")
-                .font(.callout)
+            Text("Chrome, Brave, Arc and other Chrome-based browsers get it from the Chrome Web Store, Microsoft Edge from Edge Add-ons, and Firefox and Firefox-based browsers from Firefox Add-ons. Once it's added, it connects by itself. Safari isn't supported yet.")
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack {
                 Spacer()
-                Button("OK") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
+                Button("Not Now") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                if preferFirefox {
+                    Button("Add to Chrome-Based Browser") { open(.chrome) }
+                    Button("Add to Firefox-Based Browser") { open(.firefox) }
+                        .keyboardShortcut(.defaultAction)
+                } else {
+                    Button("Add to Firefox-Based Browser") { open(.firefox) }
+                    Button("Add to Chrome-Based Browser") { open(.chrome) }
+                        .keyboardShortcut(.defaultAction)
+                }
             }
             .controlSize(.large)
         }
         .padding(24)
         .frame(width: 560)
+    }
+
+    private func open(_ family: BrowserExtension.Family) {
+        BrowserExtension.open(family)
+        dismiss()
     }
 
     private struct Feature: View {

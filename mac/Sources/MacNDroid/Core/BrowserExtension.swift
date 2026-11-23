@@ -31,11 +31,10 @@ enum BrowserExtension {
 
     // MARK: Stores
 
-    /// Each store's page for the extension. Until it's published there (and its link is filled in here),
-    /// the store's search for "Mac n Droid" opens instead.
-    static let chromeWebStore = URL(string: "https://chromewebstore.google.com/search/Mac%20n%20Droid")!
-    static let edgeAddOns = URL(string: "https://microsoftedge.microsoft.com/addons/search/Mac%20n%20Droid")!
-    static let firefoxAddOns = URL(string: "https://addons.mozilla.org/firefox/search/?q=Mac%20n%20Droid")!
+    /// Each store's page for the extension.
+    static let chromeWebStore = URL(string: "https://chromewebstore.google.com/detail/mac-n-droid/ddiakkecgnhdkmfcagclppckfbchmbga")!
+    static let edgeAddOns = URL(string: "https://microsoftedge.microsoft.com/addons/detail/apnollpkjjokneagmeopfjpmoaodpkab")!
+    static let firefoxAddOns = URL(string: "https://addons.mozilla.org/firefox/addon/mac-n-droid/")!
 
     /// Chrome-based browsers share the Chrome Web Store (Edge has its own store too); Firefox-based ones
     /// (Firefox, Zen, LibreWolf…) share Firefox Add-ons.
