@@ -118,6 +118,8 @@ enum StoreShots {
                to: out.appendingPathComponent("mac-08-menu-bar\(suffix).png"))
         window(BrowserExtensionSheet().environmentObject(state).background(Color(nsColor: .windowBackgroundColor)), size: nil, titled: false,
                to: out.appendingPathComponent("mac-09-browser-extension-sheet\(suffix).png"))
+        window(BrowserExtensionSheet(announcing: true).environmentObject(state).background(Color(nsColor: .windowBackgroundColor)), size: nil, titled: false,
+               to: out.appendingPathComponent("mac-09-browser-extension-new\(suffix).png"))
         let notchCases: [(NotchStyle, Int, String)] = [(.large, 0, "large-message"), (.compact, 0, "compact-message"),
                                                        (.small, 0, "small-message"), (.large, 1, "large-sign-in-code"), (.compact, 2, "compact-email")]
         for (style, index, label) in notchCases {
