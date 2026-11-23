@@ -25,6 +25,7 @@
   <url type="bugtracker">https://github.com/design-n-build/mac-n-droid/issues</url>
   <content_rating type="oars-1.1" />
   <releases>
+    <release version="0.14.3" date="2026-11-23" />
     <release version="0.14.2" date="2026-11-17" />
     <release version="0.14.1" date="2026-11-16" />
     <release version="0.14.0" date="2026-11-14" />

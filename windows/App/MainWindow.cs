@@ -129,6 +129,7 @@ public sealed partial class MainWindow : Window
         // First launch (never paired): the welcome screens, as on the Mac. --welcome shows them again for testing.
         var replay = Environment.GetCommandLineArgs().Contains("--welcome");
         if (string.IsNullOrEmpty(state.LastPhoneName) || replay) ShowWelcome(0, preview: replay);
+        else root.Loaded += (_, _) => AnnounceExtension();
     }
 
     public void CloseForReal()
@@ -619,13 +620,64 @@ public sealed partial class MainWindow : Window
             body.Children.Add(new SettingsCard { Header = header, Description = description, HeaderIcon = Glyph(glyph) });
 
         body.Children.Add(SectionHeader("Add it to your browser"));
-        // Until the stores have approved it, say so instead of linking to an empty search.
+        if (App.Current.Settings.BrowserExtensionSeen)
+            body.Children.Add(new SettingsCard
+            {
+                Header = "Installed", HeaderIcon = Glyph("\uE73E"),
+                Description = "The extension has connected to this PC. To add it to another browser, use the link below.",
+            });
+        // One button, for the browser this PC opens links in; the other stores are one click away.
+        var browser = Browser.Preferred;
+        var add = new Button { Content = $"Add to {browser.Name}", Style = Style("AccentButtonStyle") };
+        add.Click += (_, _) => browser.Open();
         body.Children.Add(new SettingsCard
         {
-            Header = "Coming soon", HeaderIcon = Glyph("\uE774"),
-            Description = "The extension is being reviewed by the Edge, Chrome and Firefox stores. When it's approved, you'll add it from here.",
+            Header = $"Add to {browser.Name}", HeaderIcon = Glyph("\uE774"), Content = add,
+            Description = Browser.Default == null
+                ? $"Your default browser isn't supported yet, so this adds it to {browser.Name}. Once it's added, it connects by itself."
+                : "Once it's added, it connects by itself.",
         });
+        var others = new MenuFlyout();
+        foreach (var (text, url) in new[]
+        {
+            ("Chrome Web Store (Chrome, Brave, Opera and other Chrome-based browsers)", Browser.ChromeWebStore),
+            ("Microsoft Edge Add-ons", Browser.EdgeAddOns),
+            ("Firefox Add-ons (Firefox and Firefox-based browsers)", Browser.FirefoxAddOns),
+        })
+        {
+            var item = new MenuFlyoutItem { Text = text };
+            item.Click += (_, _) => OpenUri(url);
+            others.Items.Add(item);
+        }
+        var another = new HyperlinkButton { Content = "Using another browser?", Margin = new Thickness(0, 2, 0, 0) };
+        another.Click += (_, _) => others.ShowAt(another);
+        body.Children.Add(another);
         SetPage(page);
+    }
+
+    /// <summary>Once, after updating: the extension is in the stores now, so ask people who don't have it yet
+    /// to add it. Not on first launch (the welcome screens come first).</summary>
+    async void AnnounceExtension()
+    {
+        // An extension that's already installed connects within a few seconds of the app starting.
+        await Task.Delay(TimeSpan.FromSeconds(5));
+        var settings = App.Current.Settings;
+        if (settings.BrowserExtensionSeen || settings.BrowserExtensionAnnounced || _welcomeStep >= 0) return;
+        settings.BrowserExtensionAnnounced = true;
+        settings.Save();
+        var d = new ContentDialog
+        {
+            Title = "Add Mac n Droid to your browser",
+            Content = new TextBlock
+            {
+                Text = "The free Mac n Droid extension is now in the Edge, Chrome and Firefox stores. Control browser music and videos from your phone, and open pages and links on it.",
+                TextWrapping = TextWrapping.Wrap, MaxWidth = 460,
+            },
+            PrimaryButtonText = $"Add to {Browser.Preferred.Name}", CloseButtonText = "Not now",
+            DefaultButton = ContentDialogButton.Primary, XamlRoot = Content.XamlRoot,
+        };
+        try { if (await d.ShowAsync() == ContentDialogResult.Primary) Browser.Preferred.Open(); }
+        catch (Exception e) when (e is InvalidOperationException or System.Runtime.InteropServices.COMException) { }   // another dialog is open
     }
 
     /// <summary>Android 14+ phones can be a plain USB webcam, which Windows supports with no extra software.</summary>

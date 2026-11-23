@@ -5,6 +5,9 @@ import SwiftUI
 /// Shown from Settings → Sync → Browser and from the Overview until an extension has connected.
 struct BrowserExtensionSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// Shown once after updating, to tell people the extension is now in the stores.
+    var announcing = false
+    private let browser = BrowserExtension.preferred
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -15,7 +18,9 @@ struct BrowserExtensionSheet: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Add Mac n Droid to Your Browser")
                         .font(.title2.weight(.semibold))
-                    Text("A small, free extension that lets your browser and your phone work together.")
+                    Text(announcing
+                         ? "New: the free Mac n Droid extension is now in the Chrome, Edge and Firefox stores."
+                         : "A small, free extension that lets your browser and your phone work together.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -36,17 +41,35 @@ struct BrowserExtensionSheet: View {
                         detail: "The extension talks only to Mac n Droid on this computer. It doesn't track what you browse and sends nothing to the internet.")
             }
 
-            // Until the stores have approved it, say so instead of opening an empty store search.
-            Label("Coming soon. The extension is being reviewed by the Chrome, Edge and Firefox stores. When it's approved, you'll add it from here.",
-                  systemImage: "clock")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if browser != nil && !BrowserExtension.defaultIsSupported {
+                Text("Your default browser isn't supported yet (Safari isn't), so this adds it to \(browser!.name).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             HStack {
+                // Quiet, for people who use a browser other than the one picked.
+                Menu("Using another browser?") {
+                    ForEach(BrowserExtension.stores, id: \.url) { store in
+                        Button(store.name) {
+                            NSWorkspace.shared.open(store.url)
+                            dismiss()
+                        }
+                    }
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .font(.callout)
                 Spacer()
-                Button("OK") { dismiss() }
+                Button("Not Now") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                if let browser {
+                    Button("Add to \(browser.name)") {
+                        BrowserExtension.open(browser)
+                        dismiss()
+                    }
                     .keyboardShortcut(.defaultAction)
+                }
             }
             .controlSize(.large)
         }

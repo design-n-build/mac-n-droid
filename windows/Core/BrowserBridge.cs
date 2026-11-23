@@ -29,6 +29,8 @@ public sealed class BrowserBridge(Action<Action> dispatch)
 
     public event Action<int, JsonObject>? Message;
     public event Action<int>? Closed;
+    /// <summary>An extension connected (so the app can stop suggesting it).</summary>
+    public event Action? Connected;
     public bool Listening => _listener != null;
 
     public bool Start()
@@ -123,6 +125,7 @@ public sealed class BrowserBridge(Action<Action> dispatch)
                     $"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {accept}\r\n\r\n"));
             }
             lock (_clients) { id = ++_nextId; _clients[id] = client; }
+            dispatch(() => Connected?.Invoke());
         }
         catch (Exception e) when (e is IOException or OperationCanceledException or SocketException)
         {

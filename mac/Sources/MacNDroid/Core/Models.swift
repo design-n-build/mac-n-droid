@@ -124,6 +124,8 @@ enum Prefs {
     static let browserExtensionSeen = "browserExtensionSeen"
     /// The Overview's "Add to your browser" suggestion was closed.
     static let browserTipDismissed = "browserTipDismissed"
+    /// The one-time "the extension is in the stores" sheet has been shown (0.14.3).
+    static let browserExtensionAnnounced = "browserExtensionAnnounced"
 
     static func registerDefaults() {
         // 0.6 and earlier had an on/off switch; keep "off" for people who turned it off.
