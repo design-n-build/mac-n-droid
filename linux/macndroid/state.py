@@ -82,6 +82,7 @@ class Player:
     can_next: bool
     can_seek: bool
     url: str = ""  # the exact page, from phones 0.14.5+ when the app shares it (Play on computer)
+    media_id: str = ""  # the app's id for it (YouTube Music shares the video id), phones 0.14.5+
 
     def now(self) -> float:
         """Current position in ms."""
@@ -163,6 +164,38 @@ def search_url(app: str, title: str, artist: str) -> str | None:
     if a in ("com.google.android.youtube", "youtube") or a.endswith(".youtube"):
         return "https://www.youtube.com/results?search_query=" + quote(q)
     return "https://music.youtube.com/search?q=" + quote(q)
+
+
+YOUTUBE, YOUTUBE_MUSIC = "com.google.android.youtube", "com.google.android.apps.youtube.music"
+
+
+def resolve_computer_url(p) -> str | None:
+    """The page for what the phone is playing (runs off the UI thread: it may look YouTube up)."""
+    if p.url.startswith("https://"):
+        return with_time(p.url, p.now() / 1000)
+    music = p.pkg == YOUTUBE_MUSIC
+    if p.pkg not in (YOUTUBE, YOUTUBE_MUSIC):
+        return search_url(p.pkg, p.title, p.artist)
+    import re
+    import urllib.parse
+    import urllib.request
+
+    def watch(vid):
+        return with_time(f"https://{'music' if music else 'www'}.youtube.com/watch?v={vid}", p.now() / 1000)
+    if re.fullmatch(r"[A-Za-z0-9_-]{11}", p.media_id or ""):
+        return watch(p.media_id)
+    try:
+        q = urllib.parse.quote(" ".join(x for x in (p.title, p.artist) if x))
+        req = urllib.request.Request("https://www.youtube.com/results?search_query=" + q, headers={
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+            "Accept-Language": "en"})
+        html = urllib.request.urlopen(req, timeout=6).read().decode("utf-8", "replace")
+        m = re.search(r'"videoId":"([A-Za-z0-9_-]{11})"', html)
+        if m:
+            return watch(m.group(1))
+    except OSError:
+        pass
+    return search_url(p.pkg, p.title, p.artist)
 
 
 def unique_path(folder: Path, name: str) -> Path:
@@ -774,14 +807,18 @@ class AppState(GObject.Object):
             self._computer_media_command("pause")
 
     def play_on_computer(self, p: "Player"):
-        """Play on this computer: open what the phone is playing here, and pause it on the phone."""
-        url = with_time(p.url, p.now() / 1000) if p.url.startswith("https://") else search_url(p.pkg, p.title, p.artist)
-        if not url:
-            return
-        from gi.repository import Gio
-        Gio.AppInfo.launch_default_for_uri(url, None)
+        """Play on this computer: open what the phone is playing here, and pause it on the phone. Android doesn't say
+        which YouTube video is playing, so it's found (the phone's id, or the top result for its title and channel)
+        and opened at the same spot instead of a search page."""
         if p.playing:
             self.media_command("pause", p.id)
+
+        def resolve():
+            url = resolve_computer_url(p)
+            if url:
+                from gi.repository import Gio
+                GLib.idle_add(lambda: Gio.AppInfo.launch_default_for_uri(url, None) and False)
+        threading.Thread(target=resolve, daemon=True).start()
 
     def set_phone_volume(self, v: int):
         """The phone reports the new level back."""
@@ -832,7 +869,7 @@ class AppState(GObject.Object):
                    album=m.get("album", ""), duration=float(m.get("duration") or 0), playing=bool(m.get("playing")),
                    position=float(m.get("position") or 0), position_at=at, speed=float(m.get("speed") or 1),
                    since=since, can_prev=m.get("canPrev", True) is not False, can_next=m.get("canNext", True) is not False,
-                   can_seek=bool(m.get("canSeek")), url=m.get("url") or "")
+                   can_seek=bool(m.get("canSeek")), url=m.get("url") or "", media_id=m.get("mediaId") or "")
         self.players = [x for x in self.players if x.id != pid] + [p]
         self.players.sort(key=lambda x: (not x.playing, -(x.since or x.position_at)))
         self.emit("media-changed")

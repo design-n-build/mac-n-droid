@@ -40,6 +40,8 @@ public sealed record Player(string Id, string Pkg, string App, string Title, str
 {
     /// <summary>The exact page for this (phones 0.14.5+, when the app shares it), for Play on PC.</summary>
     public string? Url { get; init; }
+    /// <summary>The app's id for what's playing (YouTube Music shares the video id), phones 0.14.5+.</summary>
+    public string? MediaId { get; init; }
 
     /// <summary>Current position in ms.</summary>
     public double Now
@@ -744,7 +746,7 @@ public sealed class AppState
                            m["positionAt"] != null ? Ms(m["positionAt"]) : DateTimeOffset.Now, Num(m["speed"], 1),
                            since > 0 ? DateTimeOffset.FromUnixTimeMilliseconds((long)since) : null,
                            (bool?)m["canPrev"] ?? true, (bool?)m["canNext"] ?? true, (bool?)m["canSeek"] ?? false)
-            { Url = (string?)m["url"] };
+            { Url = (string?)m["url"], MediaId = (string?)m["mediaId"] };
         Players.RemoveAll(x => x.Id == id);
         Players.Add(p);
         Players.Sort((a, b) => a.Playing != b.Playing ? (a.Playing ? -1 : 1) : (b.Since ?? b.PositionAt).CompareTo(a.Since ?? a.PositionAt));
@@ -1026,11 +1028,11 @@ public sealed class AppState
     }
 
     /// <summary>Play on PC: open what the phone is playing here, and pause it on the phone.</summary>
-    public void PlayOnComputer(Player p)
+    public async void PlayOnComputer(Player p)
     {
-        if (MediaHandoff.ComputerUrl(p, p.Url) is not { } url) return;
-        _platform.OpenUrl(url);
         if (p.Playing) MediaCommand("pause", p.Id);
+        // Android doesn't say which YouTube video is playing: find it, so the video opens instead of a search.
+        if (await MediaHandoff.ResolveComputerUrlAsync(p, p.Url, p.MediaId) is { } url) Server.Dispatch(() => _platform.OpenUrl(url));
     }
 
     // MARK: Clipboard

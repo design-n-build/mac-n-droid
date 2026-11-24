@@ -140,6 +140,8 @@ class MediaSync(private val ctx: Context) {
             .put("canPrev", a and PlaybackState.ACTION_SKIP_TO_PREVIOUS != 0L)
             .put("canNext", a and PlaybackState.ACTION_SKIP_TO_NEXT != 0L)
             .put("canSeek", a and PlaybackState.ACTION_SEEK_TO != 0L)
+        // YouTube Music shares the video id here: Play on computer then opens that exact song.
+        md.getString(MediaMetadata.METADATA_KEY_MEDIA_ID)?.takeIf { it.isNotBlank() && it.length <= 64 }?.let { msg.put("mediaId", it) }
 
         val artKey = "$title|$artist|$album"
         val signature = "$artKey|$duration|$playing|${st.position / 1000}|${st.playbackSpeed}"

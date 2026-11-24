@@ -13,6 +13,32 @@ public static class MediaHandoff
         return Search(p.Pkg, p.Title, p.Artist);
     }
 
+    const string YouTube = "com.google.android.youtube", YouTubeMusic = "com.google.android.apps.youtube.music";
+    static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(6) };
+
+    /// <summary>Like <see cref="ComputerUrl"/>, but for YouTube and YouTube Music finds the video itself (its id from
+    /// the phone, or the top search result for the title and channel) and opens it at the same spot.</summary>
+    public static async Task<string?> ResolveComputerUrlAsync(Player p, string? url, string? mediaId)
+    {
+        bool music = p.Pkg == YouTubeMusic;
+        if (url != null || (p.Pkg != YouTube && !music)) return ComputerUrl(p, url);
+        var seconds = p.Now / 1000;
+        string Watch(string id) => WithTime($"https://{(music ? "music" : "www")}.youtube.com/watch?v={id}", seconds);
+        if (mediaId is { Length: 11 } m && m.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')) return Watch(m);
+        try
+        {
+            var q = Uri.EscapeDataString(string.Join(" ", new[] { p.Title, p.Artist }.Where(s => s.Length > 0)));
+            using var req = new HttpRequestMessage(HttpMethod.Get, "https://www.youtube.com/results?search_query=" + q);
+            req.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36");
+            req.Headers.TryAddWithoutValidation("Accept-Language", "en");
+            var html = await (await Http.SendAsync(req)).Content.ReadAsStringAsync();
+            var match = System.Text.RegularExpressions.Regex.Match(html, "\"videoId\":\"([A-Za-z0-9_-]{11})\"");
+            if (match.Success) return Watch(match.Groups[1].Value);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { }
+        return ComputerUrl(p, url);
+    }
+
     /// <summary>Something playing on this computer → a page for the phone to open.</summary>
     public static string? PhoneUrl(ComputerTrack t)
     {

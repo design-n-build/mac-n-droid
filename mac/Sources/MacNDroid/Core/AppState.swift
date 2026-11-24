@@ -1132,9 +1132,13 @@ final class AppState: ObservableObject {
 
     /// Play on Mac: open what the phone is playing here, and pause it on the phone.
     func playOnMac(_ np: NowPlaying) {
-        guard let url = MediaHandoff.macURL(for: np) else { return }
-        NSWorkspace.shared.open(url)
         if np.playing { mediaCommand("pause", id: np.id) }
+        // Android doesn't say which YouTube video is playing: find it (the top result for its title and channel)
+        // and open that video at the same spot, instead of a search page.
+        MediaHandoff.resolveMacURL(for: np) { url in
+            guard let url else { return }
+            NSWorkspace.shared.open(url)
+        }
     }
 
     /// File → Send Browser Tab to Phone.

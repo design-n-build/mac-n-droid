@@ -201,7 +201,10 @@ Backward compatible both ways: each side only uses these with a side that announ
   the same with its clipboard history and file lists.
 
 **Play on.**
-- `media` (phone → computer) may carry `"url"`: the exact page for what's playing, when the app shares it.
+- `media` (phone → computer) may carry `"url"`: the exact page for what's playing, when the app shares it, and
+  `"mediaId"`: the app's own id (YouTube Music's is the video id).
+- For YouTube and YouTube Music without either, the computer opens the top YouTube result for the title and
+  channel (the video itself, at the same spot), not a search page.
 - Play on <computer>: the computer opens that page (or a search for the title and artist in the same service)
   and sends `media_cmd` `pause` for it.
 - Play on phone: the computer sends `open_url` with the page (YouTube gets `t=<seconds>s`, Spotify the track)

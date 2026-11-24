@@ -13,6 +13,47 @@ enum MediaHandoff {
         return search(app: np.pkg, title: np.title, artist: np.artist)
     }
 
+    static let youTube = "com.google.android.youtube"
+    static let youTubeMusic = "com.google.android.apps.youtube.music"
+
+    /// Like `macURL`, but for YouTube and YouTube Music finds the video itself (its id from the phone, or the top
+    /// search result for the title and channel) and opens it at the same spot. Calls back on the main queue.
+    static func resolveMacURL(for np: NowPlaying, completion: @escaping (URL?) -> Void) {
+        let seconds = np.position(at: Date()) / 1000
+        if np.url != nil { completion(macURL(for: np)); return }
+        let music = np.pkg == youTubeMusic
+        guard np.pkg == youTube || music else { completion(macURL(for: np)); return }
+        func watch(_ id: String) -> URL? {
+            withTime(URL(string: "https://\(music ? "music" : "www").youtube.com/watch?v=\(id)")!, seconds)
+        }
+        if let id = np.mediaId, isVideoID(id) { completion(watch(id)); return }
+        firstVideoID(query: [np.title, np.artist].filter { !$0.isEmpty }.joined(separator: " ")) { id in
+            DispatchQueue.main.async { completion(id.flatMap(watch) ?? macURL(for: np)) }
+        }
+    }
+
+    static func isVideoID(_ s: String) -> Bool {
+        s.count == 11 && s.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
+    }
+
+    /// The first video in YouTube's results for `query` (from the results page), or nil.
+    static func firstVideoID(query: String, completion: @escaping (String?) -> Void) {
+        var c = URLComponents(string: "https://www.youtube.com/results")!
+        c.queryItems = [URLQueryItem(name: "search_query", value: query)]
+        guard let url = c.url, !query.isEmpty else { completion(nil); return }
+        var req = URLRequest(url: url, timeoutInterval: 6)
+        req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+                     forHTTPHeaderField: "User-Agent")
+        req.setValue("en", forHTTPHeaderField: "Accept-Language")
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            guard let data, let html = String(data: data, encoding: .utf8),
+                  let r = html.range(of: #""videoId":"([A-Za-z0-9_-]{11})""#, options: .regularExpression) else {
+                completion(nil); return
+            }
+            completion(String(html[r].dropFirst(11).dropLast(1)))
+        }.resume()
+    }
+
     /// Something playing on this Mac → a page for the phone to open (it opens in the matching app).
     static func phoneURL(for t: MacMediaMonitor.Track) -> URL? {
         if let s = t.url, let url = URL(string: s), url.scheme == "https" { return withTime(url, t.position) }

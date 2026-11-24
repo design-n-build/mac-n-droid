@@ -135,6 +135,8 @@ struct NowPlaying: Equatable, Identifiable {
     var canSeek: Bool
     /// The exact page for this (phones 0.14.5+, when the app shares it), for Play on Mac.
     var url: String?
+    /// The app's id for what's playing (YouTube Music shares the video id), phones 0.14.5+.
+    var mediaId: String?
 
     init?(_ msg: Message) {
         guard msg["active"] as? Bool == true, let title = msg["title"] as? String else { return nil }
@@ -155,6 +157,7 @@ struct NowPlaying: Equatable, Identifiable {
         canNext = msg["canNext"] as? Bool ?? true
         canSeek = msg["canSeek"] as? Bool ?? false
         url = msg["url"] as? String
+        mediaId = msg["mediaId"] as? String
     }
 
     /// Current position in ms, ticking locally between updates.
