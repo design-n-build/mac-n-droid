@@ -123,6 +123,9 @@ class MainActivity : ComponentActivity() {
 
 // MARK: Pairing
 
+/** Where the computer apps (Mac, Windows, Linux) are downloaded. */
+const val DOWNLOAD_URL = "https://design-n-build.github.io/mac-n-droid/#download"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PairScreen(initialLink: String?, onPaired: () -> Unit, onBack: () -> Unit) {
@@ -200,6 +203,22 @@ private fun PairScreen(initialLink: String?, onPaired: () -> Unit, onBack: () ->
             }
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = { showManual = true }) { Text("Enter pairing link instead") }
+            Spacer(Modifier.height(16.dp))
+            // Pairing needs the app on the computer too: say where to get it, and offer to send the link there.
+            Text("Don't have Mac n Droid on your computer yet?", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(DOWNLOAD_URL))) }
+                }) { Text("Get the computer app") }
+                OutlinedButton(onClick = {
+                    val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                        .putExtra(Intent.EXTRA_SUBJECT, "Mac n Droid for Mac, Windows and Linux")
+                        .putExtra(Intent.EXTRA_TEXT, "Get Mac n Droid for your computer: $DOWNLOAD_URL")
+                    runCatching { ctx.startActivity(Intent.createChooser(send, "Send the link to your computer")) }
+                }) { Text("Share link") }
+            }
             error?.let {
                 Spacer(Modifier.height(12.dp))
                 Text(it, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)

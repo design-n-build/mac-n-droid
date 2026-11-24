@@ -197,7 +197,14 @@
         <service
             android:name=".service.SyncService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice|mediaProjection" />
+            android:foregroundServiceType="connectedDevice" />
+
+        <!-- Screen mirroring's own service: Android 15+ doesn't allow the mediaProjection type to start after a
+             phone restart, and SyncService does (see ScreenMirror.kt). -->
+        <service
+            android:name=".service.MirrorService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <!-- Asks for photo and video access when the computer's Photos page needs it. -->
         <activity

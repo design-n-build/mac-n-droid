@@ -289,15 +289,6 @@ class SyncService : Service() {
         }
     }
 
-    /** Adds/removes the mediaProjection foreground type around a mirroring session. */
-    fun setProjectionForeground(on: Boolean) {
-        val n = buildNotification(Link.status.value)
-        runCatching {
-            if (on && Build.VERSION.SDK_INT >= 29) {
-                startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-            } else startInForeground(Link.status.value)
-        }.onFailure { android.util.Log.w("SyncService", "foreground type change failed", it) }
-    }
 
     private fun updateNotification(s: Link.Status) {
         runCatching {

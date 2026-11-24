@@ -114,6 +114,8 @@ internal data class Features(
     val sms: Boolean,
     /** Android 17+ can block the app from the local network; then it can't reach the computer at all. */
     val localNetwork: Boolean = true,
+    /** Only some photos are allowed: the computer can browse those, but new screenshots can't be seen. */
+    val photosLimited: Boolean = false,
 ) {
     val notifications get() = listener && postNotifications
     val media get() = photos && sms
@@ -128,7 +130,9 @@ internal data class Features(
                 // OnePlus, OPPO, vivo and Xiaomi also need their own background setting, which Android can't read.
                 battery = p.battery && (!app.macndroid.core.PhoneMaker.freezesBackgroundApps ||
                     app.macndroid.core.PhoneMaker.backgroundChecked(ctx)),
-                photos = app.macndroid.service.Gallery.permissionAccess(ctx) != "none",
+                // Screenshots need access to all photos; "only selected photos" isn't enough for them.
+                photos = app.macndroid.service.Gallery.permissionAccess(ctx) in setOf("full", "photos"),
+                photosLimited = app.macndroid.service.Gallery.permissionAccess(ctx) == "partial",
                 sms = SmsBridge.hasPermission(ctx),
                 localNetwork = LocalNetwork.allowed(ctx),
             )
@@ -353,7 +357,7 @@ private fun Welcome() {
         style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Point(Icons.Outlined.Wifi, "Stays on your Wi-Fi", "Your phone talks straight to your computer. Nothing goes through the cloud.")
     Point(Icons.Outlined.Lock, "Encrypted", "Everything is encrypted with a key made when you pair. Only your computer can read it.")
-    Point(Icons.Outlined.Tune, "You choose", "Every permission is optional. Turn on only what you want to use.")
+    Point(Icons.Outlined.Tune, "You choose", "Apart from Wi-Fi access, every permission is optional. Turn on only what you want to use.")
 }
 
 @Composable
@@ -373,11 +377,12 @@ private fun MakeItYours(f: Features, a: FeatureActions) {
     Spacer(Modifier.height(8.dp))
     HeaderIcon(Icons.Outlined.Tune)
     Text("Make it yours", style = MaterialTheme.typography.headlineMedium)
-    Text("Turn on only the features you want. These permissions are optional and aren't needed to pair. You can change them later on the Home tab.",
+    Text(if (LocalNetwork.applies) "Wi-Fi access is required to connect. Everything else is optional: turn on only the features you want. You can change them later on the Home tab."
+         else "Turn on only the features you want. These permissions are optional and aren't needed to pair. You can change them later on the Home tab.",
         style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     if (LocalNetwork.applies) FeatureCard(Icons.Outlined.Wifi, "Connect on your Wi-Fi",
-        "Local network access lets this phone find and connect to your computer on the same Wi-Fi. This one is needed to connect; nothing leaves your network.",
-        f.localNetwork, a.localNetwork)
+        "Local network access lets this phone find and connect to your computer on the same Wi-Fi. Nothing leaves your network.",
+        f.localNetwork, a.localNetwork, required = true)
     FeatureCard(Icons.Outlined.TouchApp, "Clipboard and controls",
         "Accessibility lets you copy here and paste on your computer, use this phone from your computer, and open links from it right away.",
         f.controls, a.controls)
@@ -395,7 +400,7 @@ private fun MakeItYours(f: Features, a: FeatureActions) {
 }
 
 @Composable
-private fun FeatureCard(icon: ImageVector, title: String, body: String, on: Boolean, enable: () -> Unit) {
+private fun FeatureCard(icon: ImageVector, title: String, body: String, on: Boolean, enable: () -> Unit, required: Boolean = false) {
     val scheme = MaterialTheme.colorScheme
     // When a permission is allowed: the icon morphs into a ✓, the button becomes "Enabled", the card tints, and a
     // success tap. Only for a real change while the screen is open, not for things that were already on.
@@ -426,6 +431,12 @@ private fun FeatureCard(icon: ImageVector, title: String, body: String, on: Bool
                 }
                 Spacer(Modifier.width(16.dp))
                 Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                if (required) {
+                    Surface(shape = CircleShape, color = scheme.tertiaryContainer) {
+                        Text("Required", style = MaterialTheme.typography.labelMedium, color = scheme.onTertiaryContainer,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                    }
+                }
             }
             Text(body, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
             androidx.compose.animation.AnimatedContent(
@@ -478,7 +489,9 @@ internal fun SetupChecklist(f: Features, a: FeatureActions) {
                 "Not finished: ${app.macndroid.core.PhoneMaker.name} phones pause apps in the background, so copies and screenshots wait until you open Mac n Droid. ${app.macndroid.core.PhoneMaker.backgroundSteps}"
             else "Off: Android may cut the connection to save battery", a.battery))
         add(Item(Icons.Outlined.PhotoLibrary, "Photos, videos and messages", f.media,
-            "On: photos, videos, screenshots and texts on ${Computer.your}", "Off: optional, for photos, videos and texts on ${Computer.your}", a.media))
+            "On: photos, videos, screenshots and texts on ${Computer.your}",
+            if (f.photosLimited) "Only some photos are allowed, so new screenshots can't reach ${Computer.your}. Tap and choose Allow all."
+            else "Off: optional, for photos, videos and texts on ${Computer.your}", a.media))
     }
     val off = rows.filter { !it.on }
     var open by rememberSaveable { mutableStateOf(!(f.listener && f.battery && f.controls && f.localNetwork)) }

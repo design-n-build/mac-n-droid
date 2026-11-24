@@ -87,12 +87,10 @@ object ScreenMirror {
     fun begin(ctx: Context, resultCode: Int, data: Intent) {
         val app = ctx.applicationContext
         appContext = app
-        val service = SyncService.instance ?: run { Log.w(TAG, "service not running"); return }
-        // Android 14+: the foreground service must hold the mediaProjection type before getMediaProjection().
-        service.setProjectionForeground(true)
+        // Android 14+: a foreground service with the mediaProjection type (MirrorService) must be running first.
         val mp = runCatching {
             app.getSystemService(MediaProjectionManager::class.java).getMediaProjection(resultCode, data)
-        }.getOrNull() ?: run { service.setProjectionForeground(false); denied(); return }
+        }.getOrNull() ?: run { MirrorService.stop(app); denied(); return }
         projection = mp
         mp.registerCallback(object : MediaProjection.Callback() {
             override fun onStop() { main.post { stop(notifyMac = true) } }
@@ -159,7 +157,7 @@ object ScreenMirror {
         wakeLock = null
         outbox.close()
         sender = null
-        SyncService.instance?.setProjectionForeground(false)
+        appContext?.let { MirrorService.stop(it) }
         if (notifyMac) Link.post(JSONObject().put("t", "mirror_stopped"))
         Log.i(TAG, "mirroring stopped")
         Haptics.play(Haptics.Kind.Click)
@@ -276,11 +274,58 @@ class MirrorConsentActivity : Activity() {
             overridePendingTransition(0, 0)
         }
         if (resultCode == RESULT_OK && data != null) {
-            ScreenMirror.begin(this, resultCode, data)
+            // Mirroring runs in its own foreground service (MirrorService), which then calls begin().
+            MirrorService.start(this, resultCode, data)
             app.macndroid.ui.EdgeGlow.play(this, ::close)
         } else {
             ScreenMirror.denied()
             close()
         }
+    }
+}
+
+
+/**
+ * The foreground service that holds Android's "screen capture" type while this screen is shown on the computer.
+ * It's separate from SyncService on purpose: Android 15+ doesn't let a service that declares this type start after
+ * a phone restart, and SyncService does start then. Started from the consent screen, so it's always allowed.
+ */
+class MirrorService : android.app.Service() {
+    companion object {
+        private const val NOTIF_ID = 43
+
+        fun start(ctx: Context, resultCode: Int, data: Intent) {
+            val i = Intent(ctx, MirrorService::class.java).putExtra("code", resultCode).putExtra("data", data)
+            runCatching { androidx.core.content.ContextCompat.startForegroundService(ctx, i) }
+                .onFailure { Log.w("MirrorService", "couldn't start mirroring", it); ScreenMirror.denied() }
+        }
+
+        fun stop(ctx: Context) { runCatching { ctx.stopService(Intent(ctx, MirrorService::class.java)) } }
+    }
+
+    override fun onBind(intent: Intent?) = null
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val n = NotificationCompat.Builder(this, MacNDroidApp.CH_MIRROR)
+            .setSmallIcon(R.drawable.ic_stat_logo)
+            .setContentTitle("Showing this screen on ${Computer.your}")
+            .setContentText("Stop it on ${Computer.your}, or here")
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+        val ok = runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                startForeground(NOTIF_ID, n, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            } else {
+                startForeground(NOTIF_ID, n)
+            }
+        }.isSuccess
+        @Suppress("DEPRECATION")
+        val data = if (android.os.Build.VERSION.SDK_INT >= 33) intent?.getParcelableExtra("data", Intent::class.java)
+                   else intent?.getParcelableExtra("data")
+        if (!ok || data == null) { ScreenMirror.denied(); stopSelf(); return START_NOT_STICKY }
+        ScreenMirror.begin(this, intent?.getIntExtra("code", 0) ?: 0, data)
+        if (!ScreenMirror.isRunning) stopSelf()
+        return START_NOT_STICKY
     }
 }
