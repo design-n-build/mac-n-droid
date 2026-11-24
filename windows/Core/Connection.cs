@@ -31,6 +31,10 @@ public sealed class Session
     public bool Keyed { get; private set; }
     public bool Closed => _closed != 0;
     public string PhoneId { get; private set; } = "";
+    /// <summary>Phones ping every 20 seconds: nothing for this long means it left the Wi-Fi (or went away), so the
+    /// connection is closed and the phone shows as away instead of connected.</summary>
+    const int SilentSeconds = 45;
+
     /// <summary>It connected with its own device key (not the QR's invite key).</summary>
     public bool UsedDeviceKey { get; private set; }
     /// <summary>An older app: no device keys, no approval screen.</summary>
@@ -55,7 +59,7 @@ public sealed class Session
             {
                 // The handshake has to finish within 10 seconds (longer while a new phone waits for approval);
                 // after that phones ping every 20 seconds.
-                var token = new CancellationTokenSource(TimeSpan.FromSeconds(Authenticated ? 90 : _waitSeconds)).Token;
+                var token = new CancellationTokenSource(TimeSpan.FromSeconds(Authenticated ? SilentSeconds : _waitSeconds)).Token;
                 await _stream.ReadExactlyAsync(header, token);
                 int len = (int)BinaryPrimitives.ReadUInt32BigEndian(header);
                 if (len > MaxFrame) throw new IOException("Frame too large");

@@ -120,6 +120,9 @@ final class AppState: ObservableObject {
         let temp: Bool
     }
     private var pingTimer: Timer?
+    private var pingTick = 0
+    /// When the phone last sent anything (any thread).
+    private let lastHeard = LockedDate()
     private var started = false
 
     // MARK: Lifecycle
@@ -186,9 +189,16 @@ final class AppState: ObservableObject {
         server.onNewConnection = { [weak self] pc in self?.wire(pc) }
         server.start()
 
-        pingTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in
-            self?.active?.send(["t": "ping"])
-            self?.refreshAddresses()
+        pingTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.pingTick += 1
+            if self.pingTick % 2 == 0 {
+                self.active?.send(["t": "ping"])
+                self.refreshAddresses()
+            }
+            // Phones ping every 20 s. Nothing for 45 s: the phone left the Wi-Fi (its Wi-Fi was turned off, it went
+            // out of range…). Close the connection, so it shows as away instead of still connected.
+            if let conn = self.active, Date().timeIntervalSince(self.lastHeard.value) > 45 { conn.cancel() }
         }
         leftBehind.isConnected = { [weak self] in self?.isConnected ?? false }
         leftBehind.phoneName = { [weak self] in self?.phone?.name ?? self?.lastPhoneName ?? "your phone" }
@@ -287,11 +297,13 @@ final class AppState: ObservableObject {
             DispatchQueue.main.async {
                 guard let self, let pc else { return }
                 if let old = self.active, old.id != pc.id { old.cancel() }
+                self.lastHeard.set(Date())
                 self.active = pc
                 self.phoneConnected(msg)
             }
         }
         pc.onMessage = { [weak self] msg in
+            self?.lastHeard.set(Date())
             if let t = msg["t"] as? String, t == "mirror_cfg" || t == "mirror_frame" {
                 self?.mirrorQueue.async { self?.handleMirrorMessage(t, msg) }
                 return
@@ -1081,12 +1093,41 @@ final class AppState: ObservableObject {
 
     /// Play on Phone: the phone opens the same thing, and it stops here.
     func playOnPhone() {
-        guard let t = macMedia.current, let url = MediaHandoff.phoneURL(for: t), let conn = active else { return }
+        guard let t = macMedia.current, active != nil else { return }
+        // A browser tab whose extension doesn't report its address yet (before 0.14.5): the tab in front is
+        // usually the one playing; use its page if it's on the same site, so the video plays instead of a search.
+        if t.isBrowser, t.url == nil {
+            Handoff.currentTab { [weak self] result in
+                guard let self, let current = self.macMedia.current, current.id == t.id else { return }
+                if case .url(let page) = result, Self.sameSite(page, site: t.app) {
+                    self.handOffToPhone(current, url: MediaHandoff.withTime(page, current.position))
+                } else if let url = MediaHandoff.phoneURL(for: current) {
+                    self.handOffToPhone(current, url: url)
+                }
+            }
+            return
+        }
+        guard let url = MediaHandoff.phoneURL(for: t) else { return }
+        handOffToPhone(t, url: url)
+    }
+
+    private func handOffToPhone(_ t: MacMediaMonitor.Track, url: URL) {
+        guard let conn = active else { return }
         conn.send(["t": "open_url", "url": url.absoluteString])
         if t.playing { macMedia.command("pause") }
         if NotchStyle.isOn {
             NotchController.shared.flash(symbol: "iphone.and.arrow.forward", text: "Playing on \(phone?.name ?? "phone")")
         }
+    }
+
+    /// The page in the browser's front tab belongs to the site that's playing ("YouTube", "YouTube Music", "Spotify"…).
+    private static func sameSite(_ page: URL, site: String) -> Bool {
+        let host = page.host?.lowercased() ?? ""
+        let s = site.lowercased()
+        if s.contains("youtube music") { return host == "music.youtube.com" }
+        if s.contains("youtube") { return host.hasSuffix("youtube.com") || host == "youtu.be" }
+        let word = s.split(separator: " ").first.map(String.init) ?? s
+        return !word.isEmpty && host.contains(word)
     }
 
     /// Play on Mac: open what the phone is playing here, and pause it on the phone.
@@ -1792,4 +1833,12 @@ final class FileReplies {
         waiting[id] = nil
         return answers.removeValue(forKey: id)
     }
+}
+
+/// A date read and written from several threads.
+final class LockedDate {
+    private let lock = NSLock()
+    private var date = Date()
+    var value: Date { lock.lock(); defer { lock.unlock() }; return date }
+    func set(_ d: Date) { lock.lock(); date = d; lock.unlock() }
 }

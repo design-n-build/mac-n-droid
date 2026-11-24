@@ -124,7 +124,7 @@ class Session:
         if self.closed or not self.keyed or self.authenticated:
             return
         self.authenticated = True
-        self.sock.settimeout(90)  # Phones ping every 20 seconds.
+        self.sock.settimeout(45)  # Phones ping every 20 s: nothing for 45 s means it left the Wi-Fi.
         welcome = {"t": "welcome", "name": self.server.name, "caps": list(CAPS)}
         if device_key:
             welcome["deviceKey"] = base64.b64encode(device_key).decode()
