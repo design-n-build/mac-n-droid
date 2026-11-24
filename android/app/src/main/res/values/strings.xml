@@ -14,10 +14,6 @@
     <string name="tile_pause_hour">Pause 1 hour</string>
     <string name="tile_pause_3h">Pause 3 hours</string>
     <string name="tile_pause">Pause sharing</string>
-    <string name="widget_one_label">Pause sharing</string>
-    <string name="widget_one_desc">The Mac n Droid logo shows whether sharing is on. Tap it to pause or resume.</string>
-    <string name="widget_two_label">Pause and send files</string>
-    <string name="widget_two_desc">Pause or resume sharing, and send files to your computer.</string>
-    <string name="widget_four_label">Controls and music</string>
-    <string name="widget_four_desc">What\'s playing on your computer, with Play on phone, plus pause, send files, send clipboard and open.</string>
+    <string name="widget_label">Mac n Droid</string>
+    <string name="widget_desc">Pause sharing, send files and your clipboard, and control what\'s playing on your computer. Resize it for more.</string>
 </resources>

@@ -320,33 +320,15 @@
         </receiver>
 
 
-        <!-- Home-screen widgets (ui/Widgets.kt). -->
+        <!-- The home-screen widget (ui/Widgets.kt). -->
         <receiver
-            android:name=".ui.OneWidget"
+            android:name=".ui.MacNDroidWidget"
             android:exported="true"
-            android:label="@string/widget_one_label">
+            android:label="@string/widget_label">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_one" />
-        </receiver>
-        <receiver
-            android:name=".ui.TwoWidget"
-            android:exported="true"
-            android:label="@string/widget_two_label">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_two" />
-        </receiver>
-        <receiver
-            android:name=".ui.FourWidget"
-            android:exported="true"
-            android:label="@string/widget_four_label">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_four" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_mnd" />
         </receiver>
         <!-- What the widgets' buttons do (pause, music controls, Play on phone). -->
         <receiver

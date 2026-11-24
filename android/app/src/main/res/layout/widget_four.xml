@@ -10,6 +10,36 @@
     android:padding="10dp">
 
     <LinearLayout
+        android:id="@+id/header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="4dp"
+        android:visibility="gone">
+        <ImageView
+            android:id="@+id/header_icon"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_stat_logo"
+            android:tint="@color/w_primary" />
+        <TextView
+            android:id="@+id/header_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:text="Connected to MacBook"
+            android:textColor="@color/w_text2"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
         android:id="@+id/music"
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -167,53 +197,121 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:orientation="horizontal">
+        <LinearLayout
+            android:id="@+id/a_pause"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:minHeight="44dp"
+            android:layout_weight="1"
+            android:layout_marginStart="0dp"
+            android:background="@drawable/widget_btn"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="6dp">
             <ImageView
-                android:id="@+id/a_pause"
-                android:layout_width="0dp"
-                android:layout_height="44dp"
-                android:layout_weight="1"
-                android:layout_marginStart="0dp"
-                android:background="@drawable/widget_btn"
-                android:contentDescription="Pause sharing"
-                android:padding="11dp"
-                android:scaleType="fitCenter"
+                android:id="@+id/a_pause_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:contentDescription="@null"
                 android:src="@drawable/ic_w_pause"
                 android:tint="@color/w_btn_icon" />
+            <TextView
+                android:id="@+id/a_pause_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text="Pause"
+                android:textColor="@color/w_btn_icon"
+                android:textSize="12sp" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/a_files"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:minHeight="44dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/widget_btn"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="6dp">
             <ImageView
-                android:id="@+id/a_files"
-                android:layout_width="0dp"
-                android:layout_height="44dp"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:background="@drawable/widget_btn"
-                android:contentDescription="Send files"
-                android:padding="11dp"
-                android:scaleType="fitCenter"
+                android:id="@+id/a_files_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:contentDescription="@null"
                 android:src="@drawable/ic_upload"
                 android:tint="@color/w_btn_icon" />
+            <TextView
+                android:id="@+id/a_files_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text="Files"
+                android:textColor="@color/w_btn_icon"
+                android:textSize="12sp" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/a_clip"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:minHeight="44dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/widget_btn"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="6dp">
             <ImageView
-                android:id="@+id/a_clip"
-                android:layout_width="0dp"
-                android:layout_height="44dp"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:background="@drawable/widget_btn"
-                android:contentDescription="Send clipboard"
-                android:padding="11dp"
-                android:scaleType="fitCenter"
+                android:id="@+id/a_clip_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:contentDescription="@null"
                 android:src="@drawable/ic_clipboard"
                 android:tint="@color/w_btn_icon" />
+            <TextView
+                android:id="@+id/a_clip_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text="Clipboard"
+                android:textColor="@color/w_btn_icon"
+                android:textSize="12sp" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/a_open"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:minHeight="44dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/widget_btn"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="6dp">
             <ImageView
-                android:id="@+id/a_open"
-                android:layout_width="0dp"
-                android:layout_height="44dp"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:background="@drawable/widget_btn"
-                android:contentDescription="Open Mac n Droid"
-                android:padding="11dp"
-                android:scaleType="fitCenter"
-                android:src="@drawable/ic_stat_logo"
+                android:id="@+id/a_open_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_w_open"
                 android:tint="@color/w_btn_icon" />
+            <TextView
+                android:id="@+id/a_open_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text="Open"
+                android:textColor="@color/w_btn_icon"
+                android:textSize="12sp" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>

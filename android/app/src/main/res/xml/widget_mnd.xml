@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One Mac n Droid widget that changes with its size (ui/Widgets.kt): 1×1 one button, 2×1 two, 4×1 four,
+     2×2 status and two, 4×2 the computer's music and four, 4×3+ everything with labels. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_desc"
+    android:initialLayout="@layout/widget_four"
+    android:previewLayout="@layout/widget_four"
+    android:minWidth="40dp" android:minHeight="40dp"
+    android:minResizeWidth="40dp" android:minResizeHeight="40dp"
+    android:maxResizeWidth="600dp" android:maxResizeHeight="400dp"
+    android:targetCellWidth="4" android:targetCellHeight="2"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

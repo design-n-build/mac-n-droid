@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget one row high: 2×1 shows two buttons (sharing, send files), 4×1 four (and clipboard, open). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="horizontal"
+    android:padding="6dp">
+    <ImageView
+        android:id="@+id/b_pause"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginStart="0dp"
+        android:background="@drawable/widget_btn"
+        android:contentDescription="Pause sharing"
+        android:paddingVertical="10dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_w_pause"
+        android:tint="@color/w_btn_icon" />
+    <ImageView
+        android:id="@+id/b_files"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginStart="6dp"
+        android:background="@drawable/widget_btn"
+        android:contentDescription="Send files"
+        android:paddingVertical="10dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_upload"
+        android:tint="@color/w_btn_icon" />
+    <ImageView
+        android:id="@+id/b_clip"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginStart="6dp"
+        android:background="@drawable/widget_btn"
+        android:contentDescription="Send clipboard"
+        android:paddingVertical="10dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_clipboard"
+        android:tint="@color/w_btn_icon" />
+    <ImageView
+        android:id="@+id/b_open"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layout_marginStart="6dp"
+        android:background="@drawable/widget_btn"
+        android:contentDescription="Open Mac n Droid"
+        android:paddingVertical="10dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_w_open"
+        android:tint="@color/w_btn_icon" />
+</LinearLayout>

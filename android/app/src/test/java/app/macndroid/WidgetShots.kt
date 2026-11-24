@@ -23,11 +23,8 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi")
 class WidgetShots {
-    private val sizes = listOf(
-        "one" to listOf(60f to 60f, 120f to 120f),
-        "two" to listOf(130f to 60f, 250f to 60f, 250f to 120f),
-        "four" to listOf(250f to 60f, 260f to 120f, 340f to 120f, 340f to 200f),
-    )
+    /** Launcher sizes (dp) for 1×1, 2×1, 4×1, 2×2, 4×2 and 4×3 on a phone. */
+    private val sizes = listOf(70f to 70f, 150f to 70f, 330f to 70f, 150f to 150f, 330f to 150f, 330f to 240f)
 
     @Test fun light() = shoot("light")
 
@@ -48,8 +45,8 @@ class WidgetShots {
         val out = File(System.getProperty("widgetShots.out") ?: "build/widget-shots").apply { mkdirs() }
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val d = ctx.resources.displayMetrics.density
-        for ((which, list) in sizes) for ((w, h) in list) {
-            val rv = Widgets.previewViews(ctx, which, w, h)
+        for ((w, h) in sizes) {
+            val rv = Widgets.previewViews(ctx, w, h)
             val pw = (w * d).toInt(); val ph = (h * d).toInt()
             val parent = FrameLayout(ctx)
             val view = rv.apply(ctx, parent)
@@ -64,7 +61,7 @@ class WidgetShots {
             val c = Canvas(bmp)
             c.drawColor(if (theme == "dark") Color.rgb(40, 44, 52) else Color.rgb(196, 208, 222))
             parent.draw(c)
-            File(out, "$theme-$which-${w.toInt()}x${h.toInt()}.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            File(out, "$theme-${w.toInt()}x${h.toInt()}.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
 }
