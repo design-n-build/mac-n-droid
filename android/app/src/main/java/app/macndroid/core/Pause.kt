@@ -111,6 +111,7 @@ object Pause {
 
     /** Refresh the status notification and the Quick Settings tiles. */
     private fun changed(ctx: Context) {
+        app.macndroid.ui.Widgets.refresh(ctx)
         runCatching {
             ctx.startService(Intent(ctx, SyncService::class.java).setAction(SyncService.ACTION_REFRESH))
         }

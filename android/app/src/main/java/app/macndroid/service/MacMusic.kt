@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import app.macndroid.ui.Widgets
 import android.graphics.BitmapFactory
 import android.graphics.drawable.Icon
 import android.media.MediaMetadata
@@ -35,6 +36,11 @@ object MacMusic {
     private var art: Bitmap? = null
     private var lastTitle = ""
     @Volatile var isShowing = false
+        private set
+
+    /** What's playing on the computer, for the home-screen music widget (null when nothing is). */
+    data class Track(val title: String, val artist: String, val app: String, val playing: Boolean, val art: Bitmap?, val volume: Int)
+    @Volatile var current: Track? = null
         private set
     private var macVolume = -1
     private var volumeFixed = false
@@ -137,6 +143,8 @@ object MacMusic {
         applyVolume(s)
         s.isActive = true
         post(app, s, title, msg.optString("artist"), app_, playing)
+        val now = Track(title, msg.optString("artist"), app_, playing, art, if (volumeFixed) -1 else macVolume)
+        if (now != current) { current = now; Widgets.refresh(app) }
     }
 
     private fun post(c: Context, s: MediaSession, title: String, artist: String, app: String, playing: Boolean) {
@@ -182,6 +190,7 @@ object MacMusic {
     }
 
     fun end() {
+        if (current != null) { current = null; ctx?.let { Widgets.refresh(it) } }
         ctx?.getSystemService(NotificationManager::class.java)?.cancel(NOTIF)
         session?.let { it.isActive = false; it.release() }
         session = null

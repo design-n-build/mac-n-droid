@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.foundation.background
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -269,33 +270,63 @@ private fun AppShell() {
     val transfers by Transfers.items.collectAsState()
     val active = transfers.count { it.state == app.macndroid.service.TransferItem.State.Active }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0),
-        bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
-                Tab.entries.forEach { t ->
-                    NavigationBarItem(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        icon = {
-                            BadgedBox(badge = { if (t == Tab.Files && active > 0) Badge { Text("$active") } }) {
-                                Icon(if (tab == t) t.selectedIcon else t.icon, null)
-                            }
-                        },
-                        label = { Text(t.label) },
-                    )
+    val content: @Composable () -> Unit = {
+        if (tab == Tab.Home) HomeScreen()
+        else PausedGate(pausedUntil != 0L, onBlocked = { askResume = true }) {
+            when (tab) {
+                Tab.Notifications -> NotificationsScreen()
+                Tab.Clipboard -> ClipboardScreen()
+                else -> FilesScreen()
+            }
+        }
+    }
+    @Composable fun TabIcon(t: Tab) {
+        BadgedBox(badge = { if (t == Tab.Files && active > 0) Badge { Text("$active") } }) {
+            Icon(if (tab == t) t.selectedIcon else t.icon, null)
+        }
+    }
+    // Tablets, foldables and landscape (600dp and wider): a navigation rail at the side and pages at a readable
+    // width, as Material 3's adaptive layouts do. Phones keep the bottom bar.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (maxWidth >= 600.dp) {
+            Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+                NavigationRail(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    header = { Spacer(Modifier.height(12.dp)) },
+                ) {
+                    Spacer(Modifier.weight(1f))
+                    Tab.entries.forEach { t ->
+                        NavigationRailItem(
+                            selected = tab == t,
+                            onClick = { tab = t },
+                            icon = { TabIcon(t) },
+                            label = { Text(t.label) },
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                }
+                Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+                    Box(Modifier.widthIn(max = 840.dp).fillMaxSize()) { content() }
                 }
             }
-        },
-    ) { outer ->
-        Box(Modifier.padding(bottom = outer.calculateBottomPadding())) {
-            if (tab == Tab.Home) HomeScreen()
-            else PausedGate(pausedUntil != 0L, onBlocked = { askResume = true }) {
-                when (tab) {
-                    Tab.Notifications -> NotificationsScreen()
-                    Tab.Clipboard -> ClipboardScreen()
-                    else -> FilesScreen()
-                }
+        } else {
+            Scaffold(
+                contentWindowInsets = WindowInsets(0),
+                bottomBar = {
+                    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        Tab.entries.forEach { t ->
+                            NavigationBarItem(
+                                selected = tab == t,
+                                onClick = { tab = t },
+                                icon = { TabIcon(t) },
+                                label = { Text(t.label) },
+                            )
+                        }
+                    }
+                },
+            ) { outer ->
+                Box(Modifier.padding(bottom = outer.calculateBottomPadding())) { content() }
             }
         }
     }

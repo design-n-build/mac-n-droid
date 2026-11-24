@@ -17,7 +17,15 @@ class MacNDroidApp : Application() {
         app.macndroid.core.Pause.init(this)
         app.macndroid.core.Haptics.init(this)
         // The share sheet's "Send to …" / "Open on …" follow the paired computer (Mac, PC, or "computer").
-        app.macndroid.core.Link.scope.launch { Prefs.pairing.collect { app.macndroid.ui.ShareTargets.update(this@MacNDroidApp) } }
+        app.macndroid.core.Link.scope.launch {
+            Prefs.pairing.collect {
+                app.macndroid.ui.ShareTargets.update(this@MacNDroidApp)
+                app.macndroid.ui.Widgets.refresh(this@MacNDroidApp)
+            }
+        }
+        // Widgets show whether the computer is connected, and its music only when that's on.
+        app.macndroid.core.Link.scope.launch { app.macndroid.core.Link.status.collect { app.macndroid.ui.Widgets.refresh(this@MacNDroidApp) } }
+        app.macndroid.core.Link.scope.launch { Prefs.macMusic.collect { app.macndroid.ui.Widgets.refresh(this@MacNDroidApp) } }
         val nm = getSystemService(NotificationManager::class.java)
         nm.deleteNotificationChannel("files")   // v0.1–0.4 channel used the system sound
         val soft = AudioAttributes.Builder()

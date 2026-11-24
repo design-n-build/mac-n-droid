@@ -319,5 +319,51 @@
             </intent-filter>
         </receiver>
 
+
+        <!-- Home-screen widgets (ui/Widgets.kt). -->
+        <receiver
+            android:name=".ui.PauseWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_pause_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_pause" />
+        </receiver>
+        <receiver
+            android:name=".ui.QuickWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_quick_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_quick" />
+        </receiver>
+        <receiver
+            android:name=".ui.TypeWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_type_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_type" />
+        </receiver>
+        <receiver
+            android:name=".ui.MusicWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_music_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_music" />
+        </receiver>
+        <!-- The "Type to send" widget's typing window, over the home screen. -->
+        <activity
+            android:name=".ui.TypeToComputerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.MacNDroid.Invisible"
+            android:windowSoftInputMode="stateVisible|adjustResize" />
     </application>
 </manifest>
