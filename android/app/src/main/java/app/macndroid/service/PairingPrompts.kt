@@ -1,6 +1,7 @@
 package app.macndroid.service
 
 import android.app.Activity
+import app.macndroid.ui.ShareShortcuts
 import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -108,21 +109,29 @@ object PairingPrompts {
         Link.post(JSONObject().put("t", "approve").put("id", id).put("allow", allow))
     }
 
-    /** Another phone was allowed in its place: forget the pairing and say why. */
+    /**
+     * The computer let go of this phone: another phone was allowed in its place (`by`), or it was forgotten there
+     * (`reason: "forgotten"`). Forget the pairing and what came from that computer, and say why.
+     */
     fun onUnpaired(ctx: Context, msg: JSONObject) {
+        val forgotten = msg.optString("reason") == "forgotten"
         val by = msg.optString("by").ifBlank { "Another phone" }
         val mac = Prefs.pairing.value?.macName ?: Computer.word
         _request.value = null
         val nm = ctx.getSystemService(NotificationManager::class.java)
         runCatching { nm.cancel(NOTIF) }
         Prefs.clearPairing()
+        PhoneHistory.forget(ctx)
+        ShareShortcuts.remove(ctx)
         val open = PendingIntent.getActivity(ctx, NOTIF_UNPAIRED, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val text = if (forgotten) "$mac forgot this phone. To use it again, scan the pairing code on $mac."
+                   else "$by is now paired with $mac instead of this phone. To use this phone again, scan the pairing code on $mac."
         val n = NotificationCompat.Builder(ctx, MacNDroidApp.CH_PAIRING)
             .setSmallIcon(R.drawable.ic_stat_logo)
-            .setContentTitle("Disconnected from $mac")
-            .setContentText("$by is now paired with $mac. Scan its code to pair this phone again.")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(
-                "$by is now paired with $mac instead of this phone. To use this phone again, scan the pairing code on $mac."))
+            .setContentTitle(if (forgotten) "Not paired with $mac anymore" else "Disconnected from $mac")
+            .setContentText(if (forgotten) "Scan its pairing code to use this phone again."
+                            else "$by is now paired with $mac. Scan its code to pair this phone again.")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(open)
             .setAutoCancel(true)
             .build()

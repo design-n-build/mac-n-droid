@@ -52,6 +52,7 @@ import app.macndroid.core.Link
 import app.macndroid.core.Pairing
 import app.macndroid.core.Prefs
 import app.macndroid.service.ClipboardSync
+import app.macndroid.service.PhoneHistory
 import app.macndroid.service.SyncService
 import app.macndroid.service.Transfers
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -106,7 +107,10 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         intent.dataString?.let { pendingLink.value = it }
         if (Prefs.pairing.value != null && intent.dataString != null) {
-            Pairing.parse(intent.dataString!!)?.let { Prefs.savePairing(it); Link.kick(); SyncService.start(this) }
+            Pairing.parse(intent.dataString!!)?.let {
+                PhoneHistory.pairing(this, it.macId)
+                Prefs.savePairing(it); Link.kick(); SyncService.start(this)
+            }
         }
     }
 
@@ -131,6 +135,7 @@ private fun PairScreen(initialLink: String?, onPaired: () -> Unit, onBack: () ->
         if (p == null) {
             error = "That isn't a Mac n Droid pairing code."
         } else {
+            PhoneHistory.pairing(ctx, p.macId)
             Prefs.savePairing(p)
             SyncService.start(ctx)
             onPaired()
@@ -518,8 +523,9 @@ private fun HomeScreen() {
                 TextButton(onClick = {
                     confirmUnpair = false
                     Prefs.clearPairing()
+                    PhoneHistory.forget(ctx)
                     ShareShortcuts.remove(ctx)
-                    Link.stop()
+                    Link.unpair()   // tells the computer, which forgets this phone too and shows its pairing code
                     SyncService.stop(ctx)
                 }) { Text("Unpair") }
             },

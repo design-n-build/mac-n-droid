@@ -40,8 +40,11 @@ data class TransferItem(
     val uri: Uri? = null,
     val mime: String = "",
     val time: Long = System.currentTimeMillis(),
+    /** Why it failed, when there's something useful to say ("Not enough space on this phone"). */
+    val note: String? = null,
 ) {
-    enum class State { Active, Done, Failed }
+    /** `Paused`: the connection dropped; it continues where it stopped when the computer is back. */
+    enum class State { Active, Paused, Done, Failed }
     val isFolder: Boolean get() = mime == FOLDER_MIME
     val progress: Float get() = if (size > 0) (bytes.toFloat() / size).coerceIn(0f, 1f) else if (state == State.Done) 1f else 0f
 }
@@ -57,7 +60,10 @@ object Transfers {
     fun update(id: String, f: (TransferItem) -> TransferItem) {
         _items.value = _items.value.map { if (it.id == id) f(it) else it }
     }
-    fun clearFinished() { _items.value = _items.value.filter { it.state == TransferItem.State.Active } }
+    fun clearFinished() {
+        _items.value = _items.value.filter { it.state == TransferItem.State.Active || it.state == TransferItem.State.Paused }
+    }
+    fun clearAll() { _items.value = emptyList() }
 }
 
 /**
@@ -70,6 +76,53 @@ class FileTransfers(private val ctx: Context) {
         val clipFile: File? = null, var written: Long = 0,
         val folderZip: File? = null,
     )
+
+    /** What's needed to send a file again after the connection dropped (same id: the computer continues it). */
+    private class Outgoing(
+        val uri: Uri, val name: String, val size: Long, val mime: String, val folder: Boolean, val label: String,
+        /** A temporary zip of a folder: deleted once it's through. */
+        val zip: File?,
+    )
+
+    companion object {
+        /** Receives cut off by a dropped connection: the part already here (PROTOCOL.md, files2). */
+        private val pausedIn = HashMap<String, Incoming>()
+        /** Sends cut off by a dropped connection, sent again when the computer is back. */
+        private val pausedOut = HashMap<String, Outgoing>()
+        /** Room kept free beyond the file itself, so a transfer never fills the phone. */
+        private const val SPACE_MARGIN = 200L * 1024 * 1024
+
+        /** Unpaired, or a different computer: drop unfinished transfers and their parts. */
+        fun forgetPaused(ctx: Context) {
+            synchronized(pausedIn) {
+                pausedIn.values.forEach { f ->
+                    f.folderZip?.delete()
+                    f.uri?.let { runCatching { ctx.contentResolver.delete(it, null, null) } }
+                }
+                pausedIn.clear()
+            }
+            synchronized(pausedOut) {
+                pausedOut.values.forEach { it.zip?.delete() }
+                pausedOut.clear()
+            }
+        }
+    }
+
+    /** Answers to our own `file_start` with `ready`: the offset to continue from, or the refusal. */
+    private val replies = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<JSONObject>>()
+
+    /** `file_ready` / `file_refuse` from the computer (on the Link read thread). */
+    fun onReply(msg: JSONObject) {
+        replies.remove(msg.optString("id"))?.complete(msg)
+    }
+
+    private fun canContinue() = Link.FILES2 in Link.computerCaps
+
+    private fun freeSpace(): Long = runCatching {
+        android.os.StatFs(Environment.getExternalStorageDirectory().path).availableBytes
+    }.getOrDefault(Long.MAX_VALUE)
+
+    private fun humanSize(n: Long): String = android.text.format.Formatter.formatShortFileSize(ctx, n)
 
     private val incoming = HashMap<String, Incoming>()   // touched only on the Link read thread
     private val sendLock = Mutex()
@@ -99,7 +152,35 @@ class FileTransfers(private val ctx: Context) {
     private fun start(id: String, msg: JSONObject) {
         val name = msg.optString("name", "file").substringAfterLast('/').ifBlank { "file" }
         val size = msg.optLong("size")
-        if (msg.optBoolean("clip")) {
+        val ask = msg.optBoolean("ready")
+        val clip = msg.optBoolean("clip")
+        // The same transfer again after the connection dropped: carry on from what's already here.
+        val part = if (clip) null else synchronized(pausedIn) { pausedIn.remove(id) }
+        if (part != null && part.size == size) {
+            val out = runCatching {
+                part.folderZip?.let { java.io.FileOutputStream(it, true).buffered(256 * 1024) }
+                    ?: part.uri?.let { ctx.contentResolver.openOutputStream(it, "wa")?.buffered(256 * 1024) }
+            }.getOrNull()
+            if (out != null) {
+                incoming[id] = Incoming(part.uri, out, part.name, size, written = part.written, folderZip = part.folderZip)
+                if (ask) Link.post(JSONObject().put("t", "file_ready").put("id", id).put("offset", part.written))
+                Transfers.update(id) { it.copy(state = TransferItem.State.Active, bytes = part.written) }
+                return
+            }
+        }
+        // Not enough room: say so instead of filling the phone.
+        if (!clip && size > 0) {
+            val free = freeSpace()
+            if (size + SPACE_MARGIN > free) {
+                if (ask) Link.post(JSONObject().put("t", "file_refuse").put("id", id).put("reason", "space").put("free", free))
+                Transfers.add(TransferItem(id, name, size, outgoing = false, state = TransferItem.State.Failed,
+                    note = "Not enough space on this phone (${humanSize(free)} free)"))
+                app.macndroid.core.Haptics.play(app.macndroid.core.Haptics.Kind.Failure)
+                return
+            }
+        }
+        if (ask) Link.post(JSONObject().put("t", "file_ready").put("id", id).put("offset", 0))
+        if (clip) {
             // Clipboard image from the Mac: keep it private in cache, not in Downloads.
             val file = java.io.File(ClipboardSync.clipDir(ctx), "mac-${System.currentTimeMillis()}.png")
             incoming[id] = Incoming(null, file.outputStream().buffered(256 * 1024), name, size, clipFile = file)
@@ -229,14 +310,35 @@ class FileTransfers(private val ctx: Context) {
     @Volatile private var sendsActive = 0
 
     fun abortIncoming() {
+        // A computer that can continue transfers: keep what arrived so far; sends pause by themselves (one waiting
+        // for the computer's answer is told the connection dropped).
+        val resumable = canContinue()
+        replies.keys.toList().forEach { id -> replies.remove(id)?.complete(JSONObject().put("t", "dropped")) }
         incoming.forEach { (id, f) ->
             runCatching { f.out.close() }
+            if (resumable && f.clipFile == null && f.size > 0) {
+                synchronized(pausedIn) { pausedIn[id] = f }
+                Transfers.update(id) { it.copy(state = TransferItem.State.Paused, bytes = f.written) }
+                return@forEach
+            }
             f.clipFile?.delete()
             f.folderZip?.delete()
             f.uri?.let { runCatching { ctx.contentResolver.delete(it, null, null) } }
             Transfers.update(id) { it.copy(state = TransferItem.State.Failed) }
         }
         incoming.clear()
+    }
+
+    /** The computer is back: send what was cut off, with the same ids, so it continues where it stopped. */
+    fun resume() {
+        val list = synchronized(pausedOut) { pausedOut.toMap().also { pausedOut.clear() } }
+        for ((id, o) in list) {
+            Transfers.update(id) { it.copy(state = TransferItem.State.Active) }
+            synchronized(sendBatch) { sendsActive++ }
+            Link.scope.launch {
+                sendLock.withLock { stream(o.uri, id, o.name, o.size, o.mime, clip = false, folder = o.folder, label = o.label, zip = o.zip) }
+            }
+        }
     }
 
     private fun notifyReceived(batch: List<Incoming>) {
@@ -320,9 +422,10 @@ class FileTransfers(private val ctx: Context) {
                 }
                 val size = zip.length()
                 Transfers.update(id) { it.copy(size = size) }
-                sendLock.withLock { stream(Uri.fromFile(zip), id, "$name.zip", size, "application/zip", clip = false, folder = true, label = name) }
-            } finally {
+                sendLock.withLock { stream(Uri.fromFile(zip), id, "$name.zip", size, "application/zip", clip = false, folder = true, label = name, zip = zip) }
+            } catch (e: Exception) {
                 zip.delete()
+                throw e
             }
         }
     }
@@ -359,25 +462,49 @@ class FileTransfers(private val ctx: Context) {
         }
     }.getOrNull()
 
+    /**
+     * `zip`: a temporary folder zip, deleted once it's through (kept while paused). With a computer that can continue
+     * transfers (files2) it first asks whether there's room and where to continue, and a send cut off by a dropped
+     * connection pauses and finishes when the computer is back.
+     */
     private suspend fun stream(
         uri: Uri, id: String, name: String, size: Long, mime: String, clip: Boolean,
         folder: Boolean = false, label: String = name, gallery: String? = null, galleryView: Boolean = false,
+        zip: File? = null,
     ) {
         val start = JSONObject().put("t", "file_start").put("id", id).put("name", name).put("size", size).put("mime", mime)
         if (clip) start.put("clip", true)
         if (folder) start.put("folder", true)
         if (gallery != null) start.put("gallery", gallery).put("view", galleryView)
+        val ask = !clip && gallery == null && canContinue()
+        val answer = if (ask) kotlinx.coroutines.CompletableDeferred<JSONObject>().also { replies[id] = it } else null
+        if (ask) start.put("ready", true)
         var ok = Link.send(start)
+        var dropped = !ok
+        var refusedFree: Long? = null
         var sent = 0L
+        if (ok && answer != null) {
+            val a = kotlinx.coroutines.withTimeoutOrNull(20_000) { answer.await() }
+            replies.remove(id)
+            when (a?.optString("t")) {
+                "file_ready" -> sent = a.optLong("offset").coerceIn(0, size)
+                "file_refuse" -> { ok = false; refusedFree = a.optLong("free") }
+                "dropped" -> { ok = false; dropped = true }
+                else -> ok = false
+            }
+        }
         if (ok) {
             try {
                 ctx.contentResolver.openInputStream(uri)?.use { input ->
+                    var skip = sent
+                    while (skip > 0) { val n = input.skip(skip); if (n <= 0) break; skip -= n }
                     val buf = ByteArray(256 * 1024)
                     while (ok) {
                         val n = readFully(input, buf)
                         if (n <= 0) break
                         ok = Link.send(JSONObject().put("t", "file_chunk").put("id", id)
                             .put("data", Base64.encodeToString(buf, 0, n, Base64.NO_WRAP)))
+                        if (!ok) { dropped = true; break }
                         val before = sent
                         sent += n
                         if (sent / (1 shl 20) != before / (1 shl 20)) Transfers.update(id) { it.copy(bytes = sent) }
@@ -387,10 +514,19 @@ class FileTransfers(private val ctx: Context) {
                 ok = false
             }
         }
-        if (ok) ok = Link.send(JSONObject().put("t", "file_end").put("id", id))
-        Transfers.update(id) {
-            it.copy(bytes = sent, state = if (ok) TransferItem.State.Done else TransferItem.State.Failed)
+        if (ok) { ok = Link.send(JSONObject().put("t", "file_end").put("id", id)); dropped = !ok }
+        val paused = !ok && dropped && ask
+        if (paused) {
+            synchronized(pausedOut) { pausedOut[id] = Outgoing(uri, name, size, mime, folder, label, zip) }
+        } else {
+            zip?.delete()
         }
+        val mac = app.macndroid.core.Prefs.pairing.value?.macName ?: Computer.word
+        Transfers.update(id) {
+            it.copy(bytes = sent, state = when { ok -> TransferItem.State.Done; paused -> TransferItem.State.Paused; else -> TransferItem.State.Failed },
+                note = refusedFree?.let { f -> "Not enough space on $mac (${humanSize(f)} free)" })
+        }
+        if (paused) { synchronized(sendBatch) { sendsActive-- }; return }
         if (galleryView) return
         if (clip) {
             app.macndroid.core.Haptics.play(if (ok) app.macndroid.core.Haptics.Kind.Tick else app.macndroid.core.Haptics.Kind.Failure)

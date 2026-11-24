@@ -22,7 +22,8 @@ DEFAULT_PORT = 47800
 
 # Features this computer announces in `welcome` (PROTOCOL.md, v0.14.5 additions).
 FILES2 = "files2"  # resumable transfers and the free-space check
-CAPS = (FILES2,)
+PLAY_ON = "play_on"  # understands play_on_phone / play_on_computer from the phone's own buttons
+CAPS = (FILES2, PLAY_ON)
 
 class Session:
     def __init__(self, sock: socket.socket, server: "Server"):

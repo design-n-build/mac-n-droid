@@ -20,7 +20,9 @@ enum Caps {
     /// Answers a `file_start` that has `ready: true` with `file_ready` (`offset`: continue from there) or
     /// `file_refuse` (`reason: "space"`), and keeps an interrupted transfer to continue it after reconnecting.
     static let files2 = "files2"
-    static let mine = [files2]
+    /// Understands `play_on_phone` / `play_on_computer` from the phone's own buttons.
+    static let playOn = "play_on"
+    static let mine = [files2, playOn]
 }
 
 struct NotifAction: Hashable, Identifiable {

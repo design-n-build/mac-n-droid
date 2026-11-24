@@ -79,7 +79,10 @@ class OpenOnMacActivity : Activity() {
         when {
             link == null -> toast(this, "There's no web link to open")
             !Link.isConnected -> toast(this, "Not connected to ${Computer.your}")
-            app.macndroid.service.Handoff.sendToMac(link) -> {
+            // What's playing in the app that shared it continues on the computer, and stops here.
+            app.macndroid.service.Handoff.sendToMac(
+                app.macndroid.service.SyncService.instance?.media?.handOff(link, referrer?.takeIf { it.scheme == "android-app" }?.host)
+                    ?: link) -> {
                 ShareShortcuts.reportUsed(this, ShareShortcuts.OPEN_ID)
                 toast(this, "Opening on ${macName()}")
             }

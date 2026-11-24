@@ -157,6 +157,34 @@ class MediaSync(private val ctx: Context) {
         Link.post(msg)
     }
 
+    /**
+     * "Open on computer" for a link shared from an app that's playing: the computer continues from the same spot
+     * (YouTube's `t=`), and it's paused here, so it doesn't play on both. `from` is the app that shared it (the
+     * share's referrer), when Android says. Returns the link to send. Main thread.
+     */
+    fun handOff(url: String, from: String?): String {
+        val host = runCatching { android.net.Uri.parse(url).host?.lowercase() }.getOrNull() ?: return url
+        val playing = players.values.filter { isPlaying(it.controller.playbackState) }
+        val forHost = when {
+            host == "music.youtube.com" -> setOf("com.google.android.apps.youtube.music")
+            host.endsWith("youtube.com") || host == "youtu.be" -> setOf("com.google.android.youtube", "com.google.android.apps.youtube.music")
+            host.endsWith("spotify.com") || host == "spotify.link" -> setOf("com.spotify.music")
+            else -> emptySet()
+        }
+        val p = playing.firstOrNull { it.controller.packageName == from } ?: playing.firstOrNull { it.controller.packageName in forHost }
+            ?: return url
+        val st = p.controller.playbackState
+        val pos = if (st == null) 0L else st.position + ((SystemClock.elapsedRealtime() - st.lastPositionUpdateTime) * st.playbackSpeed).toLong()
+        p.controller.transportControls.pause()
+        if (!(host.endsWith("youtube.com") || host == "youtu.be") || pos < 5_000) return url
+        return runCatching {
+            val u = android.net.Uri.parse(url)
+            val b = u.buildUpon().clearQuery()
+            u.queryParameterNames.filter { it != "t" }.forEach { k -> u.getQueryParameters(k).forEach { b.appendQueryParameter(k, it) } }
+            b.appendQueryParameter("t", "${pos / 1000}s").build().toString()
+        }.getOrDefault(url)
+    }
+
     /** `id` picks the player (package name); without it, the most recently playing one. */
     fun command(cmd: String, position: Long, id: String?) = handler.post {
         val p = players.values.firstOrNull { it.id == id }

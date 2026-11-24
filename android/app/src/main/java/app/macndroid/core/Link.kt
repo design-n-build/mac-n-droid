@@ -63,6 +63,27 @@ object Link {
 
     val isConnected get() = _status.value == Status.Connected
 
+    /** Features this app understands beyond the basics (PROTOCOL.md, v0.14.5 additions). */
+    const val FILES2 = "files2"
+    /** The computer does Play on phone / Play on computer when the phone asks. */
+    const val PLAY_ON = "play_on"
+    private val CAPS = listOf(FILES2)
+
+    /** What the connected computer announced in `welcome` (empty for computers before 0.14.5). */
+    @Volatile var computerCaps: Set<String> = emptySet()
+        private set
+
+    /**
+     * Unpaired on this phone: tell the computer (0.14.5+ forgets it too and shows its pairing code), then stop.
+     * Waits up to a second for the message to go out.
+     */
+    fun unpair() {
+        scope.launch {
+            if (isConnected) withTimeoutOrNull(1000) { send(JSONObject().put("t", "unpair")) }
+            stop()
+        }
+    }
+
     fun start(ctx: Context) {
         if (job?.isActive == true) { kick(); return }
         val app = ctx.applicationContext
@@ -188,6 +209,9 @@ object Link {
                 .put("name", deviceName(ctx))
                 .put("model", "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}")
                 .put("os", "Android ${Build.VERSION.RELEASE}")
+                // The app's build number and features: newer computers offer what this version supports.
+                .put("app", appVersion(ctx))
+                .put("caps", org.json.JSONArray(CAPS))
                 .toString().toByteArray()))
             var welcome = JSONObject(String(c.open(readFrame(input))))
             if (welcome.optString("t") == "approval") {
@@ -204,6 +228,8 @@ object Link {
             val newKey = welcome.optString("deviceKey").takeIf { it.isNotEmpty() }?.let { Base64.decode(it, Base64.DEFAULT) }
             if (newKey != null && newKey.size == 32) Prefs.saveDeviceKey(newKey)
             welcome.optString("name").takeIf { it.isNotBlank() }?.let { Prefs.updateMacName(it) }
+            computerCaps = welcome.optJSONArray("caps")?.let { a -> (0 until a.length()).map { a.optString(it) }.toSet() }
+                ?: emptySet()
             Prefs.updateEndpoint(sock.inetAddress.hostAddress ?: "", sock.port)
 
             cipher = c
@@ -268,6 +294,11 @@ object Link {
     fun deviceName(ctx: Context): String =
         Settings.Global.getString(ctx.contentResolver, Settings.Global.DEVICE_NAME)
             ?: "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}"
+
+    private fun appVersion(ctx: Context): Long = runCatching {
+        val info = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+        if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+    }.getOrDefault(0L)
 }
 
 /** Android 17+ can block the app from the local network. Then nothing connects, so say so (at most hourly). */
@@ -295,4 +326,5 @@ internal object LocalNetworkBlocked {
             .build()
         runCatching { ctx.getSystemService(android.app.NotificationManager::class.java).notify(NOTIF, n) }
     }
+
 }

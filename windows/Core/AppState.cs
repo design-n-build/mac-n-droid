@@ -1390,7 +1390,9 @@ public static class Caps
 {
     /// <summary>Resumable transfers and the free-space check.</summary>
     public const string Files2 = "files2";
-    public static readonly string[] Mine = [Files2];
+    /// <summary>Understands <c>play_on_phone</c> / <c>play_on_computer</c> from the phone's own buttons.</summary>
+    public const string PlayOn = "play_on";
+    public static readonly string[] Mine = [Files2, PlayOn];
 }
 
 static class Mime

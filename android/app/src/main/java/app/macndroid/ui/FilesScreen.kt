@@ -68,7 +68,7 @@ fun FilesScreen() {
                 LargeTopAppBar(
                     title = { Text("Files") },
                     actions = {
-                        if (items.any { it.state != TransferItem.State.Active }) {
+                        if (items.any { it.state == TransferItem.State.Done || it.state == TransferItem.State.Failed }) {
                             TextButton(onClick = { Transfers.clearFinished() }) { Text("Clear") }
                         }
                     },
@@ -173,7 +173,13 @@ private fun FileCard(t: TransferItem, mac: String) {
                         ).filterNotNull().joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    TransferItem.State.Failed -> Text("Transfer failed", style = MaterialTheme.typography.bodySmall,
+                    TransferItem.State.Paused -> {
+                        LinearProgressIndicator(progress = { t.progress }, Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            color = MaterialTheme.colorScheme.outline)
+                        Text("Paused · continues when $mac reconnects",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TransferItem.State.Failed -> Text(t.note ?: "Transfer failed", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error)
                 }
             }

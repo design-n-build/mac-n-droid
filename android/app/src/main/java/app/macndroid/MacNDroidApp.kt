@@ -5,6 +5,7 @@ import app.macndroid.core.Computer
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import kotlinx.coroutines.launch
 import android.media.AudioAttributes
 import android.net.Uri
 import app.macndroid.core.Prefs
@@ -15,6 +16,8 @@ class MacNDroidApp : Application() {
         Prefs.init(this)
         app.macndroid.core.Pause.init(this)
         app.macndroid.core.Haptics.init(this)
+        // The share sheet's "Send to …" / "Open on …" follow the paired computer (Mac, PC, or "computer").
+        app.macndroid.core.Link.scope.launch { Prefs.pairing.collect { app.macndroid.ui.ShareTargets.update(this@MacNDroidApp) } }
         val nm = getSystemService(NotificationManager::class.java)
         nm.deleteNotificationChannel("files")   // v0.1–0.4 channel used the system sound
         val soft = AudioAttributes.Builder()

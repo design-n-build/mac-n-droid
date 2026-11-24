@@ -80,14 +80,21 @@
             android:taskAffinity=""
             android:theme="@style/Theme.MacNDroid.Invisible" />
 
-        <!-- "Share → Mac n Droid" for text, links, photos and any file. -->
+        <!-- "Share → Send to Mac / PC / computer" for text, links, photos and any file. The share sheet shows the
+             alias named after the paired computer (ui/ShareTargets.kt switches them); "computer" until paired. -->
         <activity
             android:name=".ui.ShareActivity"
-            android:exported="true"
+            android:exported="false"
             android:excludeFromRecents="true"
-            android:label="@string/share_label"
+            android:label="@string/send_to_computer"
             android:taskAffinity=""
-            android:theme="@style/Theme.MacNDroid.Invisible">
+            android:theme="@style/Theme.MacNDroid.Invisible" />
+        <activity-alias
+            android:name=".ui.SendToComputer"
+            android:exported="true"
+            android:enabled="true"
+            android:label="@string/send_to_computer"
+            android:targetActivity=".ui.ShareActivity">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -98,22 +105,86 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".ui.SendToMac"
+            android:exported="true"
+            android:enabled="false"
+            android:label="@string/send_to_mac"
+            android:targetActivity=".ui.ShareActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".ui.SendToPc"
+            android:exported="true"
+            android:enabled="false"
+            android:label="@string/send_to_pc"
+            android:targetActivity=".ui.ShareActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity-alias>
 
-        <!-- "Share → Open on Mac": a link opens in the Mac's browser. -->
+        <!-- "Share → Open on Mac / PC / computer": a link opens in the computer's browser. -->
         <activity
             android:name=".ui.OpenOnMacActivity"
-            android:exported="true"
+            android:exported="false"
             android:excludeFromRecents="true"
-            android:label="@string/open_on_mac_label"
+            android:label="@string/open_on_computer"
             android:taskAffinity=""
-            android:theme="@style/Theme.MacNDroid.Invisible">
+            android:theme="@style/Theme.MacNDroid.Invisible" />
+        <activity-alias
+            android:name=".ui.OpenOnComputer"
+            android:exported="true"
+            android:enabled="true"
+            android:label="@string/open_on_computer"
+            android:targetActivity=".ui.OpenOnMacActivity">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+        <activity-alias
+            android:name=".ui.OpenOnMac"
+            android:exported="true"
+            android:enabled="false"
+            android:label="@string/open_on_mac"
+            android:targetActivity=".ui.OpenOnMacActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".ui.OpenOnPc"
+            android:exported="true"
+            android:enabled="false"
+            android:label="@string/open_on_pc"
+            android:targetActivity=".ui.OpenOnMacActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Quick Settings "Send files to Mac": the file picker, over whatever's on screen. -->
         <activity

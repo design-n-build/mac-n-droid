@@ -160,8 +160,12 @@ object MacMusic {
                 else action(android.R.drawable.ic_media_play, "Play", "play"))
             .addAction(action(android.R.drawable.ic_media_next, "Next", "next"))
             .apply {
-                // Expanded notification: the Mac's volume, down and up.
-                if (macVolume >= 0 && !volumeFixed) {
+                // Play on phone: the computer hands what's playing to this phone (same spot) and stops it there.
+                // The phone's volume keys still set the computer's volume, so the volume buttons make room for it.
+                if (Link.PLAY_ON in Link.computerCaps) {
+                    addAction(action(R.drawable.ic_phone_handoff, "Play on phone", "play_here"))
+                } else if (macVolume >= 0 && !volumeFixed) {
+                    // Expanded notification: the Mac's volume, down and up.
                     addAction(action(R.drawable.ic_volume_down, "Volume down", "vol_down"))
                     addAction(action(R.drawable.ic_volume_up, "Volume up", "vol_up"))
                 }
@@ -173,6 +177,7 @@ object MacMusic {
 
     fun command(cmd: String) {
         if (cmd == "vol_up" || cmd == "vol_down") { stepVolume(cmd == "vol_up"); return }
+        if (cmd == "play_here") { Link.post(JSONObject().put("t", "play_on_phone")); return }
         Link.post(JSONObject().put("t", "mac_media_cmd").put("cmd", cmd))
     }
 

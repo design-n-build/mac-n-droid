@@ -94,6 +94,7 @@ class SyncService : Service() {
             ClipboardSync.flushPending()
             app.macndroid.ui.ShareShortcuts.publish(this)
             media.resync()
+            if (Link.FILES2 in Link.computerCaps) files.resume()
             main.post { volume.report(force = true) }
             main.post { screenshots.refresh(); SmsBridge.start(this) }
         }
@@ -178,6 +179,7 @@ class SyncService : Service() {
             "ring" -> main.post { ringer.start() }
             "ring_stop" -> main.post { ringer.stop(notifyMac = false) }
             "file_start", "file_chunk", "file_end" -> files.handleIncoming(msg)
+            "file_ready", "file_refuse" -> files.onReply(msg)
             "mirror_start" -> main.post { ScreenMirror.request(this) }
             "mirror_stop" -> main.post { ScreenMirror.stop(notifyMac = false) }
             "mirror_key" -> ScreenMirror.requestKeyFrame()

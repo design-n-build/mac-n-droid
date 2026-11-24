@@ -219,6 +219,14 @@ class NotificationMirror : NotificationListenerService() {
             .put("paused", (metric?.pausedMs ?: -1L).toDouble())
             .put("progress", progress).put("max", if (indeterminate) 0 else max)
             .put("time", sbn.postTime.toDouble())
+            // The notification's own buttons (Pause, Resume, Stop, +1:00…): the computer runs them with notif_action.
+            .put("actions", org.json.JSONArray().apply {
+                n.actions?.forEachIndexed { i, a ->
+                    val label = a.title?.toString()?.takeIf { it.isNotBlank() } ?: return@forEachIndexed
+                    if (a.remoteInputs?.isNotEmpty() == true) return@forEachIndexed
+                    put(JSONObject().put("i", i).put("title", label).put("reply", false).put("opens", false))
+                }
+            })
     }
 
     private fun shouldMirror(sbn: StatusBarNotification): Boolean {

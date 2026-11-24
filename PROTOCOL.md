@@ -187,6 +187,7 @@ Backward compatible both ways: each side only uses these with a side that announ
 **Versions and features.** The phone's `device` adds `"app"` (its build number, Android versionCode; 0.14.5 =
 37) and `"caps"` (a list). The computer's `welcome` adds its own `"caps"`. Defined so far:
 - `files2`: resumable transfers and the free-space check (below).
+- `play_on` (computers): understands `play_on_phone` / `play_on_computer` (below).
 
 **Forgetting.**
 - Unpaired on the phone: the phone sends `{"t":"unpair"}` before it disconnects. The computer forgets it, as if

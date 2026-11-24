@@ -100,8 +100,12 @@ object Prefs {
             sp.edit().putString("phoneId", it).apply()
         }
 
+    /** The computer this phone was last paired with (kept after unpairing), to notice pairing with a different one. */
+    val lastMacId: String? get() = sp.getString("lastMacId", null)
+
     fun savePairing(p: Pairing) {
         sp.edit()
+            .putString("lastMacId", p.macId)
             .putString("macId", p.macId)
             .putString("key", Base64.encodeToString(p.key, Base64.NO_WRAP))
             .putString("hosts", p.hosts.joinToString(","))
@@ -193,8 +197,9 @@ object Prefs {
 /** What to call the paired computer in sentences: "Mac", or "PC" for Windows and Linux. */
 object Computer {
     val KNOWN = setOf("mac", "windows", "linux")
-    private val os get() = Prefs.pairing.value?.os ?: "mac"
+    /** Null until paired: then it's "your computer", since the app doesn't know yet which one. */
+    private val os get() = Prefs.pairing.value?.os
     val isMac get() = os == "mac"
-    val word get() = if (isMac) "Mac" else "PC"
+    val word get() = when (os) { null -> "computer"; "mac" -> "Mac"; else -> "PC" }
     val your get() = "your $word"
 }
