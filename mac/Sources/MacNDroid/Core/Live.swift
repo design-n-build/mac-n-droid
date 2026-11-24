@@ -17,6 +17,9 @@ struct LiveActivity: Identifiable, Equatable {
     let pausedSeconds: Double?
     let progress: Int
     let max: Int
+    /// The notification's own buttons (Pause, Resume, Stop, +1:00…), from phones 0.14.5+. Pressing one runs it
+    /// on the phone. Replies and buttons that open a screen aren't offered.
+    let actions: [NotifAction]
 
     init?(_ msg: Message) {
         guard let key = msg["key"] as? String else { return nil }
@@ -33,6 +36,23 @@ struct LiveActivity: Identifiable, Equatable {
         pausedSeconds = p >= 0 ? p / 1000 : nil
         progress = msg["progress"] as? Int ?? 0
         max = msg["max"] as? Int ?? 0
+        actions = (msg["actions"] as? [[String: Any]] ?? []).compactMap { a in
+            guard let i = a["i"] as? Int, let title = a["title"] as? String, !title.isEmpty,
+                  a["reply"] as? Bool != true, a["opens"] as? Bool != true else { return nil }
+            return NotifAction(id: i, title: title, isReply: false)
+        }
+    }
+
+    /// A symbol for a timer or stopwatch button, from its label (any language falls back to the label).
+    static func symbol(for title: String) -> String? {
+        let t = title.lowercased()
+        if t.contains("pause") { return "pause.fill" }
+        if t.contains("resume") || t.contains("start") || t.contains("play") || t.contains("continue") { return "play.fill" }
+        if t.contains("reset") || t.contains("restart") { return "arrow.counterclockwise" }
+        if t.contains("lap") { return "flag.fill" }
+        if t.contains("stop") || t.contains("cancel") || t.contains("dismiss") || t.contains("delete") { return "stop.fill" }
+        if t.hasPrefix("+") || t.contains("add") { return "plus" }
+        return nil
     }
 
     /// Higher shows first in the menu bar.

@@ -246,6 +246,43 @@ struct SidebarLive: View {
     }
 
     private func activity(_ a: LiveActivity, now: Date) -> some View {
+        VStack(spacing: 6) {
+            activityRow(a, now: now)
+            activityButtons(a)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    /// Timer and stopwatch buttons from the phone (Pause, Resume, Stop…). Phones before 0.14.5 don't send them.
+    @ViewBuilder private func activityButtons(_ a: LiveActivity) -> some View {
+        let timer = a.kind == .timer || a.kind == .stopwatch
+        if timer, !a.actions.isEmpty {
+            HStack(spacing: 6) {
+                ForEach(a.actions.prefix(3)) { act in
+                    Button { state.performAction(key: a.id, index: act.id, text: nil) } label: {
+                        if let sym = LiveActivity.symbol(for: act.title) {
+                            Image(systemName: sym).frame(maxWidth: .infinity)
+                        } else {
+                            Text(act.title).lineLimit(1).frame(maxWidth: .infinity)
+                        }
+                    }
+                    .help(act.title)
+                    .accessibilityLabel(act.title)
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        } else if timer, state.phone?.hasV0145 == false {
+            Text("Timer controls: coming soon")
+                .font(.caption2).foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help("Pause and stop phone timers from here after the next Mac n Droid update on your phone.")
+        }
+    }
+
+    private func activityRow(_ a: LiveActivity, now: Date) -> some View {
         HStack(spacing: 8) {
             Group {
                 if let icon = state.icons[a.pkg] {
@@ -265,9 +302,6 @@ struct SidebarLive: View {
                 .opacity(a.isPaused ? 0.55 : 1)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
