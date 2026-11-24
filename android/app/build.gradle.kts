@@ -41,6 +41,14 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
+        // "Mac n Droid Testing": the release build under its own id, installed next to the Play Store app to try
+        // a version before it's released (./gradlew assemblePreview). Its name comes from src/preview/res.
+        create("preview") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".testing"
+            versionNameSuffix = "-testing"
+            matchingFallbacks += "release"
+        }
     }
 
     compileOptions {

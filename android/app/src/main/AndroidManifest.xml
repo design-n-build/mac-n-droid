@@ -293,7 +293,7 @@
         <!-- Shares images copied on the Mac with whichever app you paste into. -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="app.macndroid.files"
+            android:authorities="${applicationId}.files"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

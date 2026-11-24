@@ -46,7 +46,7 @@ object ClipboardSync {
         val mime = uri?.let { ctx.contentResolver.getType(it) } ?: clip.description.takeIf { it.mimeTypeCount > 0 }?.getMimeType(0)
         if (uri != null && mime?.startsWith("image/") == true) {
             val signature = "img:$uri"
-            if (auto && (uri.authority == AUTHORITY || isRepeat(signature))) return Result.Duplicate
+            if (auto && (uri.authority == authority(ctx) || isRepeat(signature))) return Result.Duplicate
             markSent(signature)
             // Looked up when it's sent: the service may only be starting now.
             val sendIt = { SyncService.instance?.files?.send(listOf(uri), clip = true); Unit }
@@ -114,7 +114,7 @@ object ClipboardSync {
 
     /** An image copied on the Mac becomes a content:// clip any app can paste. */
     fun receiveImage(ctx: Context, file: File) {
-        val uri = FileProvider.getUriForFile(ctx, AUTHORITY, file)
+        val uri = FileProvider.getUriForFile(ctx, authority(ctx), file)
         lastSent = "img:$uri"
         lastSentAt = System.currentTimeMillis()
         lastFromMac = null
@@ -131,6 +131,7 @@ object ClipboardSync {
     /** Whether automatic copying is on (it's part of Clipboard and controls). */
     fun isAutoEnabled(ctx: Context): Boolean = Controls.isEnabled(ctx)
 
-    const val AUTHORITY = "app.macndroid.files"
+    /** The app's file provider (AndroidManifest: ${applicationId}.files), so the testing build has its own. */
+    fun authority(ctx: Context) = ctx.packageName + ".files"
     private val main = Handler(Looper.getMainLooper())
 }
