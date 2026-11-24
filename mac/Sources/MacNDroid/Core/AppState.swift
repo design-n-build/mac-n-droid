@@ -544,6 +544,11 @@ final class AppState: ObservableObject {
         case "unpair":
             // Unpaired on the phone: forget it here too, and show the pairing code.
             forgetPhone(tellPhone: false)
+        case "play_on_phone":
+            playOnPhone()
+        case "play_on_computer":
+            let id = msg["id"] as? String
+            if let np = players.first(where: { $0.id == id }) ?? nowPlaying { playOnMac(np) }
         case "paused":
             sharingPaused = msg["on"] as? Bool ?? false
             let until = (msg["until"] as? NSNumber)?.doubleValue ?? 0

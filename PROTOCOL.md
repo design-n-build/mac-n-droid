@@ -204,7 +204,9 @@ Backward compatible both ways: each side only uses these with a side that announ
 - Play on <computer>: the computer opens that page (or a search for the title and artist in the same service)
   and sends `media_cmd` `pause` for it.
 - Play on phone: the computer sends `open_url` with the page (YouTube gets `t=<seconds>s`, Spotify the track)
-  and pauses it locally. `mac_media` (computer → phone) may carry `"url"` so the phone can offer the same button.
+  and pauses it locally.
+- From the phone's own buttons: `{"t":"play_on_phone"}` asks the computer to do Play on phone for what it's
+  playing; `{"t":"play_on_computer","id":"<player id>"}` asks it to do Play on <computer> for that phone player.
 - `open_url` for the page that's playing on the sender continues at the same spot and pauses the sender.
 
 **Timer buttons.** `live` (phone → computer) adds `"actions"`, the same list as `notif`. The computer runs one
