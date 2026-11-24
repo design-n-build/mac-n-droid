@@ -180,3 +180,45 @@ The session key is then
   closes, and the invite key is replaced either way.
 - A phone that doesn't send `use` (older app) pairs as before when nothing else is paired; when another phone is
   paired, it's turned away (it can't show the approval).
+
+## v0.14.5 additions: forgetting, a clean start, Play on, timer buttons, resumable transfers
+Backward compatible both ways: each side only uses these with a side that announced them.
+
+**Versions and features.** The phone's `device` adds `"app"` (its build number, Android versionCode; 0.14.5 =
+37) and `"caps"` (a list). The computer's `welcome` adds its own `"caps"`. Defined so far:
+- `files2`: resumable transfers and the free-space check (below).
+
+**Forgetting.**
+- Unpaired on the phone: the phone sends `{"t":"unpair"}` before it disconnects. The computer forgets it, as if
+  Forget Phone was chosen there, but doesn't send anything back.
+- Forget Phone on the computer: a phone with `app` ≥ 37 gets `{"t":"unpaired","reason":"forgotten"}` (no `by`),
+  shows "Not paired with <computer> anymore", and clears its pairing. Older phones aren't told; their key
+  simply stops working.
+- When a different phone pairs (allowed in place of the old one, or after it was forgotten), the computer drops
+  everything it kept from the old one: clipboard history, files, notifications and the app list with its on/off
+  choices and logos, texts, photos and unfinished transfers. A phone that pairs with a different computer does
+  the same with its clipboard history and file lists.
+
+**Play on.**
+- `media` (phone → computer) may carry `"url"`: the exact page for what's playing, when the app shares it.
+- Play on <computer>: the computer opens that page (or a search for the title and artist in the same service)
+  and sends `media_cmd` `pause` for it.
+- Play on phone: the computer sends `open_url` with the page (YouTube gets `t=<seconds>s`, Spotify the track)
+  and pauses it locally. `mac_media` (computer → phone) may carry `"url"` so the phone can offer the same button.
+- `open_url` for the page that's playing on the sender continues at the same spot and pauses the sender.
+
+**Timer buttons.** `live` (phone → computer) adds `"actions"`, the same list as `notif`. The computer runs one
+with `notif_action` (`key` = the live key, `i`).
+
+**Resumable transfers and free space (`files2`).**
+- A sender that knows the receiver has `files2` adds `"ready": true` to `file_start` (not for `clip` or Photos
+  transfers) and waits, up to 20 s, before sending chunks, for one of:
+  - `{"t":"file_ready","id":"…","offset":n}`: send from byte `n` (0 for a new file; more when continuing).
+  - `{"t":"file_refuse","id":"…","reason":"space","free":bytes}`: not enough room; the sender shows
+    "Not enough space on <device> (<free> free)".
+- Receivers check room for every file, asked or not: the file's size plus 200 MB must fit, or it's refused (and
+  chunks for that id are ignored).
+- If the connection drops mid-transfer between two `files2` devices, the receiver keeps the part it has and the
+  sender keeps the file; both show the transfer as paused. When they reconnect, the sender sends `file_start`
+  again with the same `id` and `"ready": true`, and the receiver answers with the offset it already has.
+  Forgetting the phone, or a different phone pairing, discards both.

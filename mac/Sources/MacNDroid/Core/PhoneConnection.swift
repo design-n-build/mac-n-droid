@@ -73,7 +73,7 @@ final class PhoneConnection {
             guard !self.closed, self.keyed, !self.authenticated else { return }
             self.authenticated = true
             self.handshakeTimer?.cancel()
-            var welcome: Message = ["t": "welcome", "name": Net.computerName]
+            var welcome: Message = ["t": "welcome", "name": Net.computerName, "caps": Caps.mine]
             if let deviceKey { welcome["deviceKey"] = deviceKey.base64EncodedString() }
             self.sendSealed(welcome)
             self.onAuthenticated?(device)

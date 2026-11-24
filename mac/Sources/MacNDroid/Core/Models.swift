@@ -8,8 +8,19 @@ struct PhoneInfo: Equatable {
     /// The phone app's build number (Android versionCode); 0 for apps older than 0.14.5, which don't send it.
     var app: Int = 0
 
+    /// What it understands beyond the basics (`caps` in its device message), see `Caps`.
+    var caps: Set<String> = []
+
     /// 0.14.5 and later (versionCode 37+): forget/unpair messages, timer controls, Play on, free-space checks.
     var hasV0145: Bool { app >= 37 }
+}
+
+/// Features a device announces in `device` / `welcome`, so newer ones use them only with each other.
+enum Caps {
+    /// Answers a `file_start` that has `ready: true` with `file_ready` (`offset`: continue from there) or
+    /// `file_refuse` (`reason: "space"`), and keeps an interrupted transfer to continue it after reconnecting.
+    static let files2 = "files2"
+    static let mine = [files2]
 }
 
 struct NotifAction: Hashable, Identifiable {
@@ -91,7 +102,8 @@ struct KnownApp: Codable, Identifiable, Equatable {
 
 struct Transfer: Identifiable, Equatable {
     enum Direction { case toPhone, fromPhone }
-    enum State: Equatable { case active, done, failed }
+    /// `paused`: the connection dropped; it continues where it stopped when the phone reconnects.
+    enum State: Equatable { case active, paused, done, failed }
     let id: String
     var name: String
     var size: Int64
@@ -101,6 +113,8 @@ struct Transfer: Identifiable, Equatable {
     var localURL: URL?
     var peer: String = "phone"
     var date = Date()
+    /// Why it failed, when there's something useful to say ("Not enough space on Pixel 8").
+    var note: String?
 
     var progress: Double { size > 0 ? min(1, Double(bytes) / Double(size)) : (state == .done ? 1 : 0) }
 }

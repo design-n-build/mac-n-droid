@@ -101,6 +101,24 @@ final class AppState: ObservableObject {
     /// `folder`: the name of a folder that arrives zipped and is unpacked when complete.
     private var incoming: [String: (handle: FileHandle, url: URL, isClip: Bool, folder: String?)] = [:]
     private let fileQueue = DispatchQueue(label: "app.macndroid.files")
+    /// The size announced for each file being received (on `fileQueue`).
+    private var incomingSize: [String: Int64] = [:]
+    /// Sends cut off by a dropped connection, by id: sent again with the same id when the phone is back, and
+    /// the phone continues where it stopped (on `fileQueue`).
+    private var pausedOut: [String: Outgoing] = [:]
+    /// Receives cut off by a dropped connection: the part already here, kept to continue it (on `fileQueue`).
+    private var pausedIn: [String: (url: URL, size: Int64, folder: String?)] = [:]
+    private let fileReplies = FileReplies()
+
+    private struct Outgoing {
+        let url: URL
+        let size: Int64
+        let sendName: String?
+        let folder: Bool
+        let label: String?
+        /// A temporary zip of a folder: removed once it's through.
+        let temp: Bool
+    }
     private var pingTimer: Timer?
     private var started = false
 
@@ -231,7 +249,7 @@ final class AppState: ObservableObject {
     private func forgetPhoneData() {
         clipStore.clear()
         clipHistory = []
-        transfers.removeAll { $0.state != .active }
+        transfers.removeAll { $0.state == .done || $0.state == .failed }
         notifications.removeAll()
         notifier.removeAllPhoneNotifications()
         NotchController.shared.hide()
@@ -247,6 +265,12 @@ final class AppState: ObservableObject {
         contactResults = []
         openSmsThread = nil
         gallery.forgetPhone()
+        fileQueue.async {
+            for p in self.pausedIn.values { try? FileManager.default.removeItem(at: p.url) }
+            for o in self.pausedOut.values where o.temp { try? FileManager.default.removeItem(at: o.url) }
+            self.pausedIn.removeAll()
+            self.pausedOut.removeAll()
+        }
     }
 
     // MARK: Connection
@@ -269,6 +293,11 @@ final class AppState: ObservableObject {
         pc.onMessage = { [weak self] msg in
             if let t = msg["t"] as? String, t == "mirror_cfg" || t == "mirror_frame" {
                 self?.mirrorQueue.async { self?.handleMirrorMessage(t, msg) }
+                return
+            }
+            if let t = msg["t"] as? String, t == "file_ready" || t == "file_refuse" {
+                // Answers to our own file_start: the file queue is busy sending and waits for them.
+                self?.fileReplies.deliver(msg)
                 return
             }
             if let t = msg["t"] as? String, t.hasPrefix("file_") {
@@ -440,7 +469,8 @@ final class AppState: ObservableObject {
             name: msg["name"] as? String ?? "Android phone",
             model: msg["model"] as? String ?? "",
             os: msg["os"] as? String ?? "",
-            app: msg["app"] as? Int ?? 0)
+            app: msg["app"] as? Int ?? 0,
+            caps: Set(msg["caps"] as? [String] ?? []))
         phone = info
         if lastPhoneName == nil { justPaired = true }
         lastPhoneName = info.name
@@ -454,6 +484,7 @@ final class AppState: ObservableObject {
         if smsState != .unknown { refreshSms() }
         gallery.send = { [weak self] in self?.active?.send($0) }
         gallery.phoneConnected()
+        if info.caps.contains(Caps.files2) { resumeTransfers() }
     }
 
     private func phoneDisconnected() {
@@ -477,16 +508,27 @@ final class AppState: ObservableObject {
         if mirror != .idle { mirror = .stopped }
         mirrorQueue.async { self.mirrorRenderer.reset() }
         LiveBarController.shared.update()
+        // A phone that can continue transfers: keep what arrived so far, and send the rest when it's back.
+        let resumable = phone?.caps.contains(Caps.files2) == true
         fileQueue.async {
             let partial = self.incoming
             self.incoming.removeAll()
-            self.galleryIncoming.removeAll()
-            for (_, file) in partial {
+            var kept = Set<String>()
+            for (id, file) in partial {
                 try? file.handle.close()
-                try? FileManager.default.removeItem(at: file.url)
+                if resumable, !file.isClip, self.galleryIncoming[id] == nil, let size = self.incomingSize[id], size > 0 {
+                    self.pausedIn[id] = (file.url, size, file.folder)
+                    kept.insert(id)
+                } else {
+                    try? FileManager.default.removeItem(at: file.url)
+                }
             }
+            self.galleryIncoming.removeAll()
+            self.incomingSize.removeAll()
             DispatchQueue.main.async {
-                for id in partial.keys { self.updateTransfer(id) { $0.state = .failed } }
+                for id in partial.keys { self.updateTransfer(id) { $0.state = kept.contains(id) ? .paused : .failed } }
+                // Sends end by themselves (paused or failed) as their next piece can't go out.
+                guard !resumable else { return }
                 for t in self.transfers where t.state == .active && t.direction == .toPhone {
                     self.updateTransfer(t.id) { $0.state = .failed }
                 }
@@ -1166,9 +1208,31 @@ final class AppState: ObservableObject {
             let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
             transfers.insert(Transfer(id: id, name: url.lastPathComponent, size: size, direction: .toPhone,
                                       localURL: url, peer: peer), at: 0)
-            fileQueue.async { self.stream(url, id: id, size: size, over: conn) }
+            let ask = phone?.caps.contains(Caps.files2) == true
+            fileQueue.async { self.stream(url, id: id, size: size, over: conn, ask: ask) }
         }
     }
+
+    /// The phone is back: send what was cut off, with the same ids, so it continues where it stopped.
+    private func resumeTransfers() {
+        guard let conn = active else { return }
+        fileQueue.async {
+            let list = self.pausedOut
+            self.pausedOut.removeAll()
+            for (id, o) in list {
+                DispatchQueue.main.async { self.updateTransfer(id) { $0.state = .active } }
+                self.stream(o.url, id: id, size: o.size, over: conn, sendName: o.sendName, folder: o.folder,
+                            label: o.label, temp: o.temp, ask: true)
+            }
+        }
+    }
+
+    /// Free space where received files go, or nil if it can't be read.
+    private static func freeSpace(at dir: URL) -> Int64? {
+        (try? dir.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?.volumeAvailableCapacityForImportantUsage
+    }
+    /// Room kept free beyond the file itself, so a transfer never fills the disk.
+    private static let spaceMargin: Int64 = 200 * 1024 * 1024
 
     /// A folder travels as one zip (`folder: true`); the phone unpacks it into a folder again.
     /// An older phone app just saves the zip.
@@ -1185,10 +1249,13 @@ final class AppState: ObservableObject {
                 return
             }
             let size = (try? zip.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
-            DispatchQueue.main.async { self.updateTransfer(id) { $0.size = size } }
-            self.fileQueue.async {
-                self.stream(zip, id: id, size: size, over: conn, sendName: name + ".zip", folder: true, label: name)
-                try? FileManager.default.removeItem(at: zip)
+            DispatchQueue.main.async {
+                self.updateTransfer(id) { $0.size = size }
+                let ask = self.phone?.caps.contains(Caps.files2) == true
+                self.fileQueue.async {
+                    self.stream(zip, id: id, size: size, over: conn, sendName: name + ".zip", folder: true, label: name,
+                                temp: true, ask: ask)
+                }
             }
         }
     }
@@ -1229,9 +1296,13 @@ final class AppState: ObservableObject {
     }
 
     /// Streams a file in 256 KiB chunks, waiting for each to be sent (simple flow control).
+    /// `ask`: the phone understands `ready` (Caps.files2): it says whether it has room and where to continue,
+    /// and a send cut off by a dropped connection is kept to finish when it's back. Runs on `fileQueue`.
     private func stream(_ url: URL, id: String, size: Int64, over conn: PhoneConnection, clip: Bool = false,
-                        sendName: String? = nil, folder: Bool = false, label: String? = nil) {
+                        sendName: String? = nil, folder: Bool = false, label: String? = nil, temp: Bool = false,
+                        ask: Bool = false) {
         guard let handle = try? FileHandle(forReadingFrom: url) else {
+            if temp { try? FileManager.default.removeItem(at: url) }
             DispatchQueue.main.async { self.updateTransfer(id) { $0.state = .failed } }
             return
         }
@@ -1239,16 +1310,34 @@ final class AppState: ObservableObject {
         let mime = folder ? "application/zip" : url.mimeType
         let sema = DispatchSemaphore(value: 0)
         var ok = true
+        var dropped = false
+        var refusedFree: Int64?
         var start: Message = ["t": "file_start", "id": id, "name": sendName ?? url.lastPathComponent, "size": size, "mime": mime]
         if clip { start["clip"] = true }
         if folder { start["folder"] = true }
+        let answer = ask && !clip ? fileReplies.expect(id) : nil
+        if answer != nil { start["ready"] = true }
         conn.send(start) { ok = $0; sema.signal() }
         sema.wait()
+        if !ok { dropped = true }
         var sent: Int64 = 0
+        if ok, let answer {
+            if answer.wait(timeout: .now() + 20) == .timedOut { ok = false }
+            switch fileReplies.take(id) {
+            case .ready(let offset)?:
+                if offset > 0, offset <= size, (try? handle.seek(toOffset: UInt64(offset))) != nil { sent = offset }
+            case .refused(let free)?:
+                refusedFree = free
+                ok = false
+            case nil:
+                ok = false
+            }
+        }
         var lastReport = Date.distantPast
         while ok, let chunk = try? handle.read(upToCount: 256 * 1024), !chunk.isEmpty {
             conn.send(["t": "file_chunk", "id": id, "data": chunk.base64EncodedString()]) { ok = $0; sema.signal() }
             sema.wait()
+            if !ok { dropped = true; break }
             sent += Int64(chunk.count)
             if Date().timeIntervalSince(lastReport) > 0.1 {
                 lastReport = Date()
@@ -1256,11 +1345,23 @@ final class AppState: ObservableObject {
                 DispatchQueue.main.async { self.updateTransfer(id) { $0.bytes = s } }
             }
         }
-        if ok { conn.send(["t": "file_end", "id": id]) { ok = $0; sema.signal() }; sema.wait() }
+        if ok { conn.send(["t": "file_end", "id": id]) { ok = $0; sema.signal() }; sema.wait(); if !ok { dropped = true } }
         let final = sent
+        let paused = !ok && dropped && answer != nil
+        if paused {
+            pausedOut[id] = Outgoing(url: url, size: size, sendName: sendName, folder: folder, label: label, temp: temp)
+        } else if temp {
+            try? FileManager.default.removeItem(at: url)
+        }
         DispatchQueue.main.async {
-            self.updateTransfer(id) { $0.bytes = final; $0.state = ok ? .done : .failed }
-            guard !clip else { return }
+            let phoneName = self.phone?.name ?? "your phone"
+            self.updateTransfer(id) {
+                $0.bytes = final
+                $0.state = ok ? .done : paused ? .paused : .failed
+                if let free = refusedFree { $0.note = "Not enough space on \(phoneName) (\(free.fileSize) free)" }
+            }
+            // Finished when the phone is back; the batch's sound and message wait until then.
+            guard !clip, !paused else { return }
             self.sentBatch.append((label ?? url.lastPathComponent, ok))
             // One sound and one message for a batch, once the last file is through.
             guard !self.transfers.contains(where: { $0.direction == .toPhone && $0.state == .active }) else { return }
@@ -1310,10 +1411,36 @@ final class AppState: ObservableObject {
             ? { let n = (name as NSString).deletingPathExtension; return n.isEmpty ? "Folder" : n }() : nil
         let dir = isClip || folder != nil ? FileManager.default.temporaryDirectory
             : FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+        let ask = msg["ready"] as? Bool == true
+        // The same transfer again after the connection dropped: carry on from what's already here.
+        if !isClip, let p = pausedIn.removeValue(forKey: id), p.size == size, let handle = try? FileHandle(forWritingTo: p.url) {
+            let offset = (try? handle.seekToEnd()).map(Int64.init) ?? 0
+            incoming[id] = (handle, p.url, false, p.folder)
+            incomingSize[id] = size
+            if ask { active?.send(["t": "file_ready", "id": id, "offset": offset]) }
+            DispatchQueue.main.async { self.updateTransfer(id) { $0.state = .active; $0.bytes = offset } }
+            return
+        }
+        // Not enough room: say so instead of filling the disk.
+        if !isClip, size > 0, let free = Self.freeSpace(at: dir), size + Self.spaceMargin > free {
+            if ask { active?.send(["t": "file_refuse", "id": id, "reason": "space", "free": free]) }
+            let peer = phone?.name ?? "phone"
+            DispatchQueue.main.async {
+                self.transfers.insert(Transfer(id: id, name: folder ?? name, size: size, direction: .fromPhone,
+                                               state: .failed, peer: peer), at: 0)
+                self.updateTransfer(id) { $0.note = "Not enough space on this Mac (\(free.fileSize) free)" }
+                Feedback.play(.failed)
+                self.notifier.postLocal(title: "Couldn't receive \(folder ?? name)",
+                                        body: "There isn't enough space on this Mac: it needs \(size.fileSize) and \(free.fileSize) is free.")
+            }
+            return
+        }
         let url = uniqueURL(in: dir, name: isClip ? "macndroid-clip-\(id).png" : folder != nil ? "macndroid-folder-\(id).zip" : name)
         FileManager.default.createFile(atPath: url.path, contents: nil)
         guard let handle = try? FileHandle(forWritingTo: url) else { return }
         incoming[id] = (handle, url, isClip, folder)
+        incomingSize[id] = size
+        if ask { active?.send(["t": "file_ready", "id": id, "offset": 0]) }
         guard !isClip else { return }
         let peer = phone?.name ?? "phone"
         DispatchQueue.main.async {
@@ -1336,6 +1463,7 @@ final class AppState: ObservableObject {
 
     private func finishIncomingFile(_ id: String) {
         guard let file = incoming.removeValue(forKey: id) else { return }
+        incomingSize[id] = nil
         try? file.handle.close()
         if let gid = galleryIncoming.removeValue(forKey: id) {
             let final = file.url.deletingPathExtension()
@@ -1610,4 +1738,37 @@ final class ApprovalButtons: NSObject {
     init(_ answer: @escaping (Bool) -> Void) { self.answer = answer }
     @objc func allow() { answer(true) }
     @objc func deny() { answer(false) }
+}
+
+/// Answers to a `file_start` that asked for one (`ready: true`). They arrive while the file queue is busy
+/// sending, so they're handed over here instead.
+final class FileReplies {
+    enum Answer { case ready(Int64), refused(free: Int64) }
+    private let lock = NSLock()
+    private var waiting: [String: DispatchSemaphore] = [:]
+    private var answers: [String: Answer] = [:]
+
+    func expect(_ id: String) -> DispatchSemaphore {
+        let s = DispatchSemaphore(value: 0)
+        lock.lock(); waiting[id] = s; answers[id] = nil; lock.unlock()
+        return s
+    }
+
+    func deliver(_ msg: Message) {
+        guard let id = msg["id"] as? String else { return }
+        let answer: Answer = msg["t"] as? String == "file_refuse"
+            ? .refused(free: (msg["free"] as? NSNumber)?.int64Value ?? 0)
+            : .ready((msg["offset"] as? NSNumber)?.int64Value ?? 0)
+        lock.lock()
+        let s = waiting.removeValue(forKey: id)
+        if s != nil { answers[id] = answer }
+        lock.unlock()
+        s?.signal()
+    }
+
+    func take(_ id: String) -> Answer? {
+        lock.lock(); defer { lock.unlock() }
+        waiting[id] = nil
+        return answers.removeValue(forKey: id)
+    }
 }

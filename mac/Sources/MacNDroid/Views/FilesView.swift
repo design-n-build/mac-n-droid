@@ -116,8 +116,12 @@ struct TransferRow: View {
                         .font(.caption).foregroundStyle(.secondary)
                 case .done:
                     Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                case .paused:
+                    ProgressView(value: transfer.progress).progressViewStyle(.linear).tint(.secondary)
+                    Text("Paused · continues when \(transfer.peer) reconnects")
+                        .font(.caption).foregroundStyle(.secondary)
                 case .failed:
-                    Text("Transfer failed").font(.caption).foregroundStyle(.red)
+                    Text(transfer.note ?? "Transfer failed").font(.caption).foregroundStyle(.red)
                 }
             }
             Spacer()
