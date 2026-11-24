@@ -125,7 +125,9 @@ internal data class Features(
                 controls = Controls.isEnabled(ctx),
                 listener = p.listener,
                 postNotifications = p.postNotifications,
-                battery = p.battery,
+                // OnePlus, OPPO, vivo and Xiaomi also need their own background setting, which Android can't read.
+                battery = p.battery && (!app.macndroid.core.PhoneMaker.freezesBackgroundApps ||
+                    app.macndroid.core.PhoneMaker.backgroundChecked(ctx)),
                 photos = app.macndroid.service.Gallery.permissionAccess(ctx) != "none",
                 sms = SmsBridge.hasPermission(ctx),
                 localNetwork = LocalNetwork.allowed(ctx),
@@ -181,7 +183,16 @@ internal fun rememberFeatureActions(features: MutableState<Features>, onControls
         },
         appNotifications = { if (Build.VERSION.SDK_INT >= 33) postOnly.launch(Manifest.permission.POST_NOTIFICATIONS) },
         media = { media.launch(app.macndroid.service.Gallery.permissions + SmsBridge.permissions) },
-        battery = { requestBatteryExemption(ctx) },
+        battery = {
+            val maker = app.macndroid.core.PhoneMaker
+            if (!PermissionState.read(ctx).battery || !maker.freezesBackgroundApps) requestBatteryExemption(ctx)
+            else {
+                // Android's battery setting is done; this phone's own one is on the App info page.
+                maker.markBackgroundChecked(ctx)
+                maker.openAppInfo(ctx)
+                android.widget.Toast.makeText(ctx, maker.backgroundSteps, android.widget.Toast.LENGTH_LONG).show()
+            }
+        },
         localNetwork = lan,
     )
 }
@@ -195,14 +206,14 @@ internal fun rememberFeatureActions(features: MutableState<Features>, onControls
 @Composable
 internal fun ControlsConsentDialog(on: Boolean, onDismiss: () -> Unit) {
     val ctx = LocalContext.current
-    fun openSettings() { onDismiss(); ctx.startActivity(Controls.settingsIntent()) }
+    fun openSettings() { onDismiss(); Controls.openSettings(ctx, turnOn = !on) }
     if (on) {
         AlertDialog(
             onDismissRequest = onDismiss,
             icon = { Icon(Icons.Outlined.TouchApp, null) },
             title = { Text("Turn off clipboard and controls?") },
             text = {
-                Text("In the next screen, open ${Controls.NAME} and turn it off.\n\n" +
+                Text("In the next screen, open ${Controls.whereToFind} and turn it off.\n\n" +
                     "Sending files, copying by hand with Send clipboard and watch-only mirroring keep working. " +
                     "Links from ${Computer.your} will arrive as notifications instead of opening by themselves.")
             },
@@ -227,7 +238,7 @@ internal fun ControlsConsentDialog(on: Boolean, onDismiss: () -> Unit) {
                 Text("Where your data goes", fontWeight = FontWeight.SemiBold)
                 Text("Only to your own paired ${Computer.word}, over your Wi-Fi, encrypted. Nothing is stored, and nothing is sent to us or anyone else. " +
                     "Passwords copied from password managers are never sent.")
-                Text("In the next screen, open Installed apps → ${Controls.NAME} and turn it on. You can turn it off at any time.",
+                Text("In the next screen, open ${Controls.whereToFind} and turn it on. You can turn it off at any time.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
         },
@@ -377,7 +388,9 @@ private fun MakeItYours(f: Features, a: FeatureActions) {
         "See this phone's photos and videos on your computer, paste new screenshots there, and read and reply to texts. Android asks for photos and videos, SMS and contacts separately; you can decline any.",
         f.media, a.media)
     FeatureCard(Icons.Outlined.BatteryChargingFull, "Stay connected",
-        "Lets Mac n Droid run in the background so notifications reach your computer straight away.",
+        "Lets Mac n Droid run in the background so notifications, copies and screenshots reach your computer straight away." +
+            (if (app.macndroid.core.PhoneMaker.freezesBackgroundApps) " On ${app.macndroid.core.PhoneMaker.name} phones this takes two steps: " +
+                "allow it when Android asks, then tap Enable again. ${app.macndroid.core.PhoneMaker.backgroundSteps}" else ""),
         f.battery, a.battery)
 }
 
@@ -445,6 +458,7 @@ private fun EnabledChip() {
 /** What's on and what isn't, on the Home tab. Open while something you'd likely want is off. */
 @Composable
 internal fun SetupChecklist(f: Features, a: FeatureActions) {
+    val ctx = LocalContext.current
     data class Item(val icon: ImageVector, val title: String, val on: Boolean, val onText: String, val offText: String, val action: () -> Unit)
     val rows = buildList {
         if (LocalNetwork.applies) add(Item(Icons.Outlined.Wifi, "Local network", f.localNetwork,
@@ -459,7 +473,10 @@ internal fun SetupChecklist(f: Features, a: FeatureActions) {
         if (Build.VERSION.SDK_INT >= 33) add(Item(Icons.Outlined.NotificationAdd, "App notifications", f.postNotifications,
             "On: connection status and received files", "Off: no status or file notifications here", a.appNotifications))
         add(Item(Icons.Outlined.BatteryChargingFull, "Run in background", f.battery,
-            "On: stays connected", "Off: Android may cut the connection to save battery", a.battery))
+            "On: stays connected",
+            if (app.macndroid.core.PhoneMaker.freezesBackgroundApps && PermissionState.read(ctx).battery)
+                "Not finished: ${app.macndroid.core.PhoneMaker.name} phones pause apps in the background, so copies and screenshots wait until you open Mac n Droid. ${app.macndroid.core.PhoneMaker.backgroundSteps}"
+            else "Off: Android may cut the connection to save battery", a.battery))
         add(Item(Icons.Outlined.PhotoLibrary, "Photos, videos and messages", f.media,
             "On: photos, videos, screenshots and texts on ${Computer.your}", "Off: optional, for photos, videos and texts on ${Computer.your}", a.media))
     }

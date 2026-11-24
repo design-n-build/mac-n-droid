@@ -48,9 +48,10 @@ object ClipboardSync {
             val signature = "img:$uri"
             if (auto && (uri.authority == AUTHORITY || isRepeat(signature))) return Result.Duplicate
             markSent(signature)
+            // Looked up when it's sent: the service may only be starting now.
             val sendIt = { SyncService.instance?.files?.send(listOf(uri), clip = true); Unit }
-            if (!Link.isConnected) { pending = System.currentTimeMillis() to sendIt; return Result.NotConnected }
-            sendIt()
+            if (!Link.isConnected) { queue(sendIt); SyncService.start(ctx); return Result.NotConnected }
+            deliver(sendIt)
             return Result.SentImage
         }
         val text = item.text?.toString() ?: item.coerceToText(ctx)?.toString()
@@ -60,8 +61,8 @@ object ClipboardSync {
         if (auto && (text == lastFromMac || isRepeat(text))) return Result.Duplicate
         markSent(text)
         val msg = JSONObject().put("t", "clip").put("text", text).put("explicit", !auto)
-        if (!Link.isConnected) { pending = System.currentTimeMillis() to { Link.post(msg) }; return Result.NotConnected }
-        Link.post(msg)
+        if (!Link.isConnected) { queue { Link.post(msg) }; SyncService.start(ctx); return Result.NotConnected }
+        deliver { Link.post(msg) }
         app.macndroid.core.Haptics.play(app.macndroid.core.Haptics.Kind.Tick)
         return Result.SentText
     }
@@ -73,6 +74,26 @@ object ClipboardSync {
         lastSent = signature
         lastSentAt = System.currentTimeMillis()
         lastFromMac = null   // the Mac now holds what we sent, not what it sent us before
+    }
+
+    /**
+     * Hold a copy made while the computer was unreachable and reconnect now instead of waiting out the retry
+     * delay (up to 30 s). Phones that pause apps in the background often drop the connection quietly.
+     */
+    fun queue(send: () -> Unit) {
+        pending = System.currentTimeMillis() to send
+        Link.kick()
+    }
+
+    /**
+     * Send now, and keep it until the computer has answered a ping that followed it. If it doesn't answer, the
+     * connection is rebuilt and the copy goes out again on reconnect (sending the same clipboard twice is harmless).
+     */
+    fun deliver(send: () -> Unit) {
+        val entry = System.currentTimeMillis() to send
+        pending = entry
+        send()
+        Link.confirm { if (pending === entry) pending = null }
     }
 
     /** Called when the link comes up: deliver a copy made in the last 10 minutes while offline. */

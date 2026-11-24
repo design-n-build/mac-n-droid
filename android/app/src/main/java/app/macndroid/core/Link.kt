@@ -58,6 +58,8 @@ object Link {
     @Volatile private var socket: Socket? = null
     @Volatile private var out: DataOutputStream? = null
     @Volatile private var cipher: SessionCipher? = null
+    /** When the computer last sent anything, to tell a working connection from one that died quietly. */
+    @Volatile private var lastHeard = 0L
 
     val isConnected get() = _status.value == Status.Connected
 
@@ -78,6 +80,21 @@ object Link {
     fun kick() { wake.trySend(Unit) }
 
     fun post(msg: JSONObject) { scope.launch { send(msg) } }
+
+    /**
+     * Make sure the computer is still there: ping it, and if nothing comes back within a few seconds, drop the
+     * connection so it reconnects straight away. Phones that pause apps in the background (OnePlus, OPPO, vivo,
+     * Xiaomi) can leave a connection that looks open but no longer delivers anything; without this, what was
+     * sent would only arrive once the app is opened again. [onOk] runs once the computer has answered.
+     */
+    fun confirm(onOk: () -> Unit) {
+        val since = System.currentTimeMillis()
+        scope.launch {
+            if (!send(JSONObject().put("t", "ping"))) { kick(); return@launch }
+            val answered = withTimeoutOrNull(4_000) { while (lastHeard < since) delay(100); true } == true
+            if (answered) onOk() else { Log.w(TAG, "no answer from the computer: reconnecting"); closeSocket(); kick() }
+        }
+    }
 
     suspend fun send(msg: JSONObject): Boolean {
         if (!Pause.allowsOut(msg.optString("t"))) return false   // sharing is paused
@@ -201,6 +218,7 @@ object Link {
             try {
                 while (true) {
                     val msg = JSONObject(String(c.open(readFrame(input))))
+                    lastHeard = System.currentTimeMillis()
                     when (msg.optString("t")) {
                         "ping" -> post(JSONObject().put("t", "pong"))
                         "pong" -> {}

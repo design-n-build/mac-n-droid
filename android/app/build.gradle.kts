@@ -73,6 +73,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    // The QR scanner brings in androidx.fragment 1.0.0, which Play Console flags as outdated; use a current one.
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation("junit:junit:4.13.2")

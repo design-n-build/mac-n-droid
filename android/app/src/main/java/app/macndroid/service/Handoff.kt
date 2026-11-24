@@ -64,11 +64,11 @@ object Handoff {
             .apply {
                 // Without clipboard and controls on, Android won't let links open by themselves.
                 if (!canOpen) {
-                    val settings = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    val settings = Controls.settingsIntent(ctx)
                     addAction(R.drawable.ic_stat_logo, "Open links automatically",
                         PendingIntent.getActivity(ctx, NOTIF, settings, PendingIntent.FLAG_IMMUTABLE))
                     setStyle(NotificationCompat.BigTextStyle().bigText(
-                        "$url\n\nTo open links from $mac right away, turn on ${Controls.NAME} in Accessibility settings."))
+                        "$url\n\nTo open links from $mac right away, turn on ${Controls.NAME} in Accessibility settings → ${app.macndroid.core.PhoneMaker.accessibilityList}."))
                 }
             }
             .setAutoCancel(true)

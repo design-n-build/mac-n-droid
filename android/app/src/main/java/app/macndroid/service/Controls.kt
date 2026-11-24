@@ -59,6 +59,7 @@ class CopyWatcher : AccessibilityService() {
 
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
         if (app.macndroid.core.Prefs.pairing.value == null) return
+        reviveSync()
         val pkg = e.packageName?.toString() ?: return
         if (pkg == packageName) return
         if (e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && pkg != "com.android.systemui" &&
@@ -95,6 +96,21 @@ class CopyWatcher : AccessibilityService() {
         handler.removeCallbacks(grabAgain)
         handler.postDelayed(grabAgain, 1200)
     }
+
+    /**
+     * The connection lives in SyncService. Android can stop it (a phone restart on Android 15+, low memory, the
+     * "Stop" button in active apps) and nothing would bring it back until the app is opened, so copies and
+     * screenshots would wait. Android keeps this service running, so it restarts the connection when it's gone.
+     */
+    private fun reviveSync() {
+        if (SyncService.instance != null) return
+        val now = System.currentTimeMillis()
+        if (now - lastRevive < 30_000) return
+        lastRevive = now
+        Log.i(TAG, "connection service not running: starting it")
+        SyncService.start(this)
+    }
+    private var lastRevive = 0L
 
     private fun grabClipboard() {
         if (probe != null) return
@@ -245,7 +261,27 @@ object Controls {
         return enabled.split(':').any { ComponentName.unflattenFromString(it) == me }
     }
 
-    fun settingsIntent(): Intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    /** Where to find the switch, in the words this phone's Accessibility settings use. */
+    val whereToFind: String get() = "${app.macndroid.core.PhoneMaker.accessibilityList} → $NAME"
+
+    /**
+     * Android's Accessibility settings. Apps can't open their own service's switch, but Settings scrolls to and
+     * highlights our entry when it's passed as the search highlight (Pixel and others; phones that don't ignore it).
+     */
+    fun settingsIntent(ctx: Context): Intent {
+        val key = ComponentName(ctx, CopyWatcher::class.java).flattenToString()
+        return Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(":settings:fragment_args_key", key)
+            .putExtra(":settings:show_fragment_args", android.os.Bundle().apply { putString(":settings:fragment_args_key", key) })
+    }
+
+    /** Opens the settings from the app, with a reminder of where the switch is shown on top. */
+    fun openSettings(ctx: Context, turnOn: Boolean = true) {
+        runCatching { ctx.startActivity(settingsIntent(ctx)) }
+            .onFailure { ctx.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        android.widget.Toast.makeText(ctx, "Open $whereToFind, then turn it ${if (turnOn) "on" else "off"}", android.widget.Toast.LENGTH_LONG).show()
+    }
 
     /** The first time someone clicks on the mirrored screen while it's off. */
     fun prompt(ctx: Context) {
@@ -254,7 +290,7 @@ object Controls {
         lastPrompt = now
         notify(ctx, NOTIF_PROMPT, "Control this phone from ${Computer.your}?",
             "Tap, then turn on $NAME",
-            "Tap here, open Installed apps → $NAME and turn it on. Then clicks on ${Computer.your} become taps here.",
+            "Tap here, open $whereToFind and turn it on. Then clicks on ${Computer.your} become taps here.",
             timeout = 120_000)
     }
 
@@ -272,12 +308,12 @@ object Controls {
         sp.edit().putBoolean("copyWatcherWasOn", false).putBoolean("toldMerged", true).apply()
         notify(ctx, NOTIF_LOST, "Clipboard and controls is off",
             "Tap to turn $NAME back on",
-            "Android turned off $NAME. Tap here, open Installed apps → $NAME and turn it on, so copying, " +
+            "Android turned off $NAME. Tap here, open $whereToFind and turn it on, so copying, " +
                 "controlling this phone, links and music from ${Computer.your} work again.")
     }
 
     private fun notify(ctx: Context, id: Int, title: String, text: String, long: String, timeout: Long = 0) {
-        val pi = PendingIntent.getActivity(ctx, id, settingsIntent(), PendingIntent.FLAG_IMMUTABLE)
+        val pi = PendingIntent.getActivity(ctx, id, settingsIntent(ctx), PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(ctx, MacNDroidApp.CH_MIRROR)
             .setSmallIcon(R.drawable.ic_stat_logo)
             .setContentTitle(title)

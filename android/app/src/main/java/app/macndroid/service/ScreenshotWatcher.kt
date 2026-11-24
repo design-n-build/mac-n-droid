@@ -49,10 +49,12 @@ class ScreenshotWatcher(private val ctx: Context) : ContentObserver(Handler(Loop
         val (id, isShot) = newest() ?: return
         if (id <= lastId) return
         lastId = id
-        if (!isShot || !Link.isConnected) return
+        if (!isShot) return
         val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
-        Log.i("ScreenshotWatcher", "screenshot → Mac clipboard")
-        SyncService.instance?.files?.send(listOf(uri), clip = true)
+        val send = { Log.i("ScreenshotWatcher", "screenshot → Mac clipboard"); SyncService.instance?.files?.send(listOf(uri), clip = true); Unit }
+        // Not connected right now: send it as soon as the link is back (it shares the clipboard's one slot,
+        // so the newest of a copy and a screenshot wins, as on the computer's clipboard).
+        if (!Link.isConnected) ClipboardSync.queue(send) else ClipboardSync.deliver(send)
     }
 
     /** Newest published image: (id, looks like a fresh screenshot). */

@@ -54,15 +54,27 @@ class SyncService : Service() {
         override fun onAvailable(network: Network) = Link.kick()
     }
 
+    /** Android didn't allow the service to start (see [onCreate]); it does nothing and stops. */
+    private var refused = false
+
     override fun onCreate() {
         super.onCreate()
+        // Android 15+ doesn't allow some starts, such as right after a phone restart. That used to crash the
+        // whole app, after which nothing reconnected until it was opened. Now it stops quietly, and the
+        // accessibility service, notification access or opening the app starts it again when that's allowed.
+        val started = runCatching { startInForeground(Link.status.value) }
+        if (started.isFailure) {
+            android.util.Log.w("SyncService", "not allowed to start now", started.exceptionOrNull())
+            refused = true
+            stopSelf()
+            return
+        }
         instance = this
         TransferProgress.start(this)
         ringer = Ringer(this)
         files = FileTransfers(this)
         media = MediaSync(this)
         screenshots = ScreenshotWatcher(this)
-        startInForeground(Link.status.value)
         media.start()
         volume = PhoneVolume(this).also { it.start() }
         Controls.checkLost(this)
@@ -103,6 +115,7 @@ class SyncService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (refused) return START_NOT_STICKY
         when (intent?.action) {
             ACTION_SEND_URIS -> {
                 val uris = buildList {
@@ -127,6 +140,7 @@ class SyncService : Service() {
     }
 
     override fun onDestroy() {
+        if (refused) { super.onDestroy(); return }
         instance = null
         statusJob?.cancel()
         ScreenMirror.stop(notifyMac = false)
