@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 4×2: type and send to the computer's clipboard, plus four actions. -->
+<!-- 4×2: the computer's music with Play on phone, and four actions. -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:description="@string/widget_type_desc"
-    android:initialLayout="@layout/glance_default_loading_layout"
+    android:description="@string/widget_four_desc"
+    android:initialLayout="@layout/widget_four"
+    android:previewLayout="@layout/widget_four"
     android:minWidth="250dp" android:minHeight="110dp"
-    android:minResizeWidth="250dp" android:minResizeHeight="110dp"
+    android:minResizeWidth="180dp" android:minResizeHeight="40dp"
     android:targetCellWidth="4" android:targetCellHeight="2"
+    android:maxResizeWidth="600dp"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen" />

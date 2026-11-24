@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2×1 "Pause and send": Pause / Resume, and Send files. Labels show when there's room. Also the preview. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:gravity="center"
+    android:orientation="horizontal"
+    android:padding="8dp">
+        <LinearLayout
+            android:id="@+id/pause"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="0dp"
+            android:background="@drawable/widget_btn"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="10dp">
+            <ImageView
+                android:id="@+id/pause_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:contentDescription="Pause"
+                android:src="@drawable/ic_w_pause"
+                android:tint="@color/w_btn_icon" />
+            <TextView
+                android:id="@+id/pause_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text="Pause"
+                android:textColor="@color/w_btn_icon"
+                android:textSize="14sp" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/files"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/widget_btn"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="10dp">
+            <ImageView
+                android:id="@+id/files_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:contentDescription="Send files"
+                android:src="@drawable/ic_upload"
+                android:tint="@color/w_btn_icon" />
+            <TextView
+                android:id="@+id/files_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text="Send files"
+                android:textColor="@color/w_btn_icon"
+                android:textSize="14sp" />
+        </LinearLayout>
+</LinearLayout>

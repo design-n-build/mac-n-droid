@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="w_bg">#FF1C1B22</color>
+    <color name="w_btn">#FF35334A</color>
+    <color name="w_btn_icon">#FFE4E1F6</color>
+    <color name="w_primary">#FFC4C2FF</color>
+    <color name="w_on_primary">#FF2C2A61</color>
+    <color name="w_text">#FFE6E1E5</color>
+    <color name="w_text2">#FFCAC4D0</color>
+    <color name="w_off">#FF2B2930</color>
+    <color name="w_off_icon">#FF7A7680</color>
+</resources>

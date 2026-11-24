@@ -66,6 +66,7 @@ tasks.withType<Test>().configureEach {
     systemProperty("roborazzi.test.record", "true")
     systemProperty("storeShots.out", rootProject.file("../store/screens/android").absolutePath)
     systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+    System.getProperty("widgetShots.out")?.let { systemProperty("widgetShots.out", it) }
 }
 tasks.register("storeShots") { dependsOn("testDebugUnitTest") }
 
@@ -78,9 +79,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.core:core-ktx:1.15.0")
-    // Home-screen widgets (ui/Widgets.kt), with Material You colours.
-    implementation("androidx.glance:glance-appwidget:1.1.1")
-    implementation("androidx.glance:glance-material3:1.1.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")

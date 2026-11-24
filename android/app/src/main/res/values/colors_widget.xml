@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen widget colours. Android 12+ uses the wallpaper's Material You colours (values-v31). -->
+<resources>
+    <color name="w_bg">#FFF4F1F8</color>
+    <color name="w_btn">#FFE2DFF0</color>
+    <color name="w_btn_icon">#FF1D1B26</color>
+    <color name="w_primary">#FF5B5A92</color>
+    <color name="w_on_primary">#FFFFFFFF</color>
+    <color name="w_text">#FF1C1B1F</color>
+    <color name="w_text2">#FF49454F</color>
+    <color name="w_off">#FFE7E0EC</color>
+    <color name="w_off_icon">#FF938F99</color>
+</resources>

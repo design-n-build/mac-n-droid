@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 1×1 "Pause sharing": the logo shows whether sharing is on (filled) or paused (dimmed, with a pause badge).
+     Also the widget picker's preview. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:padding="6dp">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <FrameLayout
+            android:id="@+id/badge_frame"
+            android:layout_width="56dp"
+            android:layout_height="56dp">
+
+            <FrameLayout
+                android:id="@+id/on"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/widget_circle_on">
+                <ImageView
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_stat_logo"
+                    android:tint="@color/w_on_primary" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:id="@+id/off"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/widget_circle_off"
+                android:visibility="gone">
+                <ImageView
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_stat_logo"
+                    android:tint="@color/w_off_icon" />
+            </FrameLayout>
+
+            <ImageView
+                android:id="@+id/badge"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="bottom|end"
+                android:background="@drawable/widget_circle_on"
+                android:contentDescription="@null"
+                android:padding="4dp"
+                android:src="@drawable/ic_w_pause"
+                android:tint="@color/w_on_primary"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:text="Sharing on"
+            android:textColor="@color/w_text"
+            android:textSize="13sp" />
+    </LinearLayout>
+</FrameLayout>
