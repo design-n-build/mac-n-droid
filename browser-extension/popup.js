@@ -1,10 +1,18 @@
 chrome.runtime.sendMessage({ t: "theme", dark: matchMedia("(prefers-color-scheme: dark)").matches }).catch?.(() => {});
 const $ = (id) => document.getElementById(id);
 
+const DOWNLOAD = "https://design-n-build.github.io/mac-n-droid/#download";
+let getApp = false;
+
 chrome.runtime.sendMessage({ t: "status" }, (s) => {
   s = s || {};
   if (!s.app) {
-    $("status").textContent = "Open the Mac n Droid app";
+    // The app isn't running, or isn't installed yet: say where to get it.
+    getApp = true;
+    $("status").textContent = "The app isn't running";
+    $("send").textContent = "Get the Mac n Droid App";
+    $("send").disabled = false;
+    $("note").textContent = "Open Mac n Droid on this computer. Don't have it yet? It's free for Mac, Windows and Linux.";
   } else if (!s.connected) {
     $("status").textContent = "Phone not connected";
   } else {
@@ -19,6 +27,11 @@ chrome.runtime.sendMessage({ t: "status" }, (s) => {
 });
 
 $("send").addEventListener("click", async () => {
+  if (getApp) {
+    chrome.tabs.create({ url: DOWNLOAD });
+    window.close();
+    return;
+  }
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   $("send").disabled = true;
   chrome.runtime.sendMessage({ t: "send_url", url: tab && tab.url }, (r) => {

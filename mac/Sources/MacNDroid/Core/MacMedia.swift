@@ -21,6 +21,8 @@ final class MacMediaMonitor {
         var position: Double
         /// When it last started playing (or changed): the newest playing one is what the phone controls.
         var since = Date()
+        /// A browser tab's address, when the extension reports it.
+        var url: String?
         var isBrowser: Bool { bundle.hasPrefix("browser:") }
     }
 
@@ -92,7 +94,7 @@ final class MacMediaMonitor {
             let changed = old?.title != b.title || old?.playing != b.playing
             browser[key] = Track(bundle: "browser:" + key, app: b.site, id: "\(key)|\(b.title)", title: b.title,
                                  artist: b.artist, album: b.album, playing: b.playing, duration: b.duration,
-                                 position: b.position, since: changed ? Date() : (old?.since ?? Date()))
+                                 position: b.position, since: changed ? Date() : (old?.since ?? Date()), url: b.url)
             if old?.title != b.title { browserArt[key] = nil }
         } else if key.hasSuffix(":") {
             browser = browser.filter { !$0.key.hasPrefix(key) }

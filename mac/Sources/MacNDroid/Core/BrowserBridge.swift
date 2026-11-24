@@ -21,6 +21,8 @@ final class BrowserBridge {
         let duration: Double
         let position: Double
         let canNext: Bool
+        /// The tab's address (extension 0.14.5+).
+        let url: String?
     }
 
     var onMedia: ((String, Track?) -> Void)?
@@ -150,7 +152,8 @@ final class BrowserBridge {
                           playing: m["playing"] as? Bool ?? false,
                           duration: (m["dur"] as? NSNumber)?.doubleValue ?? 0,
                           position: (m["pos"] as? NSNumber)?.doubleValue ?? 0,
-                          canNext: m["canNext"] as? Bool ?? false)
+                          canNext: m["canNext"] as? Bool ?? false,
+                          url: m["url"] as? String)
             let art = (m["art"] as? String).flatMap { Data(base64Encoded: $0) }.flatMap { MacMediaMonitor.jpeg($0) }
             DispatchQueue.main.async {
                 self.onMedia?(key, t)

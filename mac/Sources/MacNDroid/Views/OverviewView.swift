@@ -279,6 +279,9 @@ struct NowPlayingCard: View {
                         }
                         Button { state.mediaCommand("next", id: np.id) } label: { Image(systemName: "forward.fill").frame(maxWidth: .infinity) }
                             .disabled(!np.canNext)
+                        Button { state.playOnMac(np) } label: { Image(systemName: "laptopcomputer.and.arrow.down").frame(maxWidth: .infinity) }
+                            .help("Play on This Mac")
+                            .accessibilityLabel("Play on This Mac")
                     }
                     .buttonStyle(.borderless)
                     .font(compact ? .body : .title3)
@@ -286,7 +289,7 @@ struct NowPlayingCard: View {
                         PhoneVolumeSlider(volume: v, set: { state.setPhoneVolume($0) }, mute: { state.togglePhoneMute() })
                     }
                 }
-                .frame(width: compact ? 84 : 140)
+                .frame(width: compact ? 112 : 180)
                 .padding(.leading, compact ? 0 : 8)
             }
             .padding(compact ? 8 : 0)

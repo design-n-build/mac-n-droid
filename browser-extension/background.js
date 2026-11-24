@@ -97,6 +97,7 @@ async function artData(url) {
 async function forwardMedia(tab, s) {
   const m = { t: "media", tab, site: s.site, title: s.title, artist: s.artist, album: s.album,
               playing: s.playing, dur: s.dur, pos: s.pos, canNext: s.canNext, canPrev: s.canPrev };
+  if (s.url) m.url = s.url;
   if (s.art && artSent.get(tab) !== s.art) {
     artSent.set(tab, s.art);
     const data = await artData(s.art);

@@ -47,6 +47,8 @@
       art,
       canNext: !!visible(site.next),
       canPrev: true,
+      // The page itself, so "Play on phone" opens the same video or song (http/https only).
+      url: /^https?:/.test(location.href) ? location.href : "",
     };
   }
 

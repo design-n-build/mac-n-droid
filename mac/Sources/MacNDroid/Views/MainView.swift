@@ -218,6 +218,10 @@ struct SidebarLive: View {
                     Text(np.artist.isEmpty ? np.app : np.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
+                Button { state.playOnMac(np) } label: { Image(systemName: "laptopcomputer.and.arrow.down") }
+                    .buttonStyle(.borderless)
+                    .help("Play on This Mac")
+                    .accessibilityLabel("Play on This Mac")
             }
             if np.duration > 0 {
                 ProgressView(value: min(np.position(at: now), np.duration), total: np.duration)

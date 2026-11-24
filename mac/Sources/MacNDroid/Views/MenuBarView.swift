@@ -81,6 +81,20 @@ struct MenuBarView: View {
                 }
                 .controlSize(.large)
 
+                if let t = state.macTrack, t.playing {
+                    Button { state.playOnPhone() } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Play on \(state.phone?.name ?? "Phone")")
+                                Text(t.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        } icon: { Image(systemName: "iphone.and.arrow.forward") }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .controlSize(.large)
+                    .help("Open \(t.title) on your phone and stop it on this Mac")
+                }
+
                 ForEach(state.players.prefix(3)) { np in
                     NowPlayingCard(nowPlaying: np, art: state.playerArt[np.id], compact: true)
                 }

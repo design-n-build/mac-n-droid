@@ -70,6 +70,8 @@ final class AppState: ObservableObject {
     private let macMedia = MacMediaMonitor()
     let browserBridge = BrowserBridge()
     private var phoneWantsMacMedia = false
+    /// What's playing (or paused) on this Mac: Play on Phone in the menu bar.
+    @Published private(set) var macTrack: MacMediaMonitor.Track?
     private var macMediaArt: (track: String, jpeg: Data)?
 
     @Published private(set) var knownApps: [String: KnownApp] = AppState.loadKnownApps()
@@ -131,7 +133,10 @@ final class AppState: ObservableObject {
             guard let self, self.isConnected else { return }
             self.sendBrowserTab()
         }
-        macMedia.onChange = { [weak self] _ in self?.pushMacMedia(art: false) }
+        macMedia.onChange = { [weak self] t in
+            self?.macTrack = t
+            self?.pushMacMedia(art: false)
+        }
         SystemVolume.shared.onChange = { [weak self] in self?.pushMacVolume() }
         macMedia.onArt = { [weak self] jpeg in
             guard let self, let id = self.macMedia.current?.id else { return }
@@ -1010,10 +1015,35 @@ final class AppState: ObservableObject {
 
     func sendLink(_ url: URL) {
         guard Handoff.isWebLink(url), let conn = active else { return }
-        conn.send(["t": "open_url", "url": url.absoluteString])
+        // The page that's playing here: carry on from the same spot on the phone, and stop it here, so it
+        // doesn't play on both.
+        var link = url
+        if let t = macMedia.current, t.playing, let s = t.url, let playing = URL(string: s), MediaHandoff.samePage(playing, url) {
+            link = MediaHandoff.withTime(url, t.position)
+            macMedia.command("pause")
+        }
+        conn.send(["t": "open_url", "url": link.absoluteString])
         if NotchStyle.isOn {
             NotchController.shared.flash(symbol: "arrow.up.forward.app.fill", text: "Opening \(url.host ?? "link") on \(phone?.name ?? "phone")")
         }
+    }
+
+
+    /// Play on Phone: the phone opens the same thing, and it stops here.
+    func playOnPhone() {
+        guard let t = macMedia.current, let url = MediaHandoff.phoneURL(for: t), let conn = active else { return }
+        conn.send(["t": "open_url", "url": url.absoluteString])
+        if t.playing { macMedia.command("pause") }
+        if NotchStyle.isOn {
+            NotchController.shared.flash(symbol: "iphone.and.arrow.forward", text: "Playing on \(phone?.name ?? "phone")")
+        }
+    }
+
+    /// Play on Mac: open what the phone is playing here, and pause it on the phone.
+    func playOnMac(_ np: NowPlaying) {
+        guard let url = MediaHandoff.macURL(for: np) else { return }
+        NSWorkspace.shared.open(url)
+        if np.playing { mediaCommand("pause", id: np.id) }
     }
 
     /// File → Send Browser Tab to Phone.
