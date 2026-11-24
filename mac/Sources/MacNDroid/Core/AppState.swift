@@ -239,6 +239,7 @@ final class AppState: ObservableObject {
         UserDefaults.standard.set(false, forKey: "pairLater")   // straight to the pairing screen
         lastPhoneName = nil
         lastError = nil
+        phone = nil
         forgetPhoneData()
         refreshAddresses(force: true)
     }
@@ -508,8 +509,10 @@ final class AppState: ObservableObject {
         if mirror != .idle { mirror = .stopped }
         mirrorQueue.async { self.mirrorRenderer.reset() }
         LiveBarController.shared.update()
-        // A phone that can continue transfers: keep what arrived so far, and send the rest when it's back.
+        // A phone that can continue transfers: keep what arrived so far, and send the rest when it's back. A send
+        // still waiting for the phone's answer is told the connection dropped.
         let resumable = phone?.caps.contains(Caps.files2) == true
+        fileReplies.dropAll()
         fileQueue.async {
             let partial = self.incoming
             self.incoming.removeAll()
@@ -1334,6 +1337,9 @@ final class AppState: ObservableObject {
             case .refused(let free)?:
                 refusedFree = free
                 ok = false
+            case .dropped?:
+                ok = false
+                dropped = true
             case nil:
                 ok = false
             }
@@ -1748,7 +1754,7 @@ final class ApprovalButtons: NSObject {
 /// Answers to a `file_start` that asked for one (`ready: true`). They arrive while the file queue is busy
 /// sending, so they're handed over here instead.
 final class FileReplies {
-    enum Answer { case ready(Int64), refused(free: Int64) }
+    enum Answer { case ready(Int64), refused(free: Int64), dropped }
     private let lock = NSLock()
     private var waiting: [String: DispatchSemaphore] = [:]
     private var answers: [String: Answer] = [:]
@@ -1769,6 +1775,16 @@ final class FileReplies {
         if s != nil { answers[id] = answer }
         lock.unlock()
         s?.signal()
+    }
+
+    /// The connection dropped: every send still waiting gets `dropped`.
+    func dropAll() {
+        lock.lock()
+        let all = waiting
+        waiting.removeAll()
+        for id in all.keys { answers[id] = .dropped }
+        lock.unlock()
+        all.values.forEach { $0.signal() }
     }
 
     func take(_ id: String) -> Answer? {

@@ -40,6 +40,9 @@ public sealed partial class MainWindow
     sealed class LiveRow
     {
         public required Border Root;
+        /// <summary>Timer and stopwatch buttons from the phone (0.14.5+), rebuilt only when they change.</summary>
+        public required StackPanel Actions;
+        public string ActionsSig = "";
         public required TextBlock Title, Text, Glance;
         public required ContentControl Icon;
         public JsonLive Data = new("", "", "", "", "", "", 0, null, 0, 0);
@@ -80,7 +83,7 @@ public sealed partial class MainWindow
         (Windows.UI.Color color, string label) = st.Connected && st.SharingPaused ? (Microsoft.UI.Colors.Goldenrod, "Sharing paused")
             : st.Connected ? (Microsoft.UI.Colors.SeaGreen, $"Connected to {st.PhoneName}")
             : string.IsNullOrEmpty(st.LastPhoneName) ? (Microsoft.UI.Colors.Gray, "Not paired")
-            : (Microsoft.UI.Colors.DarkOrange, $"Waiting for {st.PhoneName}");
+            : (Microsoft.UI.Colors.DarkOrange, $"{st.PhoneName} is away");
         _connDot.Fill = new SolidColorBrush(color);
         _connText.Text = label;
 
@@ -102,6 +105,7 @@ public sealed partial class MainWindow
         {
             if (!_liveRows.TryGetValue(l.Key, out var row)) _liveRows[l.Key] = row = NewLiveRow();
             row.Data = l;
+            FillLiveActions(row, st.Live.GetValueOrDefault(l.Key), l.Kind);
             row.Title.Text = l.Title.Length > 0 ? l.Title : l.App;
             row.Text.Text = l.Text;
             row.Text.Visibility = l.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -193,13 +197,19 @@ public sealed partial class MainWindow
         var prev = Control(new FontIcon { Glyph = "", FontSize = 14 }, "Previous", "prev");
         var toggle = Control(toggleIcon, "Play or pause", "toggle");
         var next = Control(new FontIcon { Glyph = "", FontSize = 14 }, "Next", "next");
+        // Play on this PC: open the same thing here and pause it on the phone.
+        var here = new Button { Content = new FontIcon { Glyph = "\uE7F8", FontSize = 14 }, Style = Style("SubtleButtonStyle"), HorizontalAlignment = HorizontalAlignment.Stretch };
+        ToolTipService.SetToolTip(here, "Play on this PC");
+        here.Click += (_, _) => { if (_state.Players.FirstOrDefault(x => x.Id == id) is { } pl) _state.PlayOnComputer(pl); };
         var controls = new Grid();
-        for (int i = 0; i < 3; i++) controls.ColumnDefinitions.Add(new ColumnDefinition());
+        for (int i = 0; i < 4; i++) controls.ColumnDefinitions.Add(new ColumnDefinition());
         Grid.SetColumn(toggle, 1);
         Grid.SetColumn(next, 2);
+        Grid.SetColumn(here, 3);
         controls.Children.Add(prev);
         controls.Children.Add(toggle);
         controls.Children.Add(next);
+        controls.Children.Add(here);
 
         // The phone's media volume: follows the phone's own buttons, and sets it while you drag.
         var volIcon = new FontIcon { Glyph = "", FontSize = 13 };
@@ -300,12 +310,44 @@ public sealed partial class MainWindow
         grid.Children.Add(names);
         Grid.SetColumn(glance, 2);
         grid.Children.Add(glance);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(30, 6, 0, 0), Visibility = Visibility.Collapsed };
         var root = new Border
         {
             Padding = new Thickness(10, 8, 10, 8), CornerRadius = new CornerRadius(8),
             Background = Brush("CardBackgroundFillColorDefaultBrush"), BorderBrush = Brush("CardStrokeColorDefaultBrush"), BorderThickness = new Thickness(1),
-            Child = grid,
+            Child = new StackPanel { Children = { grid, actions } },
         };
-        return new LiveRow { Root = root, Title = title, Text = text, Glance = glance, Icon = icon };
+        return new LiveRow { Root = root, Title = title, Text = text, Glance = glance, Icon = icon, Actions = actions };
+    }
+
+    /// <summary>A timer's or stopwatch's own buttons (Pause, Resume, Stop…), which run on the phone. Phones before
+    /// 0.14.5 don't send them: "Timer controls: coming soon".</summary>
+    void FillLiveActions(LiveRow row, System.Text.Json.Nodes.JsonObject? live, string kind)
+    {
+        bool timer = kind is "timer" or "stopwatch";
+        var list = timer && live?["actions"] is System.Text.Json.Nodes.JsonArray arr
+            ? arr.OfType<System.Text.Json.Nodes.JsonObject>()
+                 .Where(a => (bool?)a["reply"] != true && (bool?)a["opens"] != true && ((string?)a["title"])?.Length > 0)
+                 .Take(3).Select(a => (index: (int?)a["i"] ?? 0, title: (string)a["title"]!)).ToList()
+            : new();
+        bool soon = timer && list.Count == 0 && !_state.PhoneIsCurrent;
+        var sig = soon ? "soon" : string.Join("|", list.Select(a => $"{a.index}:{a.title}"));
+        if (sig == row.ActionsSig) return;
+        row.ActionsSig = sig;
+        row.Actions.Children.Clear();
+        row.Actions.Visibility = sig.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (soon)
+        {
+            row.Actions.Children.Add(new TextBlock { Text = "Timer controls: coming soon", Style = Style("CaptionTextBlockStyle"),
+                                                     Foreground = Brush("TextFillColorTertiaryBrush") });
+            return;
+        }
+        var key = (string?)live?["key"] ?? "";
+        foreach (var (index, title) in list)
+        {
+            var b = new Button { Content = title, Padding = new Thickness(10, 3, 10, 4) };
+            b.Click += (_, _) => _state.Action(key, index, null);
+            row.Actions.Children.Add(b);
+        }
     }
 }

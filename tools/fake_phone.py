@@ -9,6 +9,10 @@ computer asks for (texts and conversations, contact search, sending a text, scre
 stream from --video, files and folders sent to it). At the end it prints what it received and exits with 1 if
 something expected didn't arrive (--expect t1,t2,…).
 
+--v0145 makes it a 0.14.5 phone (app 37, caps files2): before the rest it asks to send a file far too big
+(expects file_refuse), and sends a file, drops the connection halfway, reconnects and continues it (expects
+file_ready with the right offset: resume_ok). Files from the computer are answered with file_ready.
+
 A test video for --video:
     ffmpeg -f lavfi -i testsrc=size=540x1200:rate=30 -t 2 -c:v libx264 -pix_fmt yuv420p -profile:v baseline \
            -x264-params keyint=30:aud=1 -f h264 clip.h264
@@ -40,6 +44,8 @@ class Phone:
         self.out_n = 0
         self.in_n = 0
         self.session = None
+        self.device = {"t": "device", "name": "Test Pixel", "model": "Google Pixel 9", "os": "Android 16"}
+        self.backlog = []
 
     def _write(self, payload: bytes):
         self.sock.sendall(struct.pack(">I", len(payload)) + payload)
@@ -62,7 +68,7 @@ class Phone:
         hello = json.loads(self._read())
         mn = base64.b64decode(hello["nonce"])
         self.session = hmac.new(self.key, b"mnd-v1" + pn + mn, hashlib.sha256).digest()
-        self.send({"t": "device", "name": "Test Pixel", "model": "Google Pixel 9", "os": "Android 16"})
+        self.send(self.device)
         welcome = self.recv()
         return hello, welcome
 
@@ -72,6 +78,8 @@ class Phone:
         self._write(crypto.seal(self.session, nonce, json.dumps(msg, separators=(",", ":")).encode()))
 
     def recv(self) -> dict:
+        if self.backlog:
+            return self.backlog.pop(0)
         data = self._read()
         nonce = struct.pack(">IQ", 2, self.in_n)
         self.in_n += 1
@@ -121,6 +129,60 @@ def make_folder_zip() -> bytes:
     return buf.getvalue()
 
 
+def wait_for(p: Phone, types, seconds=10):
+    """The next message of one of `types`; anything else that arrives meanwhile is kept for later."""
+    until = time.time() + seconds
+    kept = []
+    try:
+        while time.time() < until:
+            m = p.recv()
+            if m.get("t") in types:
+                return m
+            kept.append(m)
+        return None
+    finally:
+        p.backlog = kept + p.backlog
+
+
+def resume_and_refuse(a, key, received):
+    """0.14.5: a file that doesn't fit is refused; a transfer cut off halfway continues after reconnecting."""
+    caps = {"app": 37, "caps": ["files2"]}
+    p = Phone(a.host, a.port, key)
+    p.device.update(caps)
+    p.handshake()
+    p.send({"t": "file_start", "id": "big", "name": "huge.bin", "size": 2 ** 55, "mime": "application/octet-stream",
+            "ready": True})
+    m = wait_for(p, {"file_refuse", "file_ready"})
+    print("← big file:", m)
+    if m and m["t"] == "file_refuse" and m.get("reason") == "space":
+        received["file_refuse"] = 1
+    data = bytes(range(256)) * 2400   # 614400 bytes
+    p.send({"t": "file_start", "id": "r1", "name": "resume-test.bin", "size": len(data), "mime": "application/octet-stream",
+            "ready": True})
+    m = wait_for(p, {"file_ready", "file_refuse"})
+    assert m and m["t"] == "file_ready" and m.get("offset") == 0, m
+    half = 256 * 1024
+    p.send({"t": "file_chunk", "id": "r1", "data": base64.b64encode(data[:half]).decode()})
+    time.sleep(0.5)
+    p.sock.close()   # the Wi-Fi drops
+    print("× dropped the connection halfway through resume-test.bin")
+    time.sleep(1)
+    p = Phone(a.host, a.port, key)
+    p.device.update(caps)
+    p.handshake()
+    p.send({"t": "file_start", "id": "r1", "name": "resume-test.bin", "size": len(data), "mime": "application/octet-stream",
+            "ready": True})
+    m = wait_for(p, {"file_ready", "file_refuse"})
+    print("← continue:", m)
+    off = (m or {}).get("offset", 0)
+    if m and m["t"] == "file_ready" and off == half:
+        received["resume_ok"] = 1
+    for o in range(off, len(data), 256 * 1024):
+        p.send({"t": "file_chunk", "id": "r1", "data": base64.b64encode(data[o:o + 256 * 1024]).decode()})
+    p.send({"t": "file_end", "id": "r1"})
+    return p
+
+
 def send_file(p: Phone, fid, name, data, mime, **extra):
     p.send({"t": "file_start", "id": fid, "name": name, "size": len(data), "mime": mime, **extra})
     for off in range(0, len(data), 256 * 1024):
@@ -136,14 +198,19 @@ def main():
     ap.add_argument("--video", help="Annex B H.264 for screen mirroring (x264 with aud=1)")
     ap.add_argument("--seconds", type=float, default=15)
     ap.add_argument("--expect", default="")
+    ap.add_argument("--v0145", action="store_true", help="act as a 0.14.5 phone and test resume / free space")
     a = ap.parse_args()
 
     ident = json.load(open(a.identity))
     key = base64.b64decode(ident["key"])
-    p = Phone(a.host, a.port, key)
-    hello, welcome = p.handshake()
-    print("← hello", {k: hello.get(k) for k in ("name", "os")}, "← welcome", welcome.get("t"))
-    assert welcome.get("t") == "welcome", welcome
+    received = {}
+    if a.v0145:
+        p = resume_and_refuse(a, key, received)
+    else:
+        p = Phone(a.host, a.port, key)
+        hello, welcome = p.handshake()
+        print("← hello", {k: hello.get(k) for k in ("name", "os")}, "← welcome", welcome.get("t"))
+        assert welcome.get("t") == "welcome", welcome
 
     now = int(time.time() * 1000)
     p.send({"t": "battery", "level": 76, "charging": True})
@@ -167,7 +234,6 @@ def main():
     print("→ sent battery, 2 notifications, live timer, media, clipboard, file, folder, ping")
 
     cfg, aus = access_units(open(a.video, "rb").read()) if a.video else (b"", [])
-    received = {}
     incoming = {}
     p.sock.settimeout(0.2)
     until = time.time() + a.seconds
@@ -192,6 +258,8 @@ def main():
             break
         t = m.get("t")
         received[t] = received.get(t, 0) + 1
+        if t == "open_url" and "t=12s" in m.get("url", ""):
+            received["play_on_phone_ok"] = 1
         if t not in ("file_chunk", "pong", "mirror_key"):
             brief = {k: (v if not isinstance(v, str) or len(v) < 80 else v[:40] + "…") for k, v in m.items()
                      if k not in ("items", "art", "data")}
@@ -220,6 +288,8 @@ def main():
             mirroring = False
         elif t == "file_start":
             incoming[m["id"]] = (m, bytearray())
+            if m.get("ready"):
+                p.send({"t": "file_ready", "id": m["id"], "offset": 0})
         elif t == "file_chunk":
             if m.get("id") in incoming:
                 incoming[m["id"]][1].extend(base64.b64decode(m["data"]))

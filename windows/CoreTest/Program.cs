@@ -25,9 +25,14 @@ void Check(string name, bool ok) => checks.Add((name, ok));
 
 bool started = false;
 WsClient? ext = null;
+// A 0.14.5 fake phone first drops a connection on purpose (to test resuming), so act on its second one.
+int connects = 0, startOn = Environment.GetEnvironmentVariable("PHONE_V0145") != null ? 2 : 1;
+bool wasConnected = false;
 state.StatusChanged += () =>
 {
-    if (!state.Connected || started) return;
+    if (state.Connected && !wasConnected) connects++;
+    wasConnected = state.Connected;
+    if (!state.Connected || started || connects < startOn) return;
     started = true;
     state.RefreshSms();
     state.SearchContacts("pri");
@@ -56,13 +61,19 @@ void Later()
     var status = ext.Receive();
     Check("extension told the phone is connected", (bool?)status?["connected"] == true && ((string?)status?["phone"])?.Length > 0);
     ext.Send(new JsonObject { ["t"] = "media", ["tab"] = 7, ["site"] = "YouTube", ["title"] = "Browser Video", ["artist"] = "",
-                              ["album"] = "", ["playing"] = true, ["dur"] = 300, ["pos"] = 12, ["canNext"] = true });
+                              ["album"] = "", ["playing"] = true, ["dur"] = 300, ["pos"] = 12, ["canNext"] = true,
+                              ["url"] = "https://www.youtube.com/watch?v=test123" });
     ext.Send(new JsonObject { ["t"] = "send_url", ["url"] = "https://example.com/from-extension" });
     _ = Task.Delay(800).ContinueWith(_ => queue.Add(() =>
     {
         state.ComputerMediaCommand("pause");
         var cmd = ext.Receive();
         Check("phone's pause reaches the browser tab", (string?)cmd?["t"] == "cmd" && (int?)cmd?["tab"] == 7 && (string?)cmd?["cmd"] == "pause");
+        // Play on phone: the phone opens the same video at the same spot (the fake phone checks t=12s), and the
+        // tab here is paused.
+        state.PlayOnPhone();
+        var pause = ext.Receive();
+        Check("Play on phone pauses the browser tab", (string?)pause?["cmd"] == "pause" && (int?)pause?["tab"] == 7);
     }));
 }
 
@@ -78,6 +89,14 @@ while (DateTime.Now < until)
 
 // Checked while the phone is still connected (disconnecting clears battery, notifications and media).
 var dl = platform.DownloadsFolder;
+// A 0.14.5 phone (fake_phone.py --v0145): a file too big for the disk is refused, and one cut off halfway continues.
+if (Environment.GetEnvironmentVariable("PHONE_V0145") != null)
+{
+    var resumed = Path.Combine(dl, "resume-test.bin");
+    Check("transfer continues after the connection drops", File.Exists(resumed) && new FileInfo(resumed).Length == 614400
+          && File.ReadAllBytes(resumed).Select((b, i) => b == (byte)(i % 256)).All(x => x));
+    Check("file too big for the disk is refused", state.Transfers.Any(t => t.State == "failed" && t.Note.StartsWith("Not enough space")));
+}
 Check("battery", state.Battery == 76);
 Check("notifications", state.Notifications.Count == 2);
 Check("call notification", state.Notifications.Any(n => n.IsCall));

@@ -132,7 +132,8 @@ public sealed class Session
     {
         if (Closed || !Keyed || Authenticated) return;
         Authenticated = true;
-        var welcome = new JsonObject { ["t"] = "welcome", ["name"] = _server.Name };
+        var welcome = new JsonObject { ["t"] = "welcome", ["name"] = _server.Name,
+                                       ["caps"] = new JsonArray(Caps.Mine.Select(c => (JsonNode)c).ToArray()) };
         if (deviceKey != null) welcome["deviceKey"] = Convert.ToBase64String(deviceKey);
         await SendAsync(welcome);
         _server.Dispatch(() => _server.RaiseAuthenticated(this));

@@ -117,6 +117,8 @@ public sealed partial class MainWindow : Window
         state.ContactsChanged += UpdateContacts;
         state.MirrorChanged += () => { if (_current == "screen") UpdateScreen(); };
         state.ApprovalRequested += ShowApproval;
+        // Forgotten (here or on the phone): back to the full-screen pairing step.
+        state.PhoneForgotten += () => { Navigate("pair"); ShowWelcome(1); };
         _mirror = new MirrorSurface(state);
         state.MirrorSink = _mirror;
         // Addresses change when the network does.
@@ -334,8 +336,8 @@ public sealed partial class MainWindow : Window
         {
             var paired = !string.IsNullOrEmpty(_state.LastPhoneName);
             SetPage(Empty("",
-                paired ? $"Waiting for {_state.PhoneName}" : "Pair your phone",
-                paired ? "Make sure Mac n Droid is open on your phone and both devices are on the same Wi-Fi network."
+                paired ? $"{_state.PhoneName} is away" : "Pair your phone",
+                paired ? "It reconnects by itself when both devices are on the same Wi-Fi network."
                        : "Scan a code with the Mac n Droid app on your Android phone to get started.",
                 paired ? null : AccentButton("Pair a phone", () => Navigate("pair"))), scroll: false);
             if (!string.IsNullOrEmpty(_state.LastError))
@@ -486,11 +488,13 @@ public sealed partial class MainWindow : Window
             {
                 "active" when t.Folder && t.Size == 0 => $"{direction} · Preparing folder…",
                 "active" => $"{direction} · {Size(t.Bytes)} of {Size(t.Size)}",
+                "paused" => $"{direction} · Paused, continues when {_state.PhoneName} reconnects",
+                "failed" when t.Note.Length > 0 => $"{direction} · {t.Note}",
                 "failed" => $"{direction} · Didn't finish",
                 _ => $"{direction} · {Size(t.Size)}",
             };
             var card = new SettingsCard { Header = t.DisplayName, Description = detail, HeaderIcon = Glyph(t.Folder ? "\uE8B7" : t.ToPhone ? "" : "") };
-            if (t.State == "active" && t.Size > 0)
+            if ((t.State == "active" || t.State == "paused") && t.Size > 0)
                 card.Content = new ProgressBar { Value = 100.0 * t.Bytes / t.Size, Width = 160 };
             else if (t.State == "done" && !t.ToPhone)
             {
@@ -540,7 +544,9 @@ public sealed partial class MainWindow : Window
         body.Children.Add(new SettingsCard { Header = "This PC", Content = _state.Name });
         body.Children.Add(new SettingsCard { Header = "Address", Content = _state.Addresses.Count > 0 ? string.Join(", ", _state.Addresses) : "No network" });
         body.Children.Add(new SettingsCard { Header = "Port", Content = _state.Server.Port.ToString() });
-        body.Children.Add(new SettingsCard { Header = "Status", Content = _state.Connected ? $"Connected to {_state.PhoneName}" : "Waiting for phone" });
+        var paired = !string.IsNullOrEmpty(_state.LastPhoneName);
+        body.Children.Add(new SettingsCard { Header = "Status", Content = _state.Connected ? $"Connected to {_state.PhoneName}"
+                                                                         : paired ? $"{_state.PhoneName} is away" : "Waiting for a phone" });
 
         body.Children.Add(SectionHeader("Pairing"));
         var copy = new SettingsCard { Header = "Copy pairing link", IsClickEnabled = true, ActionIcon = Glyph("") };
@@ -551,12 +557,19 @@ public sealed partial class MainWindow : Window
             Clipboard.SetContent(p);
         };
         body.Children.Add(copy);
-        body.Children.Add(new SettingsCard
-        {
-            Header = "Reset pairing",
-            Description = "Creates a new code. Phones paired with the old code are disconnected and must scan again.",
-            Content = PlainButton("Reset…", ConfirmReset),
-        });
+        body.Children.Add(paired
+            ? new SettingsCard
+            {
+                Header = $"Forget {_state.PhoneName}",
+                Description = "Removes the phone and everything it sent from this PC, and shows a new pairing code.",
+                Content = PlainButton("Forget…", ConfirmReset),
+            }
+            : new SettingsCard
+            {
+                Header = "Make a new code",
+                Description = "The current code, and any screenshot or copied link of it, stops working.",
+                Content = PlainButton("New code", () => _state.ForgetPhone()),
+            });
         SetPage(page);
     }
 
@@ -1097,8 +1110,8 @@ public sealed partial class MainWindow : Window
         var d = new ContentDialog
         {
             Title = $"Allow \u201c{name}\u201d to connect?",
-            Content = $"It scanned this PC's pairing code. If you allow it, it replaces {paired}, which will be disconnected. "
-                      + "Only allow a phone that's yours.",
+            Content = $"It scanned this PC's pairing code. If you allow it, it replaces {paired}: {paired} is disconnected, and its "
+                      + "notifications, clipboard history and files are removed from this PC. Only allow a phone that's yours.",
             PrimaryButtonText = "Allow", CloseButtonText = "Don't allow", DefaultButton = ContentDialogButton.Close,
             XamlRoot = Content.XamlRoot,
         };
@@ -1114,12 +1127,15 @@ public sealed partial class MainWindow : Window
 
     async void ConfirmReset()
     {
+        var name = _state.PhoneName;
         var d = new ContentDialog
         {
-            Title = "Reset pairing?", Content = "All paired phones will need to scan the new QR code.",
-            PrimaryButtonText = "Reset pairing", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Close, XamlRoot = Content.XamlRoot,
+            Title = $"Forget {name}?",
+            Content = $"{name} stops syncing with this PC, and its notifications, clipboard history and files are removed from this PC. "
+                      + "To use a phone again, scan the new pairing code.",
+            PrimaryButtonText = "Forget phone", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Close, XamlRoot = Content.XamlRoot,
         };
-        if (await d.ShowAsync() == ContentDialogResult.Primary) _state.ResetPairing();
+        if (await d.ShowAsync() == ContentDialogResult.Primary) _state.ForgetPhone();
     }
 
     async void ReplyDialog(string key, int index)

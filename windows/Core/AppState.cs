@@ -25,7 +25,9 @@ public sealed class Transfer
     public bool ToPhone { get; init; }
     public required string Path { get; init; }
     public long Bytes { get; set; }
-    public string State { get; set; } = "active";  // active | done | failed
+    public string State { get; set; } = "active";  // active | paused | done | failed
+    /// <summary>Why it failed, when there's something useful to say ("Not enough space on Pixel 8").</summary>
+    public string Note { get; set; } = "";
     public bool Folder { get; init; }
     public string ShownName { get; set; } = "";
     public string DisplayName => ShownName.Length > 0 ? ShownName : Name;
@@ -36,6 +38,9 @@ public sealed record Player(string Id, string Pkg, string App, string Title, str
                             bool Playing, double Position, DateTimeOffset PositionAt, double Speed, DateTimeOffset? Since,
                             bool CanPrev, bool CanNext, bool CanSeek)
 {
+    /// <summary>The exact page for this (phones 0.14.5+, when the app shares it), for Play on PC.</summary>
+    public string? Url { get; init; }
+
     /// <summary>Current position in ms.</summary>
     public double Now
     {
@@ -61,6 +66,8 @@ public sealed class ComputerTrack
     public double Position { get; init; }  // seconds
     public DateTimeOffset? Since { get; init; }
     public (int client, int tab)? Tab { get; init; }
+    /// <summary>A browser tab's address, when the extension reports it (0.14.5+).</summary>
+    public string? Url { get; init; }
     public byte[]? Art { get; set; }
 }
 
@@ -145,6 +152,18 @@ public sealed class AppState
     const int HistoryLimit = 20;
     readonly IPlatform _platform;
     readonly Dictionary<string, (FileStream file, string path, bool clip, string? folder, string? gallery)> _incoming = new();
+    /// <summary>The size announced for each file being received.</summary>
+    readonly Dictionary<string, long> _incomingSize = new();
+    /// <summary>Receives cut off by a dropped connection: the part already here, kept to continue it.</summary>
+    readonly Dictionary<string, (string path, long size, string? folder)> _pausedIn = new();
+    /// <summary>Sends cut off by a dropped connection: sent again with the same id when the phone is back.</summary>
+    readonly Dictionary<string, (string path, bool cleanup, Transfer? existing)> _pausedOut = new();
+    /// <summary>Answers to our own <c>file_start</c> with <c>ready</c>: offset to continue from, or -1 - free bytes if refused.</summary>
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, TaskCompletionSource<long>> _fileReplies = new();
+    /// <summary>Room kept free beyond the file itself, so a transfer never fills the disk.</summary>
+    const long SpaceMargin = 200L * 1024 * 1024;
+    /// <summary>The answer a waiting send gets when the connection drops before the phone replied.</summary>
+    const long Dropped = long.MinValue;
     readonly List<string> _received = new();
     CancellationTokenSource? _receivedTimer;
 
@@ -242,13 +261,62 @@ public sealed class AppState
     public string QrText => Identity.QrText(Server.Port, Addresses, Name);
     public string PairingLink => Identity.PairingUri(Server.Port, Addresses, Name);
 
-    public void ResetPairing()
+    /// <summary>The phone app's build number (Android versionCode); 0 before 0.14.5.</summary>
+    public int PhoneApp => Phone?["app"] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 0;
+    /// <summary>0.14.5 and later: forget messages, timer buttons, Play on.</summary>
+    public bool PhoneIsCurrent => PhoneApp >= 37;
+    public bool PhoneHas(string cap) => Phone?["caps"] is JsonArray a && a.Any(x => (string?)x == cap);
+
+    /// <summary>The phone was forgotten (here or on the phone): the app shows the pairing step again.</summary>
+    public event Action? PhoneForgotten;
+
+    /// <summary>Forget the paired phone: a new pairing code, everything this PC kept from it removed, and the pairing
+    /// step again. <paramref name="tellPhone"/> is false when the phone itself asked to unpair.</summary>
+    public void ForgetPhone(bool tellPhone = true)
     {
         if (_pending is { } p) ResolveApproval(p.Id, false);
+        if (Active is { } old)
+        {
+            // Newer phones say "Not paired with this PC anymore"; older ones find their key no longer works.
+            if (tellPhone && PhoneIsCurrent) _ = old.SendAsync(new JsonObject { ["t"] = "unpaired", ["reason"] = "forgotten" });
+            _ = Task.Delay(500).ContinueWith(_ => old.Close("Forgotten"));
+        }
         Identity.Reset();
-        Active?.Close("Pairing reset");
+        Phone = null;
+        LastPhoneName = "";
+        LastError = "";
+        ForgetPhoneData();
+        PhoneForgotten?.Invoke();
         PairingChanged?.Invoke();
+        StatusChanged?.Invoke();
     }
+
+    /// <summary>Everything kept from the paired phone: clipboard history, files, notifications, texts, photos and
+    /// unfinished transfers. Used when a different phone pairs, or this one is forgotten.</summary>
+    void ForgetPhoneData()
+    {
+        Clips.Clear();
+        Transfers.RemoveAll(t => t.State != "active");
+        foreach (var n in Notifications) _platform.WithdrawNotification(n.Key);
+        Notifications.Clear();
+        Icons.Clear();
+        SmsThreads = new();
+        SmsMessages.Clear();
+        SmsOpen = null;
+        SmsState = "unknown";
+        Contacts = new();
+        Gallery.ForgetPhone();
+        foreach (var (path, _, _) in _pausedIn.Values) TryDelete(path);
+        foreach (var (path, cleanup, _) in _pausedOut.Values) if (cleanup) TryDelete(path);
+        _pausedIn.Clear();
+        _pausedOut.Clear();
+        ClipsChanged?.Invoke();
+        TransfersChanged?.Invoke();
+        NotificationsChanged?.Invoke();
+        SmsChanged?.Invoke();
+    }
+
+    static void TryDelete(string path) { try { File.Delete(path); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { } }
 
     public void RefreshAddresses() => PairingChanged?.Invoke();
 
@@ -291,6 +359,8 @@ public sealed class AppState
 
     void Pair(Session s, string name)
     {
+        // A different phone than before: start clean.
+        if (Identity.Phone is { } prev && prev.Id != s.PhoneId) ForgetPhoneData();
         if (s.Legacy)
         {
             // An older app keeps using the invite key, so it can't be replaced until that phone updates.
@@ -364,6 +434,7 @@ public sealed class AppState
         LeftBehind.Linked();
         if (SmsState != "unknown") RefreshSms();
         Gallery.PhoneConnected();
+        if (PhoneHas(Caps.Files2)) ResumeTransfers();
     }
 
     void OnClosed(Session s, string? reason)
@@ -393,14 +464,26 @@ public sealed class AppState
         _byeSent = false;
         foreach (var n in Notifications) _platform.WithdrawNotification(n.Key);
         Notifications.Clear();
+        // A phone that can continue transfers: keep what arrived so far; sends pause by themselves (one waiting
+        // for the phone's answer is told the connection dropped).
+        bool resumable = PhoneHas(Caps.Files2);
+        foreach (var id in _fileReplies.Keys.ToList())
+            if (_fileReplies.TryRemove(id, out var waiting)) waiting.TrySetResult(Dropped);
         foreach (var (id, f) in _incoming)
         {
             f.file.Dispose();
-            try { File.Delete(f.path); } catch (IOException) { }
+            if (resumable && !f.clip && f.gallery == null && _incomingSize.GetValueOrDefault(id) > 0)
+            {
+                _pausedIn[id] = (f.path, _incomingSize[id], f.folder);
+                Update(id, state: "paused");
+                continue;
+            }
+            TryDelete(f.path);
             Update(id, state: "failed");
         }
         _incoming.Clear();
-        foreach (var t in Transfers.Where(t => t.State == "active")) t.State = "failed";
+        _incomingSize.Clear();
+        if (!resumable) foreach (var t in Transfers.Where(t => t.State == "active")) t.State = "failed";
         StatusChanged?.Invoke();
         NotificationsChanged?.Invoke();
         TransfersChanged?.Invoke();
@@ -434,6 +517,20 @@ public sealed class AppState
         {
             case "key_saved":
                 ConfirmPhoneKey();
+                break;
+            case "unpair":
+                // Unpaired on the phone: forget it here too, and show the pairing code.
+                ForgetPhone(tellPhone: false);
+                break;
+            case "play_on_phone":
+                PlayOnPhone();
+                break;
+            case "play_on_computer":
+                if ((Players.FirstOrDefault(x => x.Id == (string?)m["id"]) ?? NowPlaying) is { } pl) PlayOnComputer(pl);
+                break;
+            case "file_ready" or "file_refuse":
+                if ((string?)m["id"] is { } rid && _fileReplies.TryRemove(rid, out var tcs))
+                    tcs.TrySetResult((string?)m["t"] == "file_refuse" ? -1 - (long)Num(m["free"]) : (long)Num(m["offset"]));
                 break;
             case "approve":
                 ResolveApproval((string?)m["id"] ?? "", (bool?)m["allow"] == true);
@@ -646,7 +743,8 @@ public sealed class AppState
                            (string?)m["album"] ?? "", Num(m["duration"]), (bool?)m["playing"] ?? false, Num(m["position"]),
                            m["positionAt"] != null ? Ms(m["positionAt"]) : DateTimeOffset.Now, Num(m["speed"], 1),
                            since > 0 ? DateTimeOffset.FromUnixTimeMilliseconds((long)since) : null,
-                           (bool?)m["canPrev"] ?? true, (bool?)m["canNext"] ?? true, (bool?)m["canSeek"] ?? false);
+                           (bool?)m["canPrev"] ?? true, (bool?)m["canNext"] ?? true, (bool?)m["canSeek"] ?? false)
+            { Url = (string?)m["url"] };
         Players.RemoveAll(x => x.Id == id);
         Players.Add(p);
         Players.Sort((a, b) => a.Playing != b.Playing ? (a.Playing ? -1 : 1) : (b.Since ?? b.PositionAt).CompareTo(a.Since ?? a.PositionAt));
@@ -717,6 +815,7 @@ public sealed class AppState
                     Key = $"tab|{client}|{tab}|{(string?)m["title"]}", App = (string?)m["site"] ?? "Browser",
                     Title = (string?)m["title"] ?? "", Artist = (string?)m["artist"] ?? "", Album = (string?)m["album"] ?? "",
                     Playing = playing, Duration = Num(m["dur"]), Position = Num(m["pos"]), Since = since, Tab = key, Art = art,
+                    Url = (string?)m["url"],
                 };
                 PushComputerMedia();
                 break;
@@ -905,7 +1004,34 @@ public sealed class AppState
         StatusChanged?.Invoke();
     }
 
-    public void OpenOnPhone(string url) => Send(new JsonObject { ["t"] = "open_url", ["url"] = url });
+    /// <summary>Opens a page on the phone. The page that's playing here continues there from the same spot, and
+    /// stops here, so it doesn't play on both.</summary>
+    public void OpenOnPhone(string url)
+    {
+        var link = url;
+        if (CurrentComputerTrack() is { Playing: true, Url: { } playing } t && MediaHandoff.SamePage(playing, url))
+        {
+            link = MediaHandoff.WithTime(url, t.Position);
+            ComputerMediaCommand("pause");
+        }
+        Send(new JsonObject { ["t"] = "open_url", ["url"] = link });
+    }
+
+    /// <summary>Play on phone: the phone opens what's playing here (same YouTube spot), and it stops here.</summary>
+    public void PlayOnPhone()
+    {
+        if (Active == null || CurrentComputerTrack() is not { } t || MediaHandoff.PhoneUrl(t) is not { } url) return;
+        Send(new JsonObject { ["t"] = "open_url", ["url"] = url });
+        if (t.Playing) ComputerMediaCommand("pause");
+    }
+
+    /// <summary>Play on PC: open what the phone is playing here, and pause it on the phone.</summary>
+    public void PlayOnComputer(Player p)
+    {
+        if (MediaHandoff.ComputerUrl(p, p.Url) is not { } url) return;
+        _platform.OpenUrl(url);
+        if (p.Playing) MediaCommand("pause", p.Id);
+    }
 
     // MARK: Clipboard
 
@@ -1011,15 +1137,16 @@ public sealed class AppState
         });
     }
 
-    void SendFile(string path, bool clip = false, Transfer? existing = null, bool cleanup = false)
+    void SendFile(string path, bool clip = false, Transfer? existing = null, bool cleanup = false, string? resumeId = null)
     {
         var s = Active;
         if (s == null) { if (existing != null) Update(existing.Id, state: "failed"); return; }
-        var id = existing?.Id ?? Guid.NewGuid().ToString("N");
+        var id = resumeId ?? existing?.Id ?? Guid.NewGuid().ToString("N");
         var size = new FileInfo(path).Length;
         var name = System.IO.Path.GetFileName(path);
         bool folder = existing?.Folder == true;
-        if (existing != null)
+        if (resumeId != null) Update(id, state: "active");
+        else if (existing != null)
         {
             Transfers.Remove(existing);
             Transfers.Insert(0, new Transfer { Id = id, Name = name, ShownName = existing.Name, Size = size, ToPhone = true, Path = existing.Path, Folder = true });
@@ -1030,24 +1157,40 @@ public sealed class AppState
             Transfers.Insert(0, new Transfer { Id = id, Name = name, Size = size, ToPhone = true, Path = path });
             TransfersChanged?.Invoke();
         }
-        var shownName = existing?.Name ?? name;
+        var shownName = existing?.Name ?? Transfers.FirstOrDefault(t => t.Id == id)?.DisplayName ?? name;
+        // A phone that understands it says whether it has room and where to continue (PROTOCOL.md, files2).
+        bool ask = !clip && PhoneHas(Caps.Files2);
+        var answer = ask ? _fileReplies[id] = new TaskCompletionSource<long>(TaskCreationOptions.RunContinuationsAsynchronously) : null;
         _ = Task.Run(async () =>
         {
             var start = new JsonObject { ["t"] = "file_start", ["id"] = id, ["name"] = name, ["size"] = size,
                                          ["mime"] = folder ? "application/zip" : Mime.Of(name) };
             if (clip) start["clip"] = true;
             if (folder) start["folder"] = true;
+            if (ask) start["ready"] = true;
             bool ok = await s.SendAsync(start);
-            long sent = 0;
+            bool dropped = !ok;
+            long sent = 0, refusedFree = -1;
+            if (ok && answer != null)
+            {
+                var done = await Task.WhenAny(answer.Task, Task.Delay(TimeSpan.FromSeconds(20)));
+                _fileReplies.TryRemove(id, out _);
+                if (done != answer.Task) ok = false;
+                else if (answer.Task.Result == Dropped) { ok = false; dropped = true; }
+                else if (answer.Task.Result < 0) { refusedFree = -1 - answer.Task.Result; ok = false; }
+                else sent = Math.Min(answer.Task.Result, size);
+            }
             var last = DateTime.MinValue;
             try
             {
                 await using var f = File.OpenRead(path);
+                f.Seek(sent, SeekOrigin.Begin);
                 var buf = new byte[Chunk];
                 int n;
                 while (ok && (n = await f.ReadAsync(buf)) > 0)
                 {
                     ok = await s.SendAsync(new JsonObject { ["t"] = "file_chunk", ["id"] = id, ["data"] = Convert.ToBase64String(buf, 0, n) });
+                    if (!ok) { dropped = true; break; }
                     sent += n;
                     if ((DateTime.Now - last).TotalMilliseconds > 100)
                     {
@@ -1058,17 +1201,39 @@ public sealed class AppState
                 }
             }
             catch (IOException) { ok = false; }
-            ok = ok && await s.SendAsync(new JsonObject { ["t"] = "file_end", ["id"] = id });
-            if (clip || cleanup) { try { File.Delete(path); } catch (IOException) { } }
+            if (ok) { ok = await s.SendAsync(new JsonObject { ["t"] = "file_end", ["id"] = id }); dropped = !ok; }
+            bool paused = !ok && dropped && ask;
+            if ((clip || cleanup) && !paused) TryDelete(path);
             if (clip) return;
             long total = sent;
             Server.Dispatch(() =>
             {
+                if (paused) { _pausedOut[id] = (path, cleanup, existing); Update(id, total, "paused"); return; }
+                if (refusedFree >= 0 && Transfers.FirstOrDefault(t => t.Id == id) is { } tr)
+                    tr.Note = $"Not enough space on {PhoneName} ({Size(refusedFree)} free)";
                 Update(id, total, ok ? "done" : "failed");
                 if (!Transfers.Any(t => t.ToPhone && t.State == "active"))
-                    _platform.ShowNotification(ok ? $"Sent to {PhoneName}" : "Couldn't send", shownName, null);
+                    _platform.ShowNotification(ok ? $"Sent to {PhoneName}" : "Couldn't send",
+                        refusedFree >= 0 ? $"There isn't enough space on {PhoneName} for {shownName}." : shownName, null);
             });
         });
+    }
+
+    /// <summary>The phone is back: send what was cut off, with the same ids, so it continues where it stopped.</summary>
+    void ResumeTransfers()
+    {
+        var list = _pausedOut.ToList();
+        _pausedOut.Clear();
+        foreach (var (id, o) in list) SendFile(o.path, existing: o.existing, cleanup: o.cleanup, resumeId: id);
+    }
+
+    static string Size(long bytes) => bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):0.#} GB"
+        : bytes >= 1L << 20 ? $"{bytes / (double)(1L << 20):0.#} MB" : $"{Math.Max(1, bytes / 1024)} KB";
+
+    static long? FreeSpace(string dir)
+    {
+        try { return new DriveInfo(System.IO.Path.GetPathRoot(System.IO.Path.GetFullPath(dir))!).AvailableFreeSpace; }
+        catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException) { return null; }
     }
 
     void Update(string id, long? bytes = null, string? state = null)
@@ -1118,8 +1283,33 @@ public sealed class AppState
                 }
                 var dir = clip || isFolder ? System.IO.Path.GetTempPath() : _platform.DownloadsFolder;
                 Directory.CreateDirectory(dir);
+                long size = (long)Num(m["size"]);
+                bool ask = (bool?)m["ready"] == true;
+                // The same transfer again after the connection dropped: carry on from what's already here.
+                if (!clip && _pausedIn.Remove(id, out var part) && part.size == size && File.Exists(part.path))
+                {
+                    var fs = new FileStream(part.path, FileMode.Append, FileAccess.Write);
+                    _incoming[id] = (fs, part.path, false, part.folder, null);
+                    _incomingSize[id] = size;
+                    if (ask) Send(new JsonObject { ["t"] = "file_ready", ["id"] = id, ["offset"] = fs.Position });
+                    Update(id, fs.Position, "active");
+                    break;
+                }
+                // Not enough room: say so instead of filling the disk.
+                if (!clip && size > 0 && FreeSpace(dir) is { } free && size + SpaceMargin > free)
+                {
+                    if (ask) Send(new JsonObject { ["t"] = "file_refuse", ["id"] = id, ["reason"] = "space", ["free"] = free });
+                    Transfers.Insert(0, new Transfer { Id = id, Name = name, Size = size, Path = "", State = "failed",
+                                                       Note = $"Not enough space on this PC ({Size(free)} free)" });
+                    TransfersChanged?.Invoke();
+                    _platform.ShowNotification($"Couldn't receive {name}",
+                        $"There isn't enough space on this PC: it needs {Size(size)} and {Size(free)} is free.", null);
+                    break;
+                }
                 var path = UniquePath(dir, clip ? $"macndroid-clip-{id}.png" : isFolder ? $"macndroid-folder-{id}.zip" : name);
                 _incoming[id] = (File.Create(path), path, clip, isFolder ? name : null, null);
+                _incomingSize[id] = size;
+                if (ask) Send(new JsonObject { ["t"] = "file_ready", ["id"] = id, ["offset"] = 0 });
                 if (!clip)
                 {
                     var shown = isFolder ? (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name) : System.IO.Path.GetFileName(path);
@@ -1135,6 +1325,7 @@ public sealed class AppState
                 break;
             case "file_end":
                 if (!_incoming.Remove(id, out var done)) return;
+                _incomingSize.Remove(id);
                 done.file.Dispose();
                 if (done.gallery is { } gid) { Gallery.Arrived(gid, done.path); return; }
                 if (done.clip)
@@ -1192,6 +1383,14 @@ public sealed class AppState
             });
         });
     }
+}
+
+/// <summary>Features a device announces in <c>device</c> / <c>welcome</c> (PROTOCOL.md, v0.14.5 additions).</summary>
+public static class Caps
+{
+    /// <summary>Resumable transfers and the free-space check.</summary>
+    public const string Files2 = "files2";
+    public static readonly string[] Mine = [Files2];
 }
 
 static class Mime

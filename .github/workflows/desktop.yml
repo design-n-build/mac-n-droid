@@ -51,7 +51,16 @@ jobs:
           # Wait until the app has written its identity and is listening (up to 60 s), not a fixed time: CI machines vary.
           for i in $(seq 120); do [ -f $MACNDROID_CONFIG/identity.json ] && ss -ltn | grep -q ":$MACNDROID_PORT " && break; sleep 0.5; done
           python3 tools/fake_phone.py --identity $MACNDROID_CONFIG/identity.json --port 47901 --video $RUNNER_TEMP/clip.h264 \
-            --seconds 10 --expect clip_history,sms_threads,sms_thread,contacts_search,sms_send,mirror_start,media_cmd,notif_action,open_url,file_ok,folder_ok,mac_media
+            --seconds 10 --expect clip_history,sms_threads,sms_thread,contacts_search,sms_send,mirror_start,media_cmd,notif_action,open_url,file_ok,folder_ok,mac_media,play_on_phone_ok
+          wait $APP
+      - name: Windows app core with a 0.14.5 phone (resume after a dropped connection, free space)
+        run: |
+          export MACNDROID_CONFIG=$RUNNER_TEMP/win2 MACNDROID_PORT=47904 MACNDROID_DOWNLOADS=$RUNNER_TEMP/win2/dl PHONE_V0145=1
+          dotnet run --no-build -c Release --project windows/CoreTest -- 12 &
+          APP=$!
+          for i in $(seq 120); do [ -f $MACNDROID_CONFIG/identity.json ] && ss -ltn | grep -q ":$MACNDROID_PORT " && break; sleep 0.5; done
+          python3 tools/fake_phone.py --v0145 --identity $MACNDROID_CONFIG/identity.json --port 47904 --seconds 12 \
+            --expect clip_history,sms_threads,media_cmd,notif_action,open_url,file_ok,folder_ok,mac_media,file_refuse,resume_ok,play_on_phone_ok
           wait $APP
       - name: Linux screenshots (every page, paired with the fake phone)
         continue-on-error: true   # pictures for checking layout; never blocks a release

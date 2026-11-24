@@ -66,6 +66,12 @@ public sealed partial class App : Application
         };
         Platform.State = State;
         Platform.Sounds = Settings.Sounds;
+        // Forgotten (here or on the phone): it's no longer the paired phone.
+        State.PhoneForgotten += () =>
+        {
+            Settings.LastPhoneName = "";
+            Settings.Save();
+        };
         State.StatusChanged += () =>
         {
             UpdateTray();
@@ -157,6 +163,8 @@ public sealed partial class App : Application
             var (text, png) = await WindowsPlatform.ReadClipboardAsync();
             State.SendClipboardNow(text, png);
         }));
+        // Play on phone: what's playing on this PC opens on the phone (same spot on YouTube) and stops here.
+        menu.Items.Add(Item("Play on phone", "\uE8EA", () => State.PlayOnPhone()));
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(Item("Open Mac n Droid", "", () => ShowWindow()));
         menu.Items.Add(Item("Settings", "", () => ShowWindow("settings")));
@@ -187,7 +195,8 @@ public sealed partial class App : Application
     {
         if (_statusItem == null || _tray == null) return;
         var battery = State.Battery is { } b ? $" · {b}%" : "";
-        _statusItem.Text = State.Connected ? $"{State.PhoneName} · Connected{battery}" : $"Waiting for {State.PhoneName}";
+        _statusItem.Text = State.Connected ? $"{State.PhoneName} · Connected{battery}"
+            : string.IsNullOrEmpty(State.LastPhoneName) ? "No phone paired" : $"{State.PhoneName} is away";
         _tray.ToolTipText = State.Connected ? $"Mac n Droid · {State.PhoneName}{battery}" : "Mac n Droid · Not connected";
         if (_ringItem != null)
         {

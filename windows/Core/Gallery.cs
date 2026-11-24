@@ -199,6 +199,14 @@ public sealed class GalleryModel
     }
 
     /// <summary>Turned off on the phone: drop everything shown and the originals opened before.</summary>
+    /// <summary>A different phone, or the phone was forgotten: nothing of the old one's photos stays.</summary>
+    public void ForgetPhone()
+    {
+        Forget();
+        Access = "unknown";
+        Changed?.Invoke();
+    }
+
     void Forget()
     {
         Items.Clear(); Albums = new(); Total = 0; Thumbs.Clear(); _askedThumbs.Clear(); Opening.Clear();
