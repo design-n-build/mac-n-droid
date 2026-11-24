@@ -92,8 +92,16 @@ print(f"listening on {st.server.port}", flush=True)
 ext = {}
 
 
+# A 0.14.5 fake phone (--v0145) first drops a connection on purpose (to test resuming), so act on its second one.
+V0145 = bool(os.environ.get("PHONE_V0145"))
+seen = {"connects": 0, "was": False}
+
+
 def on_connected(*_):
-    if not st.connected or "started" in ext:
+    if st.connected and not seen["was"]:
+        seen["connects"] += 1
+    seen["was"] = st.connected
+    if not st.connected or "started" in ext or seen["connects"] < (2 if V0145 else 1):
         return
     ext["started"] = True
     st.refresh_sms()
@@ -123,7 +131,7 @@ def later():
     status = s.recv()
     check("extension told the phone is connected", status.get("connected") is True and status.get("phone"))
     s.send({"t": "media", "tab": 7, "site": "YouTube", "title": "Browser Video", "artist": "", "album": "",
-                "playing": True, "dur": 300, "pos": 12, "canNext": True})
+                "playing": True, "dur": 300, "pos": 12, "canNext": True, "url": "https://www.youtube.com/watch?v=test123"})
     s.send({"t": "send_url", "url": "https://example.com/from-extension"})
     ext["sock"] = s
     GLib.timeout_add(800, phone_controls_browser)
@@ -140,6 +148,14 @@ def phone_controls_browser():
     except (OSError, ValueError, EOFError):
         cmd = {}
     check("phone's pause reaches the browser tab", cmd == {"t": "cmd", "tab": 7, "cmd": "pause"})
+    # Play on phone: the phone opens the same video at the same spot (the fake phone checks t=12s), and the tab
+    # here is paused.
+    st.play_on_phone()
+    try:
+        cmd = s.recv()
+    except (OSError, ValueError, EOFError):
+        cmd = {}
+    check("Play on phone pauses the browser tab", cmd.get("cmd") == "pause" and cmd.get("tab") == 7)
     return False
 
 
@@ -163,6 +179,12 @@ def finish():
     check("contact search", st.contacts and st.contacts[0]["name"] == "Priya")
     check("transfers to phone done: " + ", ".join(f"{t.name}={t.state}" for t in st.transfers if t.to_phone),
           all(t.state == "done" for t in st.transfers if t.to_phone) and sum(t.to_phone for t in st.transfers) == 2)
+    if V0145:
+        r = dl / "resume-test.bin"
+        check("transfer continues after the connection drops",
+              r.exists() and r.read_bytes() == bytes(range(256)) * 2400)
+        check("file too big for the disk is refused",
+              any(t.state == "failed" and t.note.startswith("Not enough space") for t in st.transfers))
     if mirror.decoder_available() and os.environ.get("MIRROR_VIDEO"):
         check(f"screen mirroring decoded frames ({frames[0]})", frames[0] > 10)
     for k, v in checks.items():

@@ -168,6 +168,10 @@ class ComputerMedia(GObject.Object):
             "pos": p.position(),
             "since": p.since,
         }
+        # Browsers report the page (YouTube etc.): Play on phone then opens exactly that.
+        url = md.get("xesam:url", "") or ""
+        if url.startswith("https://"):
+            track["url"] = url
         self._load_art(track["key"], md.get("mpris:artUrl", "") or "")
         return track
 
@@ -206,3 +210,45 @@ class ComputerMedia(GObject.Object):
             return False
         p.proxy.call(method, None, Gio.DBusCallFlags.NONE, 1000, None, None)
         return True
+
+
+class SystemVolume:
+    """This computer's output volume, 0…100, for the phone's "Music on your computer" slider: PipeWire's wpctl, or
+    PulseAudio's pactl. None when neither is available."""
+
+    def __init__(self):
+        import shutil
+        self.tool = "wpctl" if shutil.which("wpctl") else "pactl" if shutil.which("pactl") else None
+
+    def _run(self, *args) -> str:
+        import subprocess
+        try:
+            return subprocess.run(args, capture_output=True, text=True, timeout=2).stdout
+        except (OSError, subprocess.SubprocessError):
+            return ""
+
+    def get(self) -> tuple[int, bool] | None:
+        if self.tool == "wpctl":
+            out = self._run("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@")  # "Volume: 0.45 [MUTED]"
+            try:
+                return round(float(out.split()[1]) * 100), "MUTED" in out
+            except (IndexError, ValueError):
+                return None
+        if self.tool == "pactl":
+            vol = self._run("pactl", "get-sink-volume", "@DEFAULT_SINK@")
+            mute = self._run("pactl", "get-sink-mute", "@DEFAULT_SINK@")
+            try:
+                pct = next(int(w.rstrip("%")) for w in vol.split() if w.endswith("%"))
+            except (StopIteration, ValueError):
+                return None
+            return pct, "yes" in mute
+        return None
+
+    def set(self, v: int):
+        v = max(0, min(100, int(v)))
+        if self.tool == "wpctl":
+            self._run("wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", f"{v / 100:.2f}")
+            self._run("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0")
+        elif self.tool == "pactl":
+            self._run("pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{v}%")
+            self._run("pactl", "set-sink-mute", "@DEFAULT_SINK@", "0")

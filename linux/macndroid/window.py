@@ -1,6 +1,7 @@
 """The main window, built from stock GNOME (libadwaita) parts so it looks like any other GNOME app.
 
-Same pages as the Mac app: Overview, Notifications, Messages, Phone Screen, Clipboard, Files, and Pair a Phone.
+Same pages as the Mac app: Overview, Notifications, Messages, Photos, Phone Screen, Clipboard, Files, and Pair a
+Phone. What's playing on the phone and its timers sit at the bottom of the sidebar, as on the Mac and Windows.
 """
 import time
 
@@ -8,12 +9,13 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from . import mirror as mirroring
 from .qr import QRCodeView
-from .state import can_text, number_key
+from .state import can_text, downloads_dir, number_key
 
 PAGES = [
     ("overview", "Overview", "go-home-symbolic"),
     ("notifications", "Notifications", "preferences-system-notifications-symbolic"),
     ("messages", "Messages", "mail-unread-symbolic"),
+    ("photos", "Photos", "image-x-generic-symbolic"),
     ("screen", "Phone Screen", "video-display-symbolic"),
     ("clipboard", "Clipboard", "edit-paste-symbolic"),
     ("files", "Files", "folder-download-symbolic"),
@@ -26,6 +28,8 @@ CSS = """
 .bubble.failed { background: alpha(@error_bg_color, 0.85); color: @error_fg_color; }
 .art { border-radius: 8px; }
 .mirror-frame { background: black; border-radius: 12px; }
+.live-card { padding: 10px; border-radius: 10px; }
+.tile { border-radius: 6px; }
 """
 
 
@@ -119,6 +123,22 @@ class Window(Adw.ApplicationWindow):
         scroller.set_child(self.nav)
         side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         side.append(scroller)
+        # What's live on the phone: music with its controls and the phone's volume, then timers and calls.
+        self.side_live = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_start=12, margin_end=12)
+        side.append(self.side_live)
+        self.side_volume = Gtk.Box(spacing=4, margin_start=12, margin_end=12, visible=False)
+        self.side_mute = Gtk.Button(icon_name="audio-volume-high-symbolic", tooltip_text="Mute or unmute the phone",
+                                    css_classes=["flat", "circular"])
+        self.side_mute.connect("clicked", lambda *_: self.state.toggle_phone_mute())
+        self.side_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+        self.side_scale.set_hexpand(True)
+        self.side_scale.set_draw_value(False)
+        self._volume_dragged = 0.0
+        self.side_scale.connect("value-changed", self._volume_changed)
+        self.side_volume.append(self.side_mute)
+        self.side_volume.append(self.side_scale)
+        side.append(self.side_volume)
+        self._live_bars = []
         self.footer = Gtk.Label(xalign=0, wrap=True, css_classes=["dim-label", "caption"],
                                 margin_start=18, margin_end=18, margin_top=6, margin_bottom=12)
         side.append(self.footer)
@@ -140,6 +160,7 @@ class Window(Adw.ApplicationWindow):
         self._build_overview()
         self._build_notifications()
         self._build_messages()
+        self._build_photos()
         self._build_screen()
         self._build_clipboard()
         self._build_files()
@@ -163,6 +184,10 @@ class Window(Adw.ApplicationWindow):
         state.connect("sms-changed", lambda *_: self.refresh_sms())
         state.connect("contacts-changed", lambda *_: self._refresh_contacts())
         state.connect("mirror-changed", lambda *_: self.refresh_screen())
+        state.gallery.connect("changed", lambda *_: self.refresh_photos())
+        state.gallery.connect("appended", lambda _g, first: self._append_tiles(first))
+        state.gallery.connect("thumb", lambda _g, gid: self._thumb_arrived(gid))
+        GLib.timeout_add_seconds(1, self._tick_live)
         state.connect("approval-request", lambda _s, req: self._approval(req))
         self._approval_dialog = None
         self.nav.select_row(self._rows["overview" if state.identity else "pair"])
@@ -190,6 +215,8 @@ class Window(Adw.ApplicationWindow):
         self.split.set_show_content(True)
         if pid == "messages":
             self.state.refresh_sms()
+        if pid == "photos":
+            self.state.gallery.load_if_needed()
 
     def toast(self, text: str):
         self.toasts.add_toast(Adw.Toast(title=text, timeout=3))
@@ -431,16 +458,15 @@ class Window(Adw.ApplicationWindow):
             g.add(r)
         page.add(g)
 
-        g = Adw.PreferencesGroup(description="Resetting creates a new code. Phones paired with the old code are "
-                                             "disconnected and must scan again.")
+        self.reset_group = Adw.PreferencesGroup()
         copy = Adw.ActionRow(title="Copy Pairing Link", activatable=True)
         copy.add_suffix(Gtk.Image(icon_name="edit-copy-symbolic"))
         copy.connect("activated", self._copy_link)
-        reset = Adw.ActionRow(title="Reset Pairing…", activatable=True, css_classes=["error"])
-        reset.connect("activated", lambda *_: self.confirm_reset())
-        g.add(copy)
-        g.add(reset)
-        page.add(g)
+        self.reset_row = Adw.ActionRow(activatable=True)
+        self.reset_row.connect("activated", lambda *_: self.confirm_reset())
+        self.reset_group.add(copy)
+        self.reset_group.add(self.reset_row)
+        page.add(self.reset_group)
 
     # -- refresh --
 
@@ -451,11 +477,11 @@ class Window(Adw.ApplicationWindow):
         self.badge.set_label(str(n))
         self.badge.set_visible(n > 0)
         if st.connected:
-            self.footer.set_label(f"● Connected to {phone}")
+            self.footer.set_label("Sharing paused on your phone" if st.sharing_paused else f"● Connected to {phone}")
         elif st.last_error:
             self.footer.set_label(st.last_error)
         else:
-            self.footer.set_label(f"Waiting for {phone}…" if st.last_phone_name else "No phone paired")
+            self.footer.set_label(f"{phone} is away" if st.last_phone_name else "No phone paired")
 
         # Overview
         if st.connected:
@@ -477,9 +503,9 @@ class Window(Adw.ApplicationWindow):
         else:
             self.overview.set_visible_child_name("waiting")
             if st.last_phone_name:
-                self.waiting.set_title(f"Waiting for {phone}")
-                self.waiting.set_description("Make sure Mac n Droid is open on your phone and both devices are on "
-                                             "the same Wi-Fi network.")
+                self.waiting.set_title(f"{phone} Is Away")
+                self.waiting.set_description("It reconnects by itself when both devices are on the same Wi-Fi "
+                                             "network.")
             else:
                 self.waiting.set_title("Pair Your Phone")
                 self.waiting.set_description("Scan a code with the Mac n Droid app on your Android phone to get "
@@ -507,6 +533,9 @@ class Window(Adw.ApplicationWindow):
         self.refresh_media()
         self.refresh_sms()
         self.refresh_screen()
+        if getattr(self, "_photos_connected", None) != st.connected:
+            self._photos_connected = st.connected
+            self.refresh_photos()
 
         # Pair
         self.qr.set_text(st.qr_text() if st.server.port else "")
@@ -514,51 +543,261 @@ class Window(Adw.ApplicationWindow):
         self.row_addr.set_subtitle(", ".join(st.addresses) or "No network")
         self.row_port.set_subtitle(str(st.server.port or "—"))
         self.row_status.set_subtitle(f"Connected to {GLib.markup_escape_text(phone)}" if st.connected
-                                     else "Waiting for phone")
+                                     else f"{GLib.markup_escape_text(phone)} is away" if st.last_phone_name
+                                     else "Waiting for a phone")
+        if st.last_phone_name:
+            self.reset_row.set_title(f"Forget {GLib.markup_escape_text(phone)}…")
+            self.reset_row.add_css_class("error")
+            self.reset_group.set_description("Forgetting removes the phone and everything it sent from this computer, "
+                                             "and shows a new pairing code.")
+        else:
+            self.reset_row.set_title("Make a New Code…")
+            self.reset_row.remove_css_class("error")
+            self.reset_group.set_description("A new code stops the current one, and any screenshot or copied link of "
+                                             "it, from working.")
 
     # -- now playing and live activities --
 
     def refresh_media(self):
+        """The sidebar's live section: up to two phone players and four live activities (timers, calls, rides)."""
         st = self.state
-        clear(self.live_box)
-        rows = 0
-        for p in st.players[:3]:
-            row = Adw.ActionRow(title=GLib.markup_escape_text(p.title),
-                                subtitle=GLib.markup_escape_text(" · ".join(x for x in (p.artist, p.app) if x)),
-                                title_lines=1, subtitle_lines=1)
-            art = st.player_art.get(p.id)
-            tex = texture(art) if art else None
-            if tex:
-                row.add_prefix(Gtk.Picture(paintable=tex, width_request=44, height_request=44, can_shrink=True,
-                                           content_fit=Gtk.ContentFit.COVER, css_classes=["art"],
-                                           valign=Gtk.Align.CENTER))
+        clear(self.side_live)
+        self._live_bars = []
+        self.live_group.set_visible(False)  # shown in the sidebar now, as on the Mac and Windows
+        if not st.connected:
+            self.side_volume.set_visible(False)
+            return
+        for p in st.players[:2]:
+            self.side_live.append(self._player_card(p))
+        acts = sorted(st.live.values(), key=lambda a: {"call": 50, "timer": 40, "stopwatch": 30}.get(a.get("kind"), 10),
+                      reverse=True)
+        for a in acts[:4]:
+            self.side_live.append(self._live_card(a))
+        vol = st.phone_volume
+        self.side_volume.set_visible(bool(st.players) and vol is not None)
+        if vol is not None:
+            self.side_mute.set_icon_name("audio-volume-muted-symbolic" if vol == 0 else "audio-volume-high-symbolic")
+            # Don't fight the slider while it's being dragged (it's ahead of what the phone has reported).
+            if time.time() - self._volume_dragged > 1 and int(self.side_scale.get_value()) != vol:
+                self._setting_volume = True
+                self.side_scale.set_value(vol)
+                self._setting_volume = False
+
+    _setting_volume = False
+
+    def _volume_changed(self, scale):
+        if self._setting_volume:
+            return
+        self._volume_dragged = time.time()
+        self.state.set_phone_volume(int(scale.get_value()))
+
+    def _player_card(self, p):
+        st = self.state
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, css_classes=["card", "live-card"])
+        head = Gtk.Box(spacing=8)
+        art = st.player_art.get(p.id)
+        tex = texture(art) if art else None
+        if tex:
+            head.append(Gtk.Picture(paintable=tex, width_request=36, height_request=36, can_shrink=True,
+                                    content_fit=Gtk.ContentFit.COVER, css_classes=["art"], valign=Gtk.Align.CENTER))
+        else:
+            head.append(self._app_icon(p.pkg, 28))
+        names = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, valign=Gtk.Align.CENTER)
+        names.append(Gtk.Label(label=p.title, xalign=0, ellipsize=Pango.EllipsizeMode.END, css_classes=["heading"]))
+        names.append(Gtk.Label(label=p.artist or p.app, xalign=0, ellipsize=Pango.EllipsizeMode.END,
+                               css_classes=["dim-label", "caption"]))
+        head.append(names)
+        card.append(head)
+        if p.duration:
+            bar = Gtk.ProgressBar(fraction=min(1, p.now() / p.duration))
+            self._live_bars.append((bar, p))
+            card.append(bar)
+        controls = Gtk.Box(homogeneous=True)
+        for icon, tip, cmd, on in [("media-skip-backward-symbolic", "Previous", "prev", p.can_prev),
+                                   ("media-playback-pause-symbolic" if p.playing else "media-playback-start-symbolic",
+                                    "Pause" if p.playing else "Play", "toggle", True),
+                                   ("media-skip-forward-symbolic", "Next", "next", p.can_next)]:
+            b = Gtk.Button(icon_name=icon, tooltip_text=tip, sensitive=on, css_classes=["flat", "circular"])
+            b.connect("clicked", lambda *_, c=cmd, i=p.id: st.media_command(c, i))
+            controls.append(b)
+        here = Gtk.Button(icon_name="computer-symbolic", tooltip_text="Play on This Computer",
+                          css_classes=["flat", "circular"])
+        here.connect("clicked", lambda *_, pl=p: st.play_on_computer(pl))
+        controls.append(here)
+        card.append(controls)
+        return card
+
+    def _live_card(self, a):
+        st = self.state
+        card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, css_classes=["card", "live-card"])
+        row = Gtk.Box(spacing=8)
+        row.append(self._app_icon(a.get("pkg", ""), 22))
+        names = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True, valign=Gtk.Align.CENTER)
+        names.append(Gtk.Label(label=a.get("title") or a.get("app", ""), xalign=0, ellipsize=Pango.EllipsizeMode.END))
+        sub = a.get("text") or ""
+        if sub:
+            names.append(Gtk.Label(label=sub, xalign=0, ellipsize=Pango.EllipsizeMode.END,
+                                   css_classes=["dim-label", "caption"]))
+        row.append(names)
+        kind = a.get("kind", "")
+        if kind == "progress" and a.get("max"):
+            row.append(Gtk.ProgressBar(fraction=min(1, (a.get("progress") or 0) / a["max"]), valign=Gtk.Align.CENTER,
+                                       width_request=60))
+        elif a.get("when") and kind in ("call", "timer", "stopwatch"):
+            row.append(self._chronometer(a))
+        elif a.get("short"):
+            row.append(Gtk.Label(label=a["short"], css_classes=["numeric"]))
+        card.append(row)
+        # A timer's or stopwatch's own buttons (Pause, Resume, Stop…), which run on the phone (phones 0.14.5+).
+        if kind in ("timer", "stopwatch"):
+            acts = [x for x in a.get("actions") or [] if isinstance(x, dict) and x.get("title")
+                    and not x.get("reply") and not x.get("opens")][:3]
+            if acts:
+                box = Gtk.Box(spacing=6, homogeneous=True)
+                for x in acts:
+                    b = Gtk.Button(label=x["title"])
+                    b.connect("clicked", lambda *_, k=a.get("key", ""), i=x.get("i", 0): st.action(k, i))
+                    box.append(b)
+                card.append(box)
+            elif not st.phone_is_current:
+                card.append(Gtk.Label(label="Timer controls: coming soon", xalign=0,
+                                      tooltip_text="Pause and stop phone timers from here after the next Mac n Droid "
+                                                   "update on your phone.",
+                                      css_classes=["dim-label", "caption"]))
+        return card
+
+    def _tick_live(self):
+        for bar, p in self._live_bars:
+            if p.duration:
+                bar.set_fraction(min(1, p.now() / p.duration))
+        return True
+
+    # -- Photos --
+
+    def _build_photos(self):
+        self.photos_stack = Gtk.Stack()
+        self.stack.add_named(self.photos_stack, "photos")
+        self.photos_status = Adw.StatusPage(icon_name="image-x-generic-symbolic")
+        self.photos_ask = Gtk.Button(label="Ask on Phone", halign=Gtk.Align.CENTER, css_classes=["pill", "suggested-action"],
+                                     visible=False)
+        self.photos_ask.connect("clicked", lambda *_: (self.state.gallery.ask_for_access(),
+                                                       self.toast(f"Check {self.state.phone_name}")))
+        self.photos_status.set_child(self.photos_ask)
+        self.photos_stack.add_named(self.photos_status, "status")
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        bar = Gtk.Box(spacing=8, margin_start=12, margin_end=12, margin_top=8, margin_bottom=4)
+        self.photos_kind = Gtk.DropDown.new_from_strings(["All", "Photos", "Videos"])
+        self.photos_kind.connect("notify::selected", lambda *_: self._photos_filter())
+        self.photos_album = Gtk.DropDown.new_from_strings(["All Albums"])
+        self.photos_album.connect("notify::selected", lambda *_: self._photos_filter())
+        self._album_ids = [None]
+        self._filling_albums = False
+        self.photos_count = Gtk.Label(css_classes=["dim-label"], hexpand=True, xalign=1)
+        bar.append(self.photos_kind)
+        bar.append(self.photos_album)
+        bar.append(self.photos_count)
+        box.append(bar)
+        scroller = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True)
+        self.photos_grid = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.MULTIPLE, homogeneous=True, row_spacing=4,
+                                       column_spacing=4, margin_start=12, margin_end=12, margin_top=4, margin_bottom=12,
+                                       max_children_per_line=12, min_children_per_line=2, valign=Gtk.Align.START,
+                                       activate_on_single_click=False)
+        self.photos_grid.connect("child-activated", lambda _g, child: self.state.gallery.open(child.item))
+        self.photos_grid.connect("selected-children-changed", lambda *_: self.page_actions["photos"].set_sensitive(
+            bool(self.photos_grid.get_selected_children())))
+        # Near the end of the list: the next page.
+        scroller.get_vadjustment().connect("value-changed", self._photos_scrolled)
+        scroller.set_child(self.photos_grid)
+        box.append(scroller)
+        self.photos_stack.add_named(box, "grid")
+        self._tiles = {}
+        self._header_button("photos", "folder-download-symbolic", "Save to Downloads", self._save_photos)
+
+    def _photos_filter(self):
+        if self._filling_albums:
+            return
+        kind = ["all", "photos", "videos"][self.photos_kind.get_selected()]
+        i = self.photos_album.get_selected()
+        album = self._album_ids[i] if 0 <= i < len(self._album_ids) else None
+        self.state.gallery.set_filter(kind, album)
+
+    def _photos_scrolled(self, adj):
+        g = self.state.gallery
+        if g.has_more and not g.loading and adj.get_value() + adj.get_page_size() > adj.get_upper() - 400:
+            g.load_more()
+
+    def refresh_photos(self):
+        st, g = self.state, self.state.gallery
+        status = None
+        if not st.connected:
+            status = ("Photos", f"Connect {GLib.markup_escape_text(st.phone_name)} to see its photos and videos.", False)
+        elif g.access == "off":
+            status = ("Photos Is Off", "On your phone, open Mac n Droid and turn on <b>Photos on this computer</b>.",
+                      False)
+        elif g.access == "none":
+            status = ("Allow Photo Access", "Mac n Droid on your phone needs access to photos and videos.", True)
+        elif not g.items:
+            status = ("Loading Photos…" if g.loading or g.access == "unknown" else "No Photos",
+                      "" if g.loading or g.access == "unknown" else "Photos and videos on your phone appear here.",
+                      False)
+        self.page_actions["photos"].set_sensitive(bool(self.photos_grid.get_selected_children()))
+        if status:
+            self.photos_status.set_title(status[0])
+            self.photos_status.set_description(status[1])
+            self.photos_ask.set_visible(status[2])
+            self.photos_stack.set_visible_child_name("status")
+            return
+        self.photos_stack.set_visible_child_name("grid")
+        self.photos_count.set_label(f"{g.total} item{'s' if g.total != 1 else ''}")
+        names = ["All Albums"] + [f"{a.get('name', 'Album')} ({a.get('count', 0)})" for a in g.albums]
+        if len(names) != self.photos_album.get_model().get_n_items():
+            self._filling_albums = True
+            self._album_ids = [None] + [a.get("id") for a in g.albums]
+            self.photos_album.set_model(Gtk.StringList.new(names))
+            self.photos_album.set_selected(self._album_ids.index(g.album) if g.album in self._album_ids else 0)
+            self._filling_albums = False
+        clear(self.photos_grid)
+        self._tiles = {}
+        self._append_tiles(0)
+
+    def _append_tiles(self, first):
+        g = self.state.gallery
+        if first == 0 and self.photos_stack.get_visible_child_name() != "grid":
+            self.refresh_photos()
+            return
+        for item in g.items[first:]:
+            pic = Gtk.Picture(can_shrink=True, content_fit=Gtk.ContentFit.COVER, width_request=120, height_request=120,
+                              css_classes=["tile"])
+            overlay = Gtk.Overlay(child=pic)
+            if item.is_video:
+                overlay.add_overlay(Gtk.Image(icon_name="media-playback-start-symbolic", halign=Gtk.Align.END,
+                                              valign=Gtk.Align.END, margin_end=6, margin_bottom=6))
+            if item.id in g.opening:
+                overlay.add_overlay(Gtk.Spinner(spinning=True, halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER))
+            child = Gtk.FlowBoxChild(child=overlay, tooltip_text=item.name)
+            child.item = item
+            self.photos_grid.append(child)
+            self._tiles[item.id] = pic
+            data = g.thumbs.get(item.id)
+            if data:
+                pic.set_paintable(texture(data))
             else:
-                row.add_prefix(self._app_icon(p.pkg))
-            for icon, tip, cmd, on in [("media-skip-backward-symbolic", "Previous", "prev", p.can_prev),
-                                       ("media-playback-pause-symbolic" if p.playing else
-                                        "media-playback-start-symbolic", "Pause" if p.playing else "Play", "toggle",
-                                        True),
-                                       ("media-skip-forward-symbolic", "Next", "next", p.can_next)]:
-                b = Gtk.Button(icon_name=icon, tooltip_text=tip, valign=Gtk.Align.CENTER, sensitive=on,
-                               css_classes=["flat", "circular"])
-                b.connect("clicked", lambda *_, c=cmd, i=p.id: st.media_command(c, i))
-                row.add_suffix(b)
-            self.live_box.append(row)
-            rows += 1
-        for a in list(st.live.values())[:4]:
-            kind = a.get("kind", "")
-            sub = a.get("text") or a.get("short") or ""
-            row = Adw.ActionRow(title=GLib.markup_escape_text(a.get("title") or a.get("app", "")),
-                                subtitle=GLib.markup_escape_text(sub), title_lines=1, subtitle_lines=1)
-            row.add_prefix(self._app_icon(a.get("pkg", "")))
-            if kind == "progress" and a.get("max"):
-                row.add_suffix(Gtk.ProgressBar(fraction=min(1, (a.get("progress") or 0) / a["max"]),
-                                               valign=Gtk.Align.CENTER, width_request=100))
-            elif a.get("when") and kind in ("call", "timer", "stopwatch"):
-                row.add_suffix(self._chronometer(a))
-            self.live_box.append(row)
-            rows += 1
-        self.live_group.set_visible(rows > 0 and st.connected)
+                g.want_thumb(item.id)
+        self.photos_count.set_label(f"{g.total} item{'s' if g.total != 1 else ''}")
+
+    def _thumb_arrived(self, gid):
+        pic = self._tiles.get(gid)
+        data = self.state.gallery.thumbs.get(gid)
+        if pic and data:
+            pic.set_paintable(texture(data))
+
+    def _save_photos(self):
+        items = [c.item for c in self.photos_grid.get_selected_children()]
+        if items:
+            self.state.gallery.save(items, downloads_dir())
+            self.toast(f"Saving {len(items)} to Downloads")
+            self.photos_grid.unselect_all()
 
     def _chronometer(self, a):
         label = Gtk.Label(css_classes=["numeric", "dim-label"])
@@ -841,14 +1080,16 @@ class Window(Adw.ApplicationWindow):
             detail = f"{direction} · Preparing folder…"
         elif t.state == "active":
             detail = f"{direction} · {human_size(t.bytes)} of {human_size(t.size)}"
+        elif t.state == "paused":
+            detail = f"{direction} · Paused, continues when {self.state.phone_name} reconnects"
         elif t.state == "failed":
-            detail = f"{direction} · Didn't finish"
+            detail = f"{direction} · {t.note or 'Didn' + chr(39) + 't finish'}"
         else:
             detail = f"{direction} · {human_size(t.size)}"
         row = Adw.ActionRow(title=GLib.markup_escape_text(t.name), subtitle=detail)
         row.add_prefix(Gtk.Image(icon_name="folder-symbolic" if t.folder else
                                  ("go-up-symbolic" if t.to_phone else "go-down-symbolic")))
-        if t.state == "active" and t.size:
+        if t.state in ("active", "paused") and t.size:
             bar = Gtk.ProgressBar(fraction=min(1, t.bytes / t.size), valign=Gtk.Align.CENTER, width_request=120)
             row.add_suffix(bar)
         elif t.state == "done" and not t.to_phone:
@@ -939,8 +1180,9 @@ class Window(Adw.ApplicationWindow):
             return
         d = Adw.AlertDialog(
             heading=f"Allow \u201c{name}\u201d to connect?",
-            body=f"It scanned this computer's pairing code. If you allow it, it replaces {paired}, which will be "
-                 "disconnected. Only allow a phone that's yours.")
+            body=f"It scanned this computer's pairing code. If you allow it, it replaces {paired}: {paired} is "
+                 "disconnected, and its notifications, clipboard history and files are removed from this computer. "
+                 "Only allow a phone that's yours.")
         d.add_response("deny", "Don't Allow")
         d.add_response("allow", "Allow")
         d.set_response_appearance("allow", Adw.ResponseAppearance.SUGGESTED)
@@ -956,11 +1198,23 @@ class Window(Adw.ApplicationWindow):
         self.present()
 
     def confirm_reset(self):
-        d = Adw.AlertDialog(heading="Reset Pairing?", body="All paired phones will need to scan the new QR code.")
-        d.add_response("cancel", "Cancel")
-        d.add_response("reset", "Reset Pairing")
-        d.set_response_appearance("reset", Adw.ResponseAppearance.DESTRUCTIVE)
-        d.connect("response", lambda _d, r: r == "reset" and self.state.reset_pairing())
+        st = self.state
+        if not st.last_phone_name:
+            d = Adw.AlertDialog(heading="Make a New Pairing Code?",
+                                body="The current code, and any screenshot or copied link of it, stops working.")
+            d.add_response("cancel", "Cancel")
+            d.add_response("reset", "Make a New Code")
+            d.set_response_appearance("reset", Adw.ResponseAppearance.SUGGESTED)
+        else:
+            name = st.phone_name
+            d = Adw.AlertDialog(heading=f"Forget {name}?",
+                                body=f"{name} stops syncing with this computer, and its notifications, clipboard history "
+                                     "and files are removed from this computer. To use a phone again, scan the new "
+                                     "pairing code.")
+            d.add_response("cancel", "Cancel")
+            d.add_response("reset", "Forget Phone")
+            d.set_response_appearance("reset", Adw.ResponseAppearance.DESTRUCTIVE)
+        d.connect("response", lambda _d, r: r == "reset" and st.forget_phone())
         d.present(self)
 
     def reply_dialog(self, key, i):

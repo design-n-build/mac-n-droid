@@ -3,6 +3,7 @@ import base64
 import logging
 import mimetypes
 import os
+import shutil
 import threading
 import time
 import uuid
@@ -13,14 +14,17 @@ from gi.repository import GLib, GObject
 
 from . import folders
 from .bridge import BrowserBridge
-from .connection import Server, Session
+from .connection import FILES2, Server, Session
+from .gallery import GalleryModel, cache_dir as gallery_cache, cache_file_name
 from .discovery import Advertiser
 from .identity import Identity, computer_name, local_ipv4
 from .leftbehind import LeftBehind
-from .media import ComputerMedia
+from .media import ComputerMedia, SystemVolume
 
 log = logging.getLogger("macndroid")
 CHUNK = 256 * 1024
+# Room kept free beyond the file itself, so a transfer never fills the disk.
+SPACE_MARGIN = 200 * 1024 * 1024
 HISTORY_LIMIT = 20
 
 
@@ -54,8 +58,9 @@ class Transfer:
     to_phone: bool
     path: str
     bytes: int = 0
-    state: str = "active"  # active | done | failed
+    state: str = "active"  # active | paused | done | failed
     folder: bool = False
+    note: str = ""  # why it failed, when there's something useful to say
 
 
 @dataclass
@@ -76,6 +81,7 @@ class Player:
     can_prev: bool
     can_next: bool
     can_seek: bool
+    url: str = ""  # the exact page, from phones 0.14.5+ when the app shares it (Play on computer)
 
     def now(self) -> float:
         """Current position in ms."""
@@ -112,6 +118,53 @@ def safe_id(s) -> str:
     return "".join(c for c in str(s) if c.isascii() and (c.isalnum() or c in "-_"))[:80]
 
 
+def human_size(n: int) -> str:
+    return f"{n / 2**30:.1f} GB" if n >= 2**30 else f"{n / 2**20:.1f} MB" if n >= 2**20 else f"{max(1, n // 1024)} KB"
+
+
+def free_space(folder: Path) -> int | None:
+    try:
+        return shutil.disk_usage(folder).free
+    except OSError:
+        return None
+
+
+def with_time(url: str, seconds: float) -> str:
+    """The same page, starting where it is now (YouTube and YouTube Music understand `t`)."""
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+    u = urlsplit(url)
+    host = (u.hostname or "").lower()
+    if seconds < 5 or not (host.endswith("youtube.com") or host == "youtu.be"):
+        return url
+    q = [(k, v) for k, v in parse_qsl(u.query, keep_blank_values=True) if k != "t"] + [("t", f"{int(seconds)}s")]
+    return urlunsplit((u.scheme, u.netloc, u.path, urlencode(q), u.fragment))
+
+
+def same_page(a: str, b: str) -> bool:
+    """Two addresses are the same page if they only differ in the start time or the part after "#"."""
+    from urllib.parse import parse_qsl, urlsplit
+
+    def key(s):
+        u = urlsplit(s)
+        host = (u.hostname or "").lower().replace("m.youtube.com", "www.youtube.com")
+        return (u.scheme, host, u.path, tuple(x for x in parse_qsl(u.query, keep_blank_values=True) if x[0] != "t"))
+    return bool(a) and bool(b) and key(a) == key(b)
+
+
+def search_url(app: str, title: str, artist: str) -> str | None:
+    """A search for the title and artist in the right service (Android package, "spotify" or a site name)."""
+    from urllib.parse import quote
+    q = " ".join(x for x in (title, artist) if x)
+    if not q:
+        return None
+    a = app.lower()
+    if "spotify" in a:
+        return "https://open.spotify.com/search/" + quote(q)
+    if a in ("com.google.android.youtube", "youtube") or a.endswith(".youtube"):
+        return "https://www.youtube.com/results?search_query=" + quote(q)
+    return "https://music.youtube.com/search?q=" + quote(q)
+
+
 def unique_path(folder: Path, name: str) -> Path:
     name = safe_name(name)
     p = folder / name
@@ -146,6 +199,8 @@ class AppState(GObject.Object):
         "left-behind": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
         # (request id, new phone, paired phone): ask whether to allow a new phone; "" closes the question.
         "approval-request": (GObject.SignalFlags.RUN_FIRST, None, (object,)),
+        # The phone was forgotten (here or on the phone): show the pairing step again.
+        "phone-forgotten": (GObject.SignalFlags.RUN_FIRST, None, ()),
     }
 
     def __init__(self, settings=None):
@@ -165,6 +220,20 @@ class AppState(GObject.Object):
         self.transfers: list[Transfer] = []
         self.last_error = ""
         self._incoming: dict[str, tuple] = {}
+        self._incoming_size: dict[str, int] = {}
+        # Receives / sends cut off by a dropped connection, kept to continue them (files2).
+        self._paused_in: dict[str, tuple] = {}  # id → (path, size, folder name)
+        self._paused_out: dict[str, tuple] = {}  # id → (path, folder, cleanup)
+        self._file_replies: dict[str, dict] = {}  # id → {"event", "answer"}
+        self._replies_lock = threading.Lock()
+        self.gallery = GalleryModel(self.send)
+        self.gallery_incoming: dict[str, str] = {}  # transfer id → gallery id
+        self.phone_volume: int | None = None
+        self._volume_before_mute: int | None = None
+        self.sharing_paused = False
+        self.paused_until = 0.0
+        self.system_volume = SystemVolume()
+        self._sent_volume = None
         self._received: list[Path] = []
         self._received_timer = 0
         # Phone media, live activities, Messages, mirroring
@@ -243,13 +312,67 @@ class AppState(GObject.Object):
     def pairing_link(self) -> str:
         return self.identity.pairing_uri(self.server.port, self.addresses, self.name)
 
-    def reset_pairing(self):
+    @property
+    def phone_app(self) -> int:
+        """The phone app's build number (Android versionCode); 0 before 0.14.5."""
+        try:
+            return int((self.phone or {}).get("app") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @property
+    def phone_is_current(self) -> bool:
+        """0.14.5 and later: forget messages, timer buttons, Play on."""
+        return self.phone_app >= 37
+
+    def phone_has(self, cap: str) -> bool:
+        caps = (self.phone or {}).get("caps")
+        return isinstance(caps, list) and cap in caps
+
+    def forget_phone(self, tell_phone: bool = True):
+        """Forget the paired phone: a new pairing code, everything this computer kept from it removed, and the pairing
+        step again. `tell_phone` is False when the phone itself asked to unpair."""
         if self._pending:
             self.resolve_approval(self._pending["id"], False)
+        old = self.active
+        if old:
+            # Newer phones say "Not paired with this computer anymore"; older ones find their key no longer works.
+            if tell_phone and self.phone_is_current:
+                old.send({"t": "unpaired", "reason": "forgotten"})
+            GLib.timeout_add(500, lambda: old.close("Forgotten") and False)
         self.identity.reset()
-        if self.active:
-            self.active.close("Pairing reset")
+        self.phone = None
+        self.last_phone_name = ""
+        self.last_error = ""
+        self._forget_phone_data()
+        self.emit("phone-forgotten")
         self.emit("pairing-changed")
+        self.emit("status-changed")
+
+    def _forget_phone_data(self):
+        """Everything kept from the paired phone: clipboard history, files, notifications, texts, photos and
+        unfinished transfers. Used when a different phone pairs, or this one is forgotten."""
+        self.clips.clear()
+        self.transfers = [t for t in self.transfers if t.state == "active"]
+        for n in self.notifications:
+            self.emit("withdraw-notification", n.key)
+        self.notifications.clear()
+        self.icons.clear()
+        self.sms_threads, self.sms_messages, self.sms_open, self.sms_state = [], {}, None, "unknown"
+        self.contacts = []
+        self.gallery.forget_phone()
+        for path, _size, _folder in self._paused_in.values():
+            Path(path).unlink(missing_ok=True)
+        for path, _folder, cleanup in self._paused_out.values():
+            if cleanup:
+                Path(path).unlink(missing_ok=True)
+        self._paused_in.clear()
+        self._paused_out.clear()
+        for sig in ("clips-changed", "transfers-changed", "notifications-changed", "sms-changed"):
+            self.emit(sig)
+
+    def reset_pairing(self):
+        self.forget_phone()
 
     # -- pairing: single-use codes and approving new phones --
 
@@ -279,6 +402,10 @@ class AppState(GObject.Object):
             self._ask_approval(s, name)
 
     def _pair(self, s: Session, name: str):
+        # A different phone than before: start clean.
+        prev = self.identity.phone
+        if prev and prev["id"] != s.phone_id:
+            self._forget_phone_data()
         if s.legacy:
             # An older app keeps using the invite key, so it can't be replaced until that phone updates.
             self.identity.phone = {"id": s.phone_id, "name": name, "key": None, "confirmed": True}
@@ -346,6 +473,9 @@ class AppState(GObject.Object):
         self.left_behind.linked()
         if self.sms_state != "unknown":
             self.refresh_sms()
+        self.gallery.phone_connected()
+        if self.phone_has(FILES2):
+            self._resume_transfers()
 
     def _closed(self, s: Session, reason):
         if reason and "Pair it again" in reason:
@@ -361,6 +491,11 @@ class AppState(GObject.Object):
         self.live.clear()
         self.phone_wants_media = False
         self._sent_track = None
+        self._sent_volume = None
+        self.phone_volume = None
+        self.sharing_paused = False
+        self.paused_until = 0.0
+        self.gallery.phone_disconnected()
         if self.mirror != "idle":
             self.mirror = "stopped"
             self.emit("mirror-changed")
@@ -371,14 +506,29 @@ class AppState(GObject.Object):
         for n in self.notifications:
             self.emit("withdraw-notification", n.key)
         self.notifications.clear()
-        for tid, (fh, path, _clip, _folder) in list(self._incoming.items()):
+        # A phone that can continue transfers: keep what arrived so far; sends pause by themselves (one waiting for
+        # the phone's answer is told the connection dropped).
+        resumable = self.phone_has(FILES2)
+        with self._replies_lock:
+            waiting, self._file_replies = self._file_replies, {}
+        for w in waiting.values():
+            w["answer"] = {"t": "dropped"}
+            w["event"].set()
+        for tid, (fh, path, clip, folder) in list(self._incoming.items()):
             fh.close()
+            if resumable and not clip and tid not in self.gallery_incoming and self._incoming_size.get(tid, 0) > 0:
+                self._paused_in[tid] = (str(path), self._incoming_size[tid], folder)
+                self._update_transfer(tid, state="paused")
+                continue
             path.unlink(missing_ok=True)
             self._update_transfer(tid, state="failed")
         self._incoming.clear()
-        for t in self.transfers:
-            if t.state == "active":
-                t.state = "failed"
+        self._incoming_size.clear()
+        self.gallery_incoming.clear()
+        if not resumable:
+            for t in self.transfers:
+                if t.state == "active":
+                    t.state = "failed"
         self.emit("status-changed")
         self.emit("notifications-changed")
         self.emit("transfers-changed")
@@ -407,6 +557,40 @@ class AppState(GObject.Object):
         t = m.get("t")
         if t == "key_saved":
             self._confirm_phone_key()
+        elif t == "unpair":
+            # Unpaired on the phone: forget it here too, and show the pairing code.
+            self.forget_phone(tell_phone=False)
+        elif t == "play_on_phone":
+            self.play_on_phone()
+        elif t == "play_on_computer":
+            p = next((x for x in self.players if x.id == m.get("id")), None) or self.now_playing
+            if p:
+                self.play_on_computer(p)
+        elif t in ("file_ready", "file_refuse"):
+            with self._replies_lock:
+                w = self._file_replies.pop(str(m.get("id", "")), None)
+            if w:
+                w["answer"] = m
+                w["event"].set()
+        elif t == "paused":
+            self.sharing_paused = bool(m.get("on"))
+            until = m.get("until") or 0
+            self.paused_until = until / 1000 if self.sharing_paused and until > 0 else 0.0
+            self.emit("status-changed")
+        elif t == "volume":
+            try:
+                self.phone_volume = max(0, min(100, int(m.get("vol", 50))))
+            except (TypeError, ValueError):
+                pass
+            self.emit("media-changed")
+        elif t == "mac_volume_set":
+            try:
+                self.system_volume.set(int(m.get("vol", 50)))
+            except (TypeError, ValueError):
+                pass
+            GLib.timeout_add(300, lambda: self._push_computer_volume() and False)
+        elif t in ("gallery", "gallery_thumb", "gallery_access"):
+            self.gallery.handle(m)
         elif t == "approve":
             self.resolve_approval(str(m.get("id", "")), bool(m.get("allow")))
         elif t == "battery":
@@ -568,7 +752,53 @@ class AppState(GObject.Object):
         self.emit("status-changed")
 
     def open_on_phone(self, url: str):
+        """The page that's playing here continues on the phone from the same spot, and stops here."""
+        link = url
+        t = self.computer_track()
+        if t and t.get("playing") and same_page(t.get("url", ""), url):
+            link = with_time(url, t.get("pos", 0))
+            self._computer_media_command("pause")
+        self.send({"t": "open_url", "url": link})
+
+    def play_on_phone(self):
+        """Play on phone: the phone opens what's playing here (same YouTube spot), and it stops here."""
+        t = self.computer_track()
+        if not t or not self.active:
+            return
+        url = with_time(t["url"], t.get("pos", 0)) if t.get("url", "").startswith("https://") else \
+            search_url(t.get("app", ""), t.get("title", ""), t.get("artist", ""))
+        if not url:
+            return
         self.send({"t": "open_url", "url": url})
+        if t.get("playing"):
+            self._computer_media_command("pause")
+
+    def play_on_computer(self, p: "Player"):
+        """Play on this computer: open what the phone is playing here, and pause it on the phone."""
+        url = with_time(p.url, p.now() / 1000) if p.url.startswith("https://") else search_url(p.pkg, p.title, p.artist)
+        if not url:
+            return
+        from gi.repository import Gio
+        Gio.AppInfo.launch_default_for_uri(url, None)
+        if p.playing:
+            self.media_command("pause", p.id)
+
+    def set_phone_volume(self, v: int):
+        """The phone reports the new level back."""
+        self.phone_volume = max(0, min(100, int(v)))
+        self.send({"t": "volume_set", "vol": self.phone_volume})
+
+    def toggle_phone_mute(self):
+        """The speaker button: mutes the phone, and the next click brings the sound back."""
+        if self.phone_volume is None:
+            return
+        if self.phone_volume > 0:
+            self._volume_before_mute = self.phone_volume
+            self.set_phone_volume(0)
+        else:
+            self.set_phone_volume(self._volume_before_mute or 50)
+            self._volume_before_mute = None
+        self.emit("media-changed")
 
     def volume(self, up: bool):
         self.send({"t": "input", "key": "volume_up" if up else "volume_down"})
@@ -602,7 +832,7 @@ class AppState(GObject.Object):
                    album=m.get("album", ""), duration=float(m.get("duration") or 0), playing=bool(m.get("playing")),
                    position=float(m.get("position") or 0), position_at=at, speed=float(m.get("speed") or 1),
                    since=since, can_prev=m.get("canPrev", True) is not False, can_next=m.get("canNext", True) is not False,
-                   can_seek=bool(m.get("canSeek")))
+                   can_seek=bool(m.get("canSeek")), url=m.get("url") or "")
         self.players = [x for x in self.players if x.id != pid] + [p]
         self.players.sort(key=lambda x: (not x.playing, -(x.since or x.position_at)))
         self.emit("media-changed")
@@ -642,7 +872,7 @@ class AppState(GObject.Object):
                 "key": f"tab|{cid}|{m['tab']}|{m.get('title', '')}", "app": m.get("site", "Browser"),
                 "title": m.get("title", ""), "artist": m.get("artist", ""), "album": m.get("album", ""),
                 "playing": playing, "dur": float(m.get("dur") or 0), "pos": float(m.get("pos") or 0),
-                "since": since, "tab": key,
+                "since": since, "tab": key, "url": m.get("url") or "",
             }
             self._media_source_changed()
         elif t == "media_end" and isinstance(m.get("tab"), int):
@@ -680,6 +910,7 @@ class AppState(GObject.Object):
     def _media_tick(self):
         if self.phone_wants_media:
             self._push_computer_media(periodic=True)
+            self._push_computer_volume()
         return True
 
     def _push_computer_media(self, periodic=False):
@@ -708,7 +939,20 @@ class AppState(GObject.Object):
         if art and art_key != self._pushed_art_key:
             m["art"] = base64.b64encode(art).decode()
             self._pushed_art_key = art_key
+        vol = self.system_volume.get()
+        if vol:
+            m["vol"], m["muted"], m["fixed"] = vol[0], vol[1], False
+            self._sent_volume = vol
         self.send(m)
+
+    def _push_computer_volume(self):
+        """This computer's own volume, for the phone's "Music on your computer" slider."""
+        if not self.phone_wants_media or not self.active or not self.computer_track():
+            return
+        vol = self.system_volume.get()
+        if vol and vol != self._sent_volume:
+            self._sent_volume = vol
+            self.send({"t": "mac_volume", "vol": vol[0], "muted": vol[1], "fixed": False})
 
     def _computer_media_command(self, cmd: str):
         t = self.computer_track()
@@ -877,7 +1121,7 @@ class AppState(GObject.Object):
         threading.Thread(target=zip_it, daemon=True).start()
 
     def _send_file(self, path: Path, clip: bool = False, tid: str | None = None, folder: bool = False,
-                   cleanup: bool = False):
+                   cleanup: bool = False, resume: bool = False):
         s = self.active
         if not s:
             if tid:
@@ -889,6 +1133,15 @@ class AppState(GObject.Object):
         if not clip and new:
             self.transfers.insert(0, Transfer(tid, path.name, size, True, str(path)))
             self.emit("transfers-changed")
+        if resume:
+            self._update_transfer(tid, state="active")
+        # A phone that understands it says whether it has room and where to continue (PROTOCOL.md, files2).
+        ask = not clip and self.phone_has(FILES2)
+        waiter = None
+        if ask:
+            waiter = {"event": threading.Event(), "answer": None}
+            with self._replies_lock:
+                self._file_replies[tid] = waiter
 
         def stream():
             start = {"t": "file_start", "id": tid, "name": path.name, "size": size,
@@ -898,32 +1151,74 @@ class AppState(GObject.Object):
                 start["clip"] = True
             if folder:
                 start["folder"] = True
+            if ask:
+                start["ready"] = True
             ok = s.send(start)
-            sent, last = 0, 0.0
-            with open(path, "rb") as f:
-                while ok:
-                    chunk = f.read(CHUNK)
-                    if not chunk:
-                        break
-                    ok = s.send({"t": "file_chunk", "id": tid, "data": base64.b64encode(chunk).decode()})
-                    sent += len(chunk)
-                    if time.time() - last > 0.1:
-                        last = time.time()
-                        GLib.idle_add(self._update_transfer, tid, sent, None)
-            ok = ok and s.send({"t": "file_end", "id": tid})
-            if clip or cleanup:
+            dropped = not ok
+            sent, last, refused_free = 0, 0.0, None
+            if ok and waiter:
+                waiter["event"].wait(20)
+                with self._replies_lock:
+                    self._file_replies.pop(tid, None)
+                a = waiter["answer"] or {}
+                if a.get("t") == "file_ready":
+                    sent = max(0, min(int(a.get("offset") or 0), size))
+                elif a.get("t") == "file_refuse":
+                    ok, refused_free = False, int(a.get("free") or 0)
+                elif a.get("t") == "dropped":
+                    ok, dropped = False, True
+                else:
+                    ok = False
+            try:
+                with open(path, "rb") as f:
+                    f.seek(sent)
+                    while ok:
+                        chunk = f.read(CHUNK)
+                        if not chunk:
+                            break
+                        ok = s.send({"t": "file_chunk", "id": tid, "data": base64.b64encode(chunk).decode()})
+                        if not ok:
+                            dropped = True
+                            break
+                        sent += len(chunk)
+                        if time.time() - last > 0.1:
+                            last = time.time()
+                            GLib.idle_add(self._update_transfer, tid, sent, None)
+            except OSError:
+                ok = False
+            if ok:
+                ok = s.send({"t": "file_end", "id": tid})
+                dropped = not ok
+            paused = not ok and dropped and ask
+            if (clip or cleanup) and not paused:
                 path.unlink(missing_ok=True)
             if not clip:
-                GLib.idle_add(self._sent_done, tid, sent, ok)
+                GLib.idle_add(self._sent_done, tid, sent, ok, paused, refused_free, (str(path), folder, cleanup))
 
         threading.Thread(target=stream, daemon=True).start()
 
-    def _sent_done(self, tid, sent, ok):
-        self._update_transfer(tid, sent, "done" if ok else "failed")
+    def _resume_transfers(self):
+        """The phone is back: send what was cut off, with the same ids, so it continues where it stopped."""
+        paused, self._paused_out = self._paused_out, {}
+        for tid, (path, folder, cleanup) in paused.items():
+            if Path(path).exists():
+                self._send_file(Path(path), tid=tid, folder=folder, cleanup=cleanup, resume=True)
+            else:
+                self._update_transfer(tid, state="failed")
+
+    def _sent_done(self, tid, sent, ok, paused=False, refused_free=None, source=None):
+        if paused:
+            self._paused_out[tid] = source
+            self._update_transfer(tid, sent, "paused")
+            return False
         t = next((x for x in self.transfers if x.id == tid), None)
+        if t and refused_free is not None:
+            t.note = f"Not enough space on {self.phone_name} ({human_size(refused_free)} free)"
+        self._update_transfer(tid, sent, "done" if ok else "failed")
         if t and not any(x.to_phone and x.state == "active" for x in self.transfers):
             title = f"Sent to {self.phone_name}" if ok else "Couldn't send"
-            self.emit("post-notification", (title, t.name, ""))
+            body = f"There isn't enough space on {self.phone_name} for {t.name}." if refused_free is not None else t.name
+            self.emit("post-notification", (title, body, ""))
         return False
 
     def _update_transfer(self, tid, sent=None, state=None):
@@ -946,6 +1241,37 @@ class AppState(GObject.Object):
             clip = bool(m.get("clip"))
             is_folder = bool(m.get("folder")) and not clip
             name = m.get("name", "file")
+            size = int(m.get("size") or 0)
+            ask = bool(m.get("ready"))
+            # A photo opened from Photos: into its cache, then opened with the default app.
+            gid = m.get("gallery")
+            if gid and m.get("view") and not clip and not is_folder:
+                path = gallery_cache() / cache_file_name(str(gid), name)
+                self._incoming[tid] = (open(path, "wb"), path, False, None)
+                self.gallery_incoming[tid] = str(gid)
+                return
+            # The same transfer again after the connection dropped: carry on from what's already here.
+            part = self._paused_in.pop(tid, None) if not clip else None
+            if part and part[1] == size and Path(part[0]).exists():
+                fh = open(part[0], "ab")
+                self._incoming[tid] = (fh, Path(part[0]), False, part[2])
+                self._incoming_size[tid] = size
+                if ask:
+                    self.send({"t": "file_ready", "id": tid, "offset": fh.tell()})
+                self._update_transfer(tid, fh.tell(), "active")
+                return
+            folder_dir = Path(GLib.get_tmp_dir()) if clip or is_folder else downloads_dir()
+            free = free_space(folder_dir)
+            # Not enough room: say so instead of filling the disk.
+            if not clip and size > 0 and free is not None and size + SPACE_MARGIN > free:
+                if ask:
+                    self.send({"t": "file_refuse", "id": tid, "reason": "space", "free": free})
+                self.transfers.insert(0, Transfer(tid, name, size, False, "", state="failed",
+                                                  note=f"Not enough space on this computer ({human_size(free)} free)"))
+                self.emit("transfers-changed")
+                self.emit("post-notification", (f"Couldn't receive {name}", f"There isn't enough space on this computer: "
+                                                f"it needs {human_size(size)} and {human_size(free)} is free.", ""))
+                return
             if clip:
                 path = unique_path(Path(GLib.get_tmp_dir()), f"macndroid-clip-{tid}.png")
             elif is_folder:
@@ -953,6 +1279,9 @@ class AppState(GObject.Object):
             else:
                 path = unique_path(downloads_dir(), name)
             self._incoming[tid] = (open(path, "wb"), path, clip, name if is_folder else None)
+            self._incoming_size[tid] = size
+            if ask:
+                self.send({"t": "file_ready", "id": tid, "offset": 0})
             if not clip:
                 shown = (name[:-4] if name.lower().endswith(".zip") else name) if is_folder else path.name
                 self.transfers.insert(0, Transfer(tid, shown, int(m.get("size") or 0), False, str(path),
@@ -965,13 +1294,19 @@ class AppState(GObject.Object):
                     entry[0].write(base64.b64decode(m.get("data", "")))
                 except ValueError:
                     return
-                self._update_transfer(tid, entry[0].tell())
+                if tid not in self.gallery_incoming:
+                    self._update_transfer(tid, entry[0].tell())
         elif t == "file_end":
             entry = self._incoming.pop(tid, None)
+            self._incoming_size.pop(tid, None)
             if not entry:
                 return
             fh, path, clip, folder_name = entry
             fh.close()
+            gid = self.gallery_incoming.pop(tid, None)
+            if gid:
+                self.gallery.arrived(gid, str(path))
+                return
             if folder_name:
                 def unpack():
                     out = folders.unpack(path, downloads_dir(), folder_name)

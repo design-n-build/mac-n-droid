@@ -118,6 +118,20 @@ def access_units(h264: bytes):
     return cfg, aus
 
 
+def solid_png(rgb, size=96) -> bytes:
+    """A plain coloured square, as a PNG: stands in for photo thumbnails."""
+    import zlib
+    raw = b"".join(b"\x00" + bytes(rgb) * size for _ in range(size))
+
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+
+
+PHOTO_COLOURS = [(234, 134, 98), (95, 158, 160), (238, 203, 104), (120, 144, 200), (180, 120, 170), (110, 180, 120)]
+
+
 def make_folder_zip() -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
@@ -310,6 +324,23 @@ def main():
                 received["file_ok"] = received.get("file_ok", 0) + int(ok)
         elif t == "ping":
             p.send({"t": "pong"})
+        elif t == "gallery_list":
+            off = int(m.get("offset") or 0)
+            items = [{"id": f"i{n}", "v": n % 5 == 4, "name": f"IMG_{2400 + n}.jpg", "date": now - n * 3600000,
+                      "size": 2_000_000, "w": 3000, "h": 4000, "dur": 12000 if n % 5 == 4 else 0}
+                     for n in range(off, min(off + int(m.get("limit") or 120), 18))]
+            reply = {"t": "gallery", "offset": off, "kind": m.get("kind", "all"), "access": "full", "total": 18,
+                     "items": items}
+            if m.get("album") is not None:
+                reply["album"] = m["album"]
+            if off == 0:
+                reply["albums"] = [{"id": "cam", "name": "Camera", "count": 14}, {"id": "ss", "name": "Screenshots", "count": 4}]
+            p.send(reply)
+        elif t == "gallery_thumbs":
+            for gid in m.get("ids") or []:
+                n = int(str(gid)[1:] or 0)
+                p.send({"t": "gallery_thumb", "id": gid,
+                        "d": base64.b64encode(solid_png(PHOTO_COLOURS[n % len(PHOTO_COLOURS)])).decode()})
     p.sock.close()
     print("received:", ", ".join(f"{k}×{v}" for k, v in sorted(received.items())))
     missing = [t for t in a.expect.split(",") if t and t not in received]

@@ -19,6 +19,11 @@ MAX_FRAME = 8 * 1024 * 1024
 DEFAULT_PORT = 47800
 
 
+
+# Features this computer announces in `welcome` (PROTOCOL.md, v0.14.5 additions).
+FILES2 = "files2"  # resumable transfers and the free-space check
+CAPS = (FILES2,)
+
 class Session:
     def __init__(self, sock: socket.socket, server: "Server"):
         self.id = uuid.uuid4().hex
@@ -119,7 +124,7 @@ class Session:
             return
         self.authenticated = True
         self.sock.settimeout(90)  # Phones ping every 20 seconds.
-        welcome = {"t": "welcome", "name": self.server.name}
+        welcome = {"t": "welcome", "name": self.server.name, "caps": list(CAPS)}
         if device_key:
             welcome["deviceKey"] = base64.b64encode(device_key).decode()
         self.send(welcome)

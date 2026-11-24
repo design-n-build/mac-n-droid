@@ -41,6 +41,9 @@ class Application(Adw.Application):
         self.state.connect("withdraw-notification", lambda _s, key: self.withdraw_notification(self._nid(key)))
         self.state.connect("set-clipboard", lambda _s, v: self.set_clipboard(v))
         self.state.connect("left-behind", self._left_behind)
+        self.state.connect("phone-forgotten", self._forgotten)
+        self.state.gallery.connect("opened", lambda _g, path: Gio.AppInfo.launch_default_for_uri(
+            Gio.File.new_for_path(path).get_uri(), None))
         self.state.start()
 
         for name, cb, ptype in [
@@ -106,6 +109,12 @@ class Application(Adw.Application):
     def _show(self, page):
         self.activate()
         self.window.show_page(page)
+
+    def _forgotten(self, _st):
+        """Forgotten (here or on the phone): it's no longer the paired phone; back to pairing."""
+        self.settings["last_phone_name"] = ""
+        if self.window:
+            self.window.show_page("pair")
 
     def _status_changed(self, st):
         if st.phone and st.phone.get("name") and st.phone["name"] != self.settings["last_phone_name"]:
