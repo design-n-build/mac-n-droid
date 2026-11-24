@@ -5,6 +5,11 @@ struct PhoneInfo: Equatable {
     var name: String
     var model: String
     var os: String
+    /// The phone app's build number (Android versionCode); 0 for apps older than 0.14.5, which don't send it.
+    var app: Int = 0
+
+    /// 0.14.5 and later (versionCode 37+): forget/unpair messages, timer controls, Play on, free-space checks.
+    var hasV0145: Bool { app >= 37 }
 }
 
 struct NotifAction: Hashable, Identifiable {

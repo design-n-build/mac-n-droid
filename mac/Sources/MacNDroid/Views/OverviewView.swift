@@ -120,7 +120,7 @@ struct DisconnectedView: View {
 
     var body: some View {
         ContentUnavailableView {
-            Label(state.hasPairedBefore ? "\(state.lastPhoneName ?? "Phone") Isn't Connected" : "No Phone Paired",
+            Label(state.hasPairedBefore ? "\(state.lastPhoneName ?? "Phone") Is Away" : "No Phone Paired",
                   systemImage: "smartphone")
         } description: {
             if case .error(let message) = state.status {
@@ -128,12 +128,12 @@ struct DisconnectedView: View {
             } else if let err = state.lastError {
                 Text(err)
             } else if state.hasPairedBefore {
-                Text("Make sure Mac n Droid is open on your phone and both devices are on the same Wi-Fi network.")
+                Text("\(state.lastPhoneName ?? "Your phone") is away. It reconnects by itself when both devices are on the same Wi-Fi network.")
             } else {
                 Text("Pair your Android phone to see its notifications, share your clipboard and send files.")
             }
         } actions: {
-            Button(state.hasPairedBefore ? "Pair Again" : "Pair a Phone") { selection = .pair }
+            Button(state.hasPairedBefore ? "Pairing Options" : "Pair a Phone") { selection = .pair }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
         }

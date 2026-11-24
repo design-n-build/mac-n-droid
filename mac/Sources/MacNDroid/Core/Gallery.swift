@@ -190,6 +190,12 @@ final class GalleryModel: ObservableObject {
         }
     }
 
+    /// A different phone, or the phone was forgotten: nothing of the old one's photos stays.
+    func forgetPhone() {
+        forget()
+        access = .unknown
+    }
+
     /// Turned off on the phone: drop everything shown and the originals opened before.
     private func forget() {
         items = []; albums = []; total = 0; thumbs = [:]; askedThumbs = []; opening = []; preview = nil

@@ -18,13 +18,19 @@ struct PairView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Pair a Phone")
-        .confirmationDialog("Reset pairing?", isPresented: $confirmReset) {
-            Button("Reset Pairing", role: .destructive) {
-                UserDefaults.standard.set(true, forKey: "pairLater")   // stay on this page, not the first-launch screen
-                state.resetPairing()
+        .confirmationDialog(state.hasPairedBefore ? "Forget \(phoneName)?" : "Make a new pairing code?",
+                            isPresented: $confirmReset) {
+            if state.hasPairedBefore {
+                Button("Forget Phone", role: .destructive) { state.forgetPhone() }
+            } else {
+                Button("Make a New Code") { state.forgetPhone() }
             }
         } message: {
-            Text("All paired phones will need to scan the new QR code.")
+            if state.hasPairedBefore {
+                Text("\(phoneName) stops syncing with this Mac, and its notifications, clipboard history, files and app list are removed from this Mac. To use a phone again, scan the new pairing code.")
+            } else {
+                Text("The current code, and any screenshot or copied link of it, stops working.")
+            }
         }
         // The new phone connected: back to the card.
         .onChange(of: state.isConnected) { _, on in if on { pairAnother = false } }
@@ -46,7 +52,7 @@ struct PairView: View {
                         .font(.title3.weight(.semibold))
                     HStack(spacing: 6) {
                         Circle().fill(state.isConnected ? Color.green : Color.secondary.opacity(0.5)).frame(width: 7, height: 7)
-                        Text(state.isConnected ? "Notifications, clipboard and files are syncing." : "Not connected right now. Open Mac n Droid on the phone, on the same Wi-Fi.")
+                        Text(state.isConnected ? "Notifications, clipboard and files are syncing." : "Away right now. It reconnects by itself when both are on the same Wi-Fi.")
                             .font(.callout).foregroundStyle(.secondary)
                     }
                 }
@@ -55,7 +61,7 @@ struct PairView: View {
             }
             .padding(.vertical, 6)
         } footer: {
-            Text("Mac n Droid works with one phone at a time. Pairing a different phone replaces \(phoneName).")
+            Text("Mac n Droid works with one phone at a time. Pairing a different phone replaces \(phoneName) and removes its things from this Mac.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -98,7 +104,7 @@ struct PairView: View {
                         Label("Connected to \(phone.name)", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                     } else {
-                        Text("Waiting for phone").foregroundStyle(.secondary)
+                        Text(state.hasPairedBefore ? "\(phoneName) is away" : "Waiting for a phone").foregroundStyle(.secondary)
                     }
                 }
             }
@@ -109,9 +115,15 @@ struct PairView: View {
                     copied = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false }
                 }
-                Button("Reset Pairing…", role: .destructive) { confirmReset = true }
+                if state.hasPairedBefore {
+                    Button("Forget \(phoneName)…", role: .destructive) { confirmReset = true }
+                } else {
+                    Button("Make a New Code…") { confirmReset = true }
+                }
             } footer: {
-                Text("Resetting creates a new code. Phones paired with the old code are disconnected and must scan again.")
+                Text(state.hasPairedBefore
+                     ? "Forgetting removes the phone and everything it sent from this Mac, and shows a new pairing code."
+                     : "A new code stops the current one, and any screenshot or copied link of it, from working.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

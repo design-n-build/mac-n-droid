@@ -201,14 +201,47 @@ final class AppState: ObservableObject {
         pairingURI = identity.pairingURI(port: port, hosts: ips, name: Net.computerName)
     }
 
-    func resetPairing() {
+    /// Forget the paired phone: a new pairing code, everything this Mac kept from that phone removed, and the
+    /// full-screen pairing step again. `tellPhone` is false when the phone itself asked to unpair.
+    func forgetPhone(tellPhone: Bool = true) {
         if let p = pendingApproval { resolveApproval(p.id, allow: false) }
+        if let old = active {
+            // Newer phones say "Not paired with this Mac anymore"; older ones find their key no longer works.
+            if tellPhone, phone?.hasV0145 == true { old.send(["t": "unpaired", "reason": "forgotten"]) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { old.cancel() }
+        }
         identity = Identity.reset()
         server.identity = identity
-        active?.cancel()
         UserDefaults.standard.removeObject(forKey: Prefs.lastPhoneName)
+        UserDefaults.standard.set(false, forKey: "pairLater")   // straight to the pairing screen
         lastPhoneName = nil
+        lastError = nil
+        forgetPhoneData()
         refreshAddresses(force: true)
+    }
+
+    /// Everything kept from the paired phone: clipboard history, files, notifications and the apps that sent
+    /// them (with their on/off choices), texts and photos. Used when a different phone pairs, or this one is
+    /// forgotten, so a new phone never sees the old one's things.
+    private func forgetPhoneData() {
+        clipStore.clear()
+        clipHistory = []
+        transfers.removeAll { $0.state != .active }
+        notifications.removeAll()
+        notifier.removeAllPhoneNotifications()
+        NotchController.shared.hide()
+        knownApps = [:]
+        mutedApps = []
+        icons = [:]
+        UserDefaults.standard.removeObject(forKey: Prefs.knownApps)
+        UserDefaults.standard.removeObject(forKey: Prefs.mutedApps)
+        try? FileManager.default.removeItem(at: Self.iconDir)
+        smsThreads = []
+        smsMessages = [:]
+        smsState = .unknown
+        contactResults = []
+        openSmsThread = nil
+        gallery.forgetPhone()
     }
 
     // MARK: Connection
@@ -288,6 +321,9 @@ final class AppState: ObservableObject {
     }
 
     private func pairPhone(_ pc: PhoneConnection, device: Message, name: String) {
+        // A different phone than before (allowed in its place, or after the old one was forgotten without
+        // this Mac running): start clean.
+        if let old = identity.phone, old.id != pc.phoneId { forgetPhoneData() }
         if pc.isLegacy {
             // An older app keeps using the invite key, so it can't be replaced until that phone updates.
             saveIdentity { $0.phone = PairedPhone(id: pc.phoneId, name: name, key: nil, confirmed: true) }
@@ -336,8 +372,9 @@ final class AppState: ObservableObject {
         guard pendingApproval?.id == id else { return }
         let alert = NSAlert()
         alert.messageText = "Allow “\(name)” to connect?"
-        alert.informativeText = "It scanned this Mac's pairing code. If you allow it, it replaces \(paired), which will be "
-            + "disconnected. Only allow a phone that's yours."
+        alert.informativeText = "It scanned this Mac's pairing code. If you allow it, it replaces \(paired): \(paired) is "
+            + "disconnected, and its notifications, clipboard history and files are removed from this Mac. Only allow a "
+            + "phone that's yours."
         alert.alertStyle = .warning
         // Not modal: the paired phone can answer first, and then this closes by itself.
         let answer = ApprovalButtons { [weak self] allow in
@@ -397,7 +434,8 @@ final class AppState: ObservableObject {
         let info = PhoneInfo(
             name: msg["name"] as? String ?? "Android phone",
             model: msg["model"] as? String ?? "",
-            os: msg["os"] as? String ?? "")
+            os: msg["os"] as? String ?? "",
+            app: msg["app"] as? Int ?? 0)
         phone = info
         if lastPhoneName == nil { justPaired = true }
         lastPhoneName = info.name
@@ -456,6 +494,9 @@ final class AppState: ObservableObject {
     private func handle(_ msg: Message) {
         guard let t = msg["t"] as? String else { return }
         switch t {
+        case "unpair":
+            // Unpaired on the phone: forget it here too, and show the pairing code.
+            forgetPhone(tellPhone: false)
         case "paused":
             sharingPaused = msg["on"] as? Bool ?? false
             let until = (msg["until"] as? NSNumber)?.doubleValue ?? 0
